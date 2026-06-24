@@ -61,6 +61,27 @@ cd am-agents/ui-test-agent
 docker build -t am-ui-test-agent:local .
 ```
 
+### ui-test-agent base image (faster CI)
+
+Playwright + system deps + `pip install` live in a **cached base image** so app builds only copy `app/` and `scripts/` (~seconds instead of ~15 min).
+
+| Image | Rebuild when |
+|-------|----------------|
+| `ghcr.io/am-portfolio/am-ui-test-agent-base:latest` | `docker/Dockerfile.ui-test-agent-base` or `ui-test-agent/requirements.txt` change |
+| `ghcr.io/am-portfolio/am-ui-test-agent:<run_id>` | any `ui-test-agent/app/**` or `scripts/**` change |
+
+CI: `ensure-base` job in `am-ui-test-agent.yml` pulls or rebuilds base; app `Dockerfile` is a thin layer on top.
+
+Manual base rebuild only:
+
+```bash
+cd am-agents
+docker build -f docker/Dockerfile.ui-test-agent-base -t ghcr.io/am-portfolio/am-ui-test-agent-base:latest .
+docker push ghcr.io/am-portfolio/am-ui-test-agent-base:latest
+```
+
+Or run workflow **Build Agent Base Images** in GitHub Actions.
+
 ## CI/CD workflows
 
 | Workflow | Trigger |

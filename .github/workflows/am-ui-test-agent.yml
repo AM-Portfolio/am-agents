@@ -5,17 +5,68 @@ on:
     branches: ["main", "develop", "test/**", "feature/**", "hotfix/**", "fix/**"]
     paths:
       - "ui-test-agent/**"
+      - "docker/Dockerfile.ui-test-agent-base"
       - ".dockerignore"
   pull_request:
     branches: ["main", "develop", "test/**", "feature/**", "hotfix/**", "fix/**"]
     paths:
       - "ui-test-agent/**"
+      - "docker/Dockerfile.ui-test-agent-base"
       - ".dockerignore"
   workflow_dispatch:
 
 jobs:
+  ensure-base:
+    name: Ensure Playwright base image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      base_image: ghcr.io/am-portfolio/am-ui-test-agent-base:latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Build base only when deps change (else pull cache)
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="ghcr.io/am-portfolio/am-ui-test-agent-base"
+          BASE=$(echo "$BASE" | tr '[:upper:]' '[:lower:]')
+          TAG_LATEST="${BASE}:latest"
+
+          NEED_BUILD=false
+          BEFORE="${{ github.event.before }}"
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            BEFORE="HEAD~1"
+          fi
+          if git diff --name-only "$BEFORE" "${{ github.sha }}" | grep -qE '^docker/Dockerfile.ui-test-agent-base$|^ui-test-agent/requirements.txt$'; then
+            echo "Base inputs changed — rebuilding base image"
+            NEED_BUILD=true
+          fi
+          if ! docker pull "$TAG_LATEST"; then
+            echo "Base image missing in GHCR — building"
+            NEED_BUILD=true
+          fi
+          if [ "$NEED_BUILD" = true ]; then
+            docker build -f docker/Dockerfile.ui-test-agent-base -t "$TAG_LATEST" -t "${BASE}:${{ github.sha }}" .
+            docker push "$TAG_LATEST"
+            docker push "${BASE}:${{ github.sha }}"
+          else
+            echo "Reusing cached base image $TAG_LATEST"
+          fi
+
   publish:
     name: Publish AM UI Test Agent
+    needs: ensure-base
     permissions:
       contents: read
       packages: write
