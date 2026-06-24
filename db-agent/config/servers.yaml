@@ -1,0 +1,34 @@
+deployment:
+  mode: self_hosted
+  universal_gateway: toolbox
+
+universal:
+  transport: stdio
+  command: toolbox
+  args:
+    - --tools-file
+    - config/toolbox.yaml
+    - --readonly
+
+satellites:
+  qdrant:
+    transport: stdio
+    command: uvx
+    args:
+      - mcp-server-qdrant
+      - --url
+      - "${QDRANT_URL}"
+  kafka:
+    transport: stdio
+    command: npx
+    args:
+      - -y
+      - "@confluentinc/mcp-confluent"
+  grafana:
+    transport: stdio
+    command: mcp-grafana
+    args:
+      - --grafana-url
+      - "${GRAFANA_URL}"
+      - --enabled-tools
+      - influxdb,prometheus,loki

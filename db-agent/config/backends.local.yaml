@@ -1,0 +1,17 @@
+deployment:
+  mode: self_hosted
+  universal_gateway: toolbox
+
+backends:
+  postgres:
+    host: localhost
+    port: 5432
+  mongodb:
+    host: localhost
+    port: 27017
+  redis:
+    host: localhost
+    port: 6379
+  qdrant:
+    host: localhost
+    port: 6333

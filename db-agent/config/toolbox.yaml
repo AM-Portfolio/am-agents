@@ -1,0 +1,28 @@
+# Google MCP Toolbox tools — read-only SQL/NoSQL for AM preprod
+# See https://mcp-toolbox.dev/documentation/tools/
+sources:
+  am-postgres:
+    kind: postgres
+    connection: ${POSTGRES_URL}
+  am-mongo:
+    kind: mongodb
+    connection: ${MONGODB_URI}
+  am-redis:
+    kind: redis
+    connection: ${REDIS_URL}
+
+tools:
+  postgres-list-tables:
+    kind: postgres-sql
+    source: am-postgres
+    description: List tables in public schema
+    statement: |
+      SELECT table_schema, table_name
+      FROM information_schema.tables
+      WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+      LIMIT 100
+  mongo-list-dbs:
+    kind: mongodb
+    source: am-mongo
+    description: List MongoDB databases
+    command: listDatabases

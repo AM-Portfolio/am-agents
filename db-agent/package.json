@@ -1,0 +1,16 @@
+{
+  "name": "@am/db-agent",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "node scripts/run-with-logs.js python -m uvicorn app.main:app --host 0.0.0.0 --port 8140 --reload",
+    "preprod": "node scripts/run-with-logs.js python scripts/run_preprod.py",
+    "start": "npm run dev",
+    "start:preprod": "npm run preprod",
+    "logs:clean": "node scripts/clean-logs.js",
+    "test": "node scripts/run-with-logs.js python -m pytest tests -q",
+    "test:verbose": "node scripts/run-with-logs.js python -m pytest tests -v",
+    "smoke:preprod": "node scripts/run-with-logs.js python scripts/smoke_preprod.py",
+    "test:preprod": "node scripts/run-with-logs.js python scripts/test_preprod_api.py"
+  }
+}

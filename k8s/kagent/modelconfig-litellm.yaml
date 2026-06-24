@@ -1,0 +1,12 @@
+apiVersion: kagent.dev/v1alpha2
+kind: ModelConfig
+metadata:
+  name: litellm-together
+  namespace: kagent
+spec:
+  provider: OpenAI
+  model: together_ai/meta-llama/Meta-Llama-3-8B-Instruct-Lite
+  apiKeySecret: litellm-kagent-secret
+  apiKeySecretKey: masterkey
+  openAI:
+    baseUrl: http://litellm.am-ai.svc.cluster.local:4000/v1

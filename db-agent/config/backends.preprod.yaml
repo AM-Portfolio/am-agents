@@ -1,0 +1,42 @@
+deployment:
+  mode: self_hosted
+  universal_gateway: toolbox
+
+universal:
+  toolbox:
+    tools_file: config/toolbox.yaml
+    transport: http
+    url: http://mcp-toolbox.infra.svc:5000
+
+satellites:
+  kafka:
+    enabled: true
+    server: confluent
+  qdrant:
+    enabled: true
+    server: qdrant-mcp
+  grafana:
+    enabled: true
+    server: mcp-grafana
+
+backends:
+  postgres:
+    host: postgresql.infra.svc.cluster.local
+    port: 5432
+  mongodb:
+    host: mongodb.infra.svc.cluster.local
+    port: 27017
+  redis:
+    host: redis.infra.svc.cluster.local
+    port: 6379
+  qdrant:
+    host: qdrant.munish.org
+    port: 443
+    tls: true
+  kafka:
+    bootstrap: kafka.infra.svc.cluster.local:9092
+  grafana:
+    url: https://am.asrax.in/grafana
+  influx:
+    host: influxdb.infra.svc.cluster.local
+    port: 8086

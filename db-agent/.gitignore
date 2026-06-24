@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+# Local secrets — ignored by git only; files are NOT deleted from disk.
+.env
+.env.*
+!.env.example
+logs/*
+!logs/README.md

@@ -1,0 +1,160 @@
+backends:
+  postgres:
+    mcp_server: toolbox
+    adapter: postgres
+    operations:
+      search_schema:
+        mcp_tool: search_objects
+        adapter_method: search_schema
+        read_only: true
+      run_sql:
+        mcp_tool: execute_sql
+        adapter_method: run_sql
+        read_only: true
+      table_row_count:
+        mcp_tool: execute_sql
+        adapter_method: table_row_count
+        read_only: true
+
+  mongodb:
+    mcp_server: toolbox
+    adapter: mongodb
+    operations:
+      list_databases:
+        mcp_tool: list-databases
+        adapter_method: list_databases
+        read_only: true
+      list_collections:
+        mcp_tool: list-collections
+        adapter_method: list_collections
+        read_only: true
+      find:
+        mcp_tool: find
+        adapter_method: find
+        read_only: true
+      aggregate:
+        mcp_tool: aggregate
+        adapter_method: find
+        read_only: true
+      collection_schema:
+        mcp_tool: collection-schema
+        adapter_method: list_collections
+        read_only: true
+      count_documents:
+        mcp_tool: count
+        adapter_method: count_documents
+        read_only: true
+
+  redis:
+    mcp_server: toolbox
+    adapter: redis
+    operations:
+      scan_keys:
+        mcp_tool: scan
+        adapter_method: scan_keys
+        read_only: true
+      get:
+        mcp_tool: get
+        adapter_method: get
+        read_only: true
+      info:
+        mcp_tool: info
+        adapter_method: info
+        read_only: true
+      type:
+        mcp_tool: type
+        adapter_method: type
+        read_only: true
+
+  qdrant:
+    mcp_server: qdrant
+    adapter: qdrant
+    operations:
+      list_collections:
+        mcp_tool: list_collections
+        adapter_method: list_collections
+        read_only: true
+      collection_info:
+        mcp_tool: get_collection
+        adapter_method: collection_info
+        read_only: true
+      scroll:
+        mcp_tool: scroll
+        adapter_method: scroll
+        read_only: true
+      search:
+        mcp_tool: search
+        adapter_method: search
+        read_only: true
+
+  kafka:
+    mcp_server: kafka
+    adapter: kafka
+    operations:
+      list_topics:
+        mcp_tool: list_topics
+        adapter_method: list_topics
+        read_only: true
+      describe_topic:
+        mcp_tool: describe_topic
+        adapter_method: describe_topic
+        read_only: true
+      peek_messages:
+        mcp_tool: consume_messages
+        adapter_method: peek_messages
+        read_only: true
+      consumer_lag:
+        mcp_tool: consumer_lag
+        adapter_method: consumer_lag
+        read_only: true
+
+  grafana:
+    mcp_server: grafana
+    adapter: grafana
+    operations:
+      search_dashboards:
+        mcp_tool: search_dashboards
+        adapter_method: search_dashboards
+        read_only: true
+      get_dashboard:
+        mcp_tool: get_dashboard
+        adapter_method: get_dashboard
+        read_only: true
+      query_datasource:
+        mcp_tool: query_prometheus
+        adapter_method: query_datasource
+        read_only: true
+
+  influx:
+    mcp_server: grafana
+    adapter: influx
+    operations:
+      query_flux:
+        mcp_tool: query_influxdb
+        adapter_method: query_flux
+        read_only: true
+      query_influxql:
+        mcp_tool: query_influxdb
+        adapter_method: query_influxql
+        read_only: true
+
+  loki:
+    mcp_server: grafana
+    adapter: loki
+    operations:
+      query_logs:
+        mcp_tool: query_loki_logs
+        adapter_method: query_logs
+        read_only: true
+      list_labels:
+        mcp_tool: list_loki_label_names
+        adapter_method: list_labels
+        read_only: true
+      list_label_values:
+        mcp_tool: list_loki_label_values
+        adapter_method: list_label_values
+        read_only: true
+      query_patterns:
+        mcp_tool: query_loki_patterns
+        adapter_method: query_patterns
+        read_only: true

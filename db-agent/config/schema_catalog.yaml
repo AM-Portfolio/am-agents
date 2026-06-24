@@ -1,0 +1,53 @@
+environment: preprod
+entities:
+  portfolio:
+    backend: mongodb
+    database: portfolio
+    collection: portfolios
+    id_field: _id
+    alternate_id_fields:
+      - portfolio_id
+    lookup_fields:
+      id: _id
+      email: email
+  user:
+    backend: mongodb
+    database: portfolio
+    collection: users
+    id_field: _id
+    lookup_fields:
+      id: _id
+      email: email
+  portfolio_pg:
+    backend: postgres
+    schema: public
+    table: portfolios
+    id_field: id
+    lookup_fields:
+      id: id
+  user_account:
+    backend: postgres
+    schema: public
+    table: user_accounts
+    id_field: id
+    lookup_fields:
+      id: id
+      email: email
+  session:
+    backend: redis
+    key_template: "session:{id}"
+    key_pattern: "session:*"
+  portfolio_cache:
+    backend: redis
+    key_template: "portfolio:{id}"
+    key_pattern: "portfolio:*"
+  bug_memory:
+    backend: qdrant
+    collection: bug_memory
+defaults:
+  mongodb:
+    database: portfolio
+  postgres:
+    schema: public
+  redis:
+    key_pattern: "*"

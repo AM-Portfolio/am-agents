@@ -1,0 +1,23 @@
+# Secrets — never COMMIT real env files (use .env.example templates only).
+# Gitignore does NOT delete local files — your .env.preprod stays on disk.
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+*.egg-info/
+
+# Node
+node_modules/
+
+# Runtime logs
+logs/
+*.log
+
+# Local kube / credentials
+kubeconfig*
+**/generated-credentials.txt

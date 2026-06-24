@@ -1,0 +1,27 @@
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: am-k8s-ops
+  namespace: kagent
+spec:
+  description: AM preprod Kubernetes ops — read-only pod/log/event/helm queries
+  type: Declarative
+  declarative:
+    modelConfig: litellm-together
+    systemMessage: |
+      You are the AM platform Kubernetes ops agent for the preprod cluster.
+      Use k8s tools to inspect pods, logs, events, and cluster resources.
+      Prefer read-only operations. Always name the namespace you queried.
+      Format responses as Markdown with a short summary first.
+    tools:
+      - type: McpServer
+        mcpServer:
+          apiGroup: kagent.dev
+          kind: RemoteMCPServer
+          name: kagent-tool-server
+          toolNames:
+            - k8s_get_resources
+            - k8s_describe_resource
+            - k8s_get_pod_logs
+            - k8s_get_events
+            - k8s_get_available_api_resources
