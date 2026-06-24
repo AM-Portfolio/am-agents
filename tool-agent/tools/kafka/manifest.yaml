@@ -1,0 +1,27 @@
+name: kafka
+display_name: Kafka
+enabled: true
+version: "0.1.0"
+
+infer_keywords: [kafka, topic, messages]
+
+vault:
+  path_template: "apps/data/{env}/infra/kafka"
+env_prefix: KAFKA_
+
+supports_mcp: true
+mcp_server: kafka
+has_entities: false
+health_check: skip
+
+prompts:
+  intent:
+    source: file
+    name: tool-agent/intent/kafka
+    label: "{{APP_ENV}}"
+    fallback: prompts/intent.yaml
+  examples:
+    source: file
+    name: tool-agent/intent/kafka/examples
+    fallback: prompts/examples.yaml
+    optional: true

@@ -1,0 +1,27 @@
+name: _template
+display_name: __DISPLAY_NAME__
+enabled: false
+version: "0.1.0"
+
+infer_keywords: [__KEYWORDS__]
+
+vault:
+  path_template: "apps/data/{env}/infra/__TOOL_NAME__"
+env_prefix: __ENV_PREFIX__
+
+supports_mcp: false
+mcp_server: toolbox
+has_entities: false
+health_check: skip
+
+prompts:
+  intent:
+    source: file
+    name: tool-agent/intent/__TOOL_NAME__
+    label: "{{APP_ENV}}"
+    fallback: prompts/intent.yaml
+  examples:
+    source: file
+    name: tool-agent/intent/__TOOL_NAME__/examples
+    fallback: prompts/examples.yaml
+    optional: true

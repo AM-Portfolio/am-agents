@@ -1,0 +1,27 @@
+name: postgres
+display_name: Postgres
+enabled: true
+version: "0.1.0"
+
+infer_keywords: [postgres, sql, table]
+
+vault:
+  path_template: "apps/data/{env}/infra/postgres"
+env_prefix: POSTGRES_
+
+supports_mcp: true
+mcp_server: toolbox
+has_entities: true
+health_check: skip
+
+prompts:
+  intent:
+    source: file
+    name: tool-agent/intent/postgres
+    label: "{{APP_ENV}}"
+    fallback: prompts/intent.yaml
+  examples:
+    source: file
+    name: tool-agent/intent/postgres/examples
+    fallback: prompts/examples.yaml
+    optional: true

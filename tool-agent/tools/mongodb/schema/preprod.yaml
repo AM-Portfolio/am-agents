@@ -1,0 +1,19 @@
+defaults:
+  database: portfolio
+entities:
+  portfolio:
+    database: portfolio
+    collection: portfolios
+    id_field: _id
+    alternate_id_fields:
+      - portfolio_id
+    lookup_fields:
+      id: _id
+      email: email
+  user:
+    database: portfolio
+    collection: users
+    id_field: _id
+    lookup_fields:
+      id: _id
+      email: email

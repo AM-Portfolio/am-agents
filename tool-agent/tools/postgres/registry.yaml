@@ -1,0 +1,14 @@
+adapter: postgres
+operations:
+  search_schema:
+    mcp_tool: search_objects
+    adapter_method: search_schema
+    read_only: true
+  run_sql:
+    mcp_tool: execute_sql
+    adapter_method: run_sql
+    read_only: true
+  table_row_count:
+    mcp_tool: execute_sql
+    adapter_method: table_row_count
+    read_only: true

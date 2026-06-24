@@ -1,0 +1,16 @@
+defaults:
+  schema: public
+entities:
+  portfolio_pg:
+    schema: public
+    table: portfolios
+    id_field: id
+    lookup_fields:
+      id: id
+  user_account:
+    schema: public
+    table: user_accounts
+    id_field: id
+    lookup_fields:
+      id: id
+      email: email

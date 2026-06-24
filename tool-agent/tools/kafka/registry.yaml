@@ -1,0 +1,18 @@
+adapter: kafka
+operations:
+  list_topics:
+    mcp_tool: list_topics
+    adapter_method: list_topics
+    read_only: true
+  describe_topic:
+    mcp_tool: describe_topic
+    adapter_method: describe_topic
+    read_only: true
+  peek_messages:
+    mcp_tool: consume_messages
+    adapter_method: peek_messages
+    read_only: true
+  consumer_lag:
+    mcp_tool: consumer_lag
+    adapter_method: consumer_lag
+    read_only: true

@@ -7,6 +7,7 @@ Same pattern as [am-platform/helm/README.md](../../am-platform/helm/README.md): 
 | Agent | Image | Port | Ingress path |
 |-------|-------|------|--------------|
 | db-agent | `ghcr.io/am-portfolio/am-db-agent` | 8140 | `/db` |
+| tool-agent | `ghcr.io/am-portfolio/am-tool-agent` | 8141 | `/tools` |
 | ui-test-agent | `ghcr.io/am-portfolio/am-ui-test-agent` | 8130 | `/ui-test` |
 
 ## Environments
@@ -39,6 +40,17 @@ Agents do **not** need dedicated `am-db-agent` / `am-ui-test-agent` Vault entrie
 | `apps/data/{env}/services/am-identity` | `AM_MCP_CLIENT_SECRET` |
 | `apps/data/{env}/services/am-mcp-gateway` | `LANGFUSE_*`, `LITELLM_MASTER_KEY` |
 
+**tool-agent** (same infra paths as db-agent; plugin tools under `tool-agent/tools/`):
+
+| Vault path | Keys injected |
+|------------|---------------|
+| `apps/data/{env}/infra/postgres` | `POSTGRES_URL` ← `url` |
+| `apps/data/{env}/infra/mongodb` | `MONGODB_URI` ← `url` |
+| `apps/data/{env}/infra/redis` | `REDIS_URL` (template) |
+| `apps/data/{env}/infra/kafka` | `KAFKA_*` |
+| `apps/data/{env}/services/am-identity` | `AM_MCP_CLIENT_SECRET` |
+| `apps/data/{env}/services/am-mcp-gateway` | `LANGFUSE_*`, `LITELLM_MASTER_KEY` |
+
 **ui-test-agent:**
 
 | Vault path | Keys injected |
@@ -56,6 +68,9 @@ Key names must match `helm/vault-mappings.yaml` in each agent. CLI writes use `a
 ```bash
 cd am-agents/db-agent
 docker build -t am-db-agent:local .
+
+cd am-agents/tool-agent
+docker build -t am-tool-agent:local .
 
 cd am-agents/ui-test-agent
 docker build -t am-ui-test-agent:local .
@@ -109,3 +124,5 @@ cd am-agents
 ## MCP gateway
 
 Set `DB_AGENT_BASE_URL` in [am-mcp-gateway helm values](../../am-platform/am-mcp-gateway/helm/) per env so gateway can route to db-agent.
+
+Set `TOOL_AGENT_BASE_URL` in the same helm values for the new tool-agent (`http://am-tool-agent.am-apps-{env}.svc.cluster.local:8141`).

@@ -1,0 +1,18 @@
+adapter: redis
+operations:
+  scan_keys:
+    mcp_tool: scan
+    adapter_method: scan_keys
+    read_only: true
+  get:
+    mcp_tool: get
+    adapter_method: get
+    read_only: true
+  info:
+    mcp_tool: info
+    adapter_method: info
+    read_only: true
+  type:
+    mcp_tool: type
+    adapter_method: type
+    read_only: true

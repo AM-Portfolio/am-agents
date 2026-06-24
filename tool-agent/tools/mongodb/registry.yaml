@@ -1,0 +1,26 @@
+adapter: mongodb
+operations:
+  list_databases:
+    mcp_tool: list-databases
+    adapter_method: list_databases
+    read_only: true
+  list_collections:
+    mcp_tool: list-collections
+    adapter_method: list_collections
+    read_only: true
+  find:
+    mcp_tool: find
+    adapter_method: find
+    read_only: true
+  aggregate:
+    mcp_tool: aggregate
+    adapter_method: find
+    read_only: true
+  collection_schema:
+    mcp_tool: collection-schema
+    adapter_method: list_collections
+    read_only: true
+  count_documents:
+    mcp_tool: count
+    adapter_method: count_documents
+    read_only: true

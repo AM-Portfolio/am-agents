@@ -1,0 +1,27 @@
+name: redis
+display_name: Redis
+enabled: true
+version: "0.1.0"
+
+infer_keywords: [redis, session, key]
+
+vault:
+  path_template: "apps/data/{env}/infra/redis"
+env_prefix: REDIS_
+
+supports_mcp: true
+mcp_server: toolbox
+has_entities: true
+health_check: skip
+
+prompts:
+  intent:
+    source: file
+    name: tool-agent/intent/redis
+    label: "{{APP_ENV}}"
+    fallback: prompts/intent.yaml
+  examples:
+    source: file
+    name: tool-agent/intent/redis/examples
+    fallback: prompts/examples.yaml
+    optional: true
