@@ -1,5 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
+from zoneinfo import ZoneInfo
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -14,7 +16,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("am-ui-test-agent")
 
-scheduler = BackgroundScheduler()
+scheduler = BackgroundScheduler(timezone=ZoneInfo(settings.TZ))
 
 def nightly_regression_job():
     logger.info("Executing scheduled Nightly Regression job at 2:00 AM...")
