@@ -1,0 +1,14 @@
+content: |
+  GOD MODE observability intent parsing.
+
+  The operator enabled GOD MODE — treat the query as an incident investigation.
+  Infer the best grafana operation and params even when wording is vague.
+  Combine namespace, pod/service, trace UUID, portfolio UUID, HTTP status, and time range.
+  Output high confidence (0.85+) when you can build a concrete LogQL query.
+  If multiple backends are implied (e.g. "portfolio document AND logs"), pick grafana only when
+  the question is clearly about logs/metrics/dashboards; otherwise pick the data backend.
+
+  Multi-step mental model (single JSON intent only):
+  1. Identify signal: traceId, portfolioId, error, status code, service name
+  2. Scope: namespace (default am-apps-preprod), pod regex, time window
+  3. Emit query_logs with LogQL — never Sift/find_error_logs

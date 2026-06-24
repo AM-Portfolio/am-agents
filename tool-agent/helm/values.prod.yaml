@@ -1,0 +1,40 @@
+environment: prod
+replicaCount: 1
+
+vault:
+  enabled: true
+  secretPaths:
+    postgres:
+      path: "apps/data/prod/infra/postgres"
+    mongodb:
+      path: "apps/data/prod/infra/mongodb"
+    redis:
+      path: "apps/data/prod/infra/redis"
+    kafka:
+      path: "apps/data/prod/infra/kafka"
+    identity-oidc:
+      path: "apps/data/prod/services/am-identity"
+    observability:
+      path: "apps/data/prod/services/am-mcp-gateway"
+    llm-api-keys:
+      path: "apps/data/prod/services/am-mcp-gateway"
+
+# Keep ingress off until prod pods are healthy. A prod Ingress on am.asrax.in/tools
+# with no endpoints steals Traefik traffic from preprod (503). Match db-agent prod
+# pattern: enable only at cutover.
+ingress:
+  enabled: false
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: >-
+      am-apps-prod-global-cors@kubernetescrd,
+      am-apps-prod-strip-prefix-apps@kubernetescrd
+  hosts:
+    - host: am.asrax.in
+      paths:
+        - path: /tools
+          pathType: Prefix
+
+env:
+  APP_ENV: prod
+  QDRANT_URL: "https://qdrant.munish.org"
+  TOOL_AGENT_ALLOW_WRITES: "false"

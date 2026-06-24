@@ -1,0 +1,27 @@
+name: qdrant
+display_name: Qdrant
+enabled: true
+version: "0.1.0"
+
+infer_keywords: [qdrant, collection, vector]
+
+vault:
+  path_template: "apps/data/{env}/infra/qdrant"
+env_prefix: QDRANT_
+
+supports_mcp: true
+mcp_server: qdrant
+has_entities: true
+health_check: skip
+
+prompts:
+  intent:
+    source: file
+    name: tool-agent/intent/qdrant
+    label: "{{APP_ENV}}"
+    fallback: prompts/intent.yaml
+  examples:
+    source: file
+    name: tool-agent/intent/qdrant/examples
+    fallback: prompts/examples.yaml
+    optional: true

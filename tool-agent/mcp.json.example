@@ -1,0 +1,14 @@
+﻿{
+  "mcpServers": {
+    "am-tool-agent-preprod": {
+      "command": "python",
+      "args": [
+        "a:/InfraCode/AM-Portfolio-grp/am-agents/tool-agent/scripts/mcp_stdio_bridge.py"
+      ],
+      "env": {
+        "TOOL_AGENT_BASE_URL": "https://am.asrax.in/tools",
+        "TOOL_AGENT_CALLER": "cursor-mcp"
+      }
+    }
+  }
+}

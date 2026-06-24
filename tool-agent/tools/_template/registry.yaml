@@ -1,0 +1,5 @@
+adapter: __TOOL_NAME__
+operations:
+  ping:
+    adapter_method: ping
+    read_only: true

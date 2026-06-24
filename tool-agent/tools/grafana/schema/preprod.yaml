@@ -1,0 +1,18 @@
+defaults:
+  start: now-1h
+  end: now
+  loki_datasource_uid: P8E80F9AEF21F6940
+  namespace: am-apps-preprod
+
+entities:
+  pod_logs:
+    datasource_uid: ""
+    logql_template: '{namespace="{namespace}", pod=~"{pod}.*"}'
+    lookup_fields:
+      namespace: namespace
+      pod: pod
+  namespace_logs:
+    datasource_uid: ""
+    logql_template: '{namespace="{namespace}"}'
+    lookup_fields:
+      namespace: namespace

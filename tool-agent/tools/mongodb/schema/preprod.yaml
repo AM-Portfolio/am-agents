@@ -1,0 +1,110 @@
+# Live preprod catalog (discovered 2026-06). Use entity + id when possible.
+defaults:
+  database: portfolio
+
+# Reference for LLM / operators — not auto-scanned at runtime
+databases:
+  portfolio:
+    collections: [portfolios, securities]
+    description: User portfolio holdings and linked securities master
+  market_data:
+    collections:
+      - securities
+      - instruments
+      - upstock_instruments
+      - stock_indices_market_data
+      - ingestion_job_logs
+      - document_processing_records
+      - market_data_ingestion_status
+    description: Market instruments, indices, ingestion telemetry
+  am-trade:
+    collections:
+      - trades
+      - trade_details
+      - portfolio_trades
+      - trade_replays
+      - favoriteFilter
+      - notebookItem
+      - tradeJournalEntry
+    description: Trade execution and journal data
+  trade_management:
+    collections:
+      - trade
+      - trade_details
+      - portfolio_trades
+      - trade_replays
+      - notebookItem
+      - notebookTag
+      - journalTemplate
+      - favoriteFilter
+      - dashboardPreferences
+      - daily_behavior_tracking
+    description: Trade management UI preferences and journals
+  mutual_funds:
+    collections: [portfolios, etfs, etf_holdings, background_jobs]
+    description: Mutual fund / ETF portfolios
+
+entities:
+  portfolio:
+    database: portfolio
+    collection: portfolios
+    id_field: _id
+    alternate_id_fields:
+      - portfolio_id
+    lookup_fields:
+      id: _id
+      name: name
+      owner: owner
+  portfolio_security:
+    database: portfolio
+    collection: securities
+    id_field: _id
+    lookup_fields:
+      id: _id
+      isin: isin
+      symbol: equity_symbol
+  market_security:
+    database: market_data
+    collection: securities
+    id_field: _id
+    lookup_fields:
+      id: _id
+      isin: isin
+      symbol: equity_symbol
+  market_instrument:
+    database: market_data
+    collection: instruments
+    id_field: _id
+    lookup_fields:
+      id: _id
+      symbol: symbol
+  trade:
+    database: am-trade
+    collection: trades
+    id_field: _id
+    lookup_fields:
+      id: _id
+  trade_detail:
+    database: am-trade
+    collection: trade_details
+    id_field: _id
+    lookup_fields:
+      id: _id
+  portfolio_trade:
+    database: am-trade
+    collection: portfolio_trades
+    id_field: _id
+    lookup_fields:
+      id: _id
+  mutual_fund_portfolio:
+    database: mutual_funds
+    collection: portfolios
+    id_field: _id
+    lookup_fields:
+      id: _id
+  etf:
+    database: mutual_funds
+    collection: etfs
+    id_field: _id
+    lookup_fields:
+      id: _id

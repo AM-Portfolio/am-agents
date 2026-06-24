@@ -1,0 +1,32 @@
+content: |
+  Example 1 — list databases
+  Query: list all mongo databases
+  JSON: {"backend":"mongodb","operation":"list_databases","params":{},"read_only":true,"confidence":0.9,"rationale":"discovery"}
+
+  Example 2 — list collections in portfolio
+  Query: list collections in portfolio mongodb database
+  JSON: {"backend":"mongodb","operation":"list_collections","params":{"database":"portfolio"},"read_only":true,"confidence":0.9,"rationale":"portfolio discovery"}
+
+  Example 3 — count portfolios
+  Query: how many portfolios in portfolio database
+  JSON: {"backend":"mongodb","operation":"count_documents","params":{"database":"portfolio","collection":"portfolios","filter":{}},"read_only":true,"confidence":0.85,"rationale":"count portfolios"}
+
+  Example 4 — count securities
+  Query: how many securities in portfolio db
+  JSON: {"backend":"mongodb","operation":"count_documents","params":{"database":"portfolio","collection":"securities","filter":{}},"read_only":true,"confidence":0.85,"rationale":"count securities"}
+
+  Example 5 — find portfolio by id (entity)
+  Query: find portfolio 163d0143-4fcb-480c-ac20-622f14e0e293
+  JSON: {"backend":"mongodb","operation":"find","params":{"entity":"portfolio","id":"163d0143-4fcb-480c-ac20-622f14e0e293"},"read_only":true,"confidence":0.9,"rationale":"entity lookup"}
+
+  Example 6 — market data instruments
+  Query: list instruments in market_data database
+  JSON: {"backend":"mongodb","operation":"find","params":{"database":"market_data","collection":"instruments","filter":{}},"read_only":true,"confidence":0.8,"rationale":"market instruments sample","max_rows":10}
+
+  Example 7 — trades in am-trade
+  Query: list trades in am-trade mongo database
+  JSON: {"backend":"mongodb","operation":"find","params":{"database":"am-trade","collection":"trades","filter":{}},"read_only":true,"confidence":0.85,"rationale":"trade sample"}
+
+  Example 8 — schema discovery
+  Query: show schema for portfolios collection in portfolio
+  JSON: {"backend":"mongodb","operation":"collection_schema","params":{"database":"portfolio","collection":"portfolios","sample_size":20},"read_only":true,"confidence":0.85,"rationale":"infer shape"}

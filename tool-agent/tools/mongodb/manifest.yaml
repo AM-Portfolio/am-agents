@@ -1,0 +1,38 @@
+name: mongodb
+display_name: Mongodb
+enabled: true
+version: "0.1.0"
+
+infer_keywords:
+  - mongo
+  - mongodb
+  - collection
+  - portfolio
+  - securities
+  - market_data
+  - instruments
+  - trade
+  - am-trade
+  - mutual_funds
+  - etf
+
+vault:
+  path_template: "apps/data/{env}/infra/mongodb"
+env_prefix: MONGODB_
+
+supports_mcp: true
+mcp_server: toolbox
+has_entities: true
+health_check: skip
+
+prompts:
+  intent:
+    source: file
+    name: tool-agent/intent/mongodb
+    label: "{{APP_ENV}}"
+    fallback: prompts/intent.yaml
+  examples:
+    source: file
+    name: tool-agent/intent/mongodb/examples
+    fallback: prompts/examples.yaml
+    optional: true

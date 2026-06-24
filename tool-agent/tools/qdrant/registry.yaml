@@ -1,0 +1,18 @@
+adapter: qdrant
+operations:
+  list_collections:
+    mcp_tool: list_collections
+    adapter_method: list_collections
+    read_only: true
+  collection_info:
+    mcp_tool: get_collection
+    adapter_method: collection_info
+    read_only: true
+  scroll:
+    mcp_tool: scroll
+    adapter_method: scroll
+    read_only: true
+  search:
+    mcp_tool: search
+    adapter_method: search
+    read_only: true

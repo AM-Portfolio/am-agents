@@ -1,0 +1,3 @@
+content: |
+  Tool: __DISPLAY_NAME__
+  Describe supported operations and vocabulary for intent parsing.

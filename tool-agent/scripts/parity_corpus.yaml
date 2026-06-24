@@ -1,0 +1,31 @@
+# Parity corpus: NL queries to compare /db vs /tools
+queries:
+  - label: mongo-list-databases
+    query: list mongo databases
+    backend: mongodb
+    compare_query: false
+
+  - label: mongo-user-email
+    query: find user by email test@example.com
+    backend: mongodb
+    compare_query: false
+
+  - label: postgres-schema
+    query: search postgres schema user_accounts
+    backend: postgres
+    compare_query: false
+
+  - label: redis-info
+    query: redis info server
+    backend: redis
+    compare_query: false
+
+  - label: kafka-topics
+    query: list kafka topics
+    backend: kafka
+    compare_query: false
+
+  - label: qdrant-collections
+    query: list qdrant collections
+    backend: qdrant
+    compare_query: false

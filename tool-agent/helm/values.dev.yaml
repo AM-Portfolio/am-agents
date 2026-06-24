@@ -1,0 +1,14 @@
+environment: dev
+replicaCount: 1
+
+ingress:
+  hosts:
+    - host: am-dev.asrax.in
+      paths:
+        - path: /tools
+          pathType: Prefix
+
+env:
+  APP_ENV: dev
+  MCP_GATEWAY_BASE_URL: "http://am-mcp-gateway.am-apps-dev.svc.cluster.local:8120"
+  QDRANT_URL: "http://qdrant.am-ai.svc.cluster.local:6333"

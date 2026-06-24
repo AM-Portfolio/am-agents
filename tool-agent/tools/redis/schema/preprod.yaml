@@ -1,0 +1,9 @@
+entities:
+  session:
+    key_template: "session:{id}"
+    key_pattern: "session:*"
+  portfolio_cache:
+    key_template: "portfolio:{id}"
+    key_pattern: "portfolio:*"
+defaults:
+  key_pattern: "*"
