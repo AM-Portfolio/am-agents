@@ -1,23 +1,7 @@
-FROM mcr.microsoft.com/playwright/python:v1.49.1-jammy
-
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PYTHONPATH=/app \
-    APP_PORT=8130 \
-    TZ=Asia/Kolkata \
-    HEADLESS=true
-
-WORKDIR /app
-
-RUN apt-get update && apt-get install -y --no-install-recommends tzdata \
-    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
-    && echo $TZ > /etc/timezone \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# App layer — fast rebuild when only app/ or scripts/ change.
+# Base (Playwright + tzdata + pip deps): ghcr.io/am-portfolio/am-ui-test-agent-base
+ARG BASE_IMAGE=ghcr.io/am-portfolio/am-ui-test-agent-base:latest
+FROM ${BASE_IMAGE}
 
 COPY app/ app/
 COPY scripts/ scripts/
