@@ -1,0 +1,12 @@
+content: |
+  Example — query logs
+  Query: loki logs for am-tool-agent in am-apps-preprod namespace last 30 minutes
+  JSON: {"backend":"grafana","operation":"query_logs","params":{"query":"{namespace=\"am-apps-preprod\", pod=~\"am-tool-agent.*\"}","start":"now-30m","end":"now"},"read_only":true,"confidence":0.85,"rationale":"pod logs"}
+
+  Example — list datasources
+  Query: list grafana datasources
+  JSON: {"backend":"grafana","operation":"list_datasources","params":{},"read_only":true,"confidence":0.9,"rationale":"discovery"}
+
+  Example — search dashboards
+  Query: search grafana dashboards for portfolio
+  JSON: {"backend":"grafana","operation":"search_dashboards","params":{"query":"portfolio"},"read_only":true,"confidence":0.85,"rationale":"dashboard search"}

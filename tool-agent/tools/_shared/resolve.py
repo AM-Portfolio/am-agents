@@ -29,6 +29,17 @@ BACKEND_OPERATIONS: dict[str, list[str]] = {
     "redis": ["scan_keys", "get", "info", "type"],
     "kafka": ["list_topics", "describe_topic", "peek_messages", "consumer_lag"],
     "qdrant": ["list_collections", "collection_info", "scroll", "search"],
+    "grafana": [
+        "query_logs",
+        "list_labels",
+        "list_label_values",
+        "query_patterns",
+        "find_error_logs",
+        "query_metrics",
+        "search_dashboards",
+        "get_dashboard",
+        "list_datasources",
+    ],
 }
 
 _ENTITY_HINTS: list[tuple[re.Pattern[str], str]] = [
@@ -259,4 +270,11 @@ def _missing_required_params(backend: str, operation: str, params: dict[str, Any
         return "Missing key for redis.get"
     if backend == "qdrant" and operation in QDRANT_COLL_OPS and not params.get("collection"):
         return f"Missing collection for qdrant.{operation}"
+    if backend == "grafana" and operation == "query_logs":
+        if not (params.get("query") or params.get("logql")):
+            return "Missing query/logql for grafana.query_logs"
+    if backend == "grafana" and operation == "get_dashboard" and not (
+        params.get("uid") or params.get("dashboardUid")
+    ):
+        return "Missing uid for grafana.get_dashboard"
     return None

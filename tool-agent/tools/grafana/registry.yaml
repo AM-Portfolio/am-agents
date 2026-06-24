@@ -1,0 +1,38 @@
+adapter: grafana
+operations:
+  query_logs:
+    mcp_tool: query_loki_logs
+    adapter_method: query_logs
+    read_only: true
+  list_labels:
+    mcp_tool: list_loki_label_names
+    adapter_method: list_labels
+    read_only: true
+  list_label_values:
+    mcp_tool: list_loki_label_values
+    adapter_method: list_label_values
+    read_only: true
+  query_patterns:
+    mcp_tool: query_loki_patterns
+    adapter_method: query_patterns
+    read_only: true
+  find_error_logs:
+    mcp_tool: find_error_pattern_logs
+    adapter_method: find_error_logs
+    read_only: true
+  query_metrics:
+    mcp_tool: query_prometheus
+    adapter_method: query_metrics
+    read_only: true
+  search_dashboards:
+    mcp_tool: search_dashboards
+    adapter_method: search_dashboards
+    read_only: true
+  get_dashboard:
+    mcp_tool: get_dashboard_by_uid
+    adapter_method: get_dashboard
+    read_only: true
+  list_datasources:
+    mcp_tool: list_datasources
+    adapter_method: list_datasources
+    read_only: true

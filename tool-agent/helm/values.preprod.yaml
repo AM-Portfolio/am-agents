@@ -40,4 +40,6 @@ env:
   QDRANT_URL: "https://qdrant.munish.org"
   KAFKA_UI_URL: "https://am.munish.org/kafka-ui"
   KAFKA_UI_CLUSTER: am-preprod
+  GRAFANA_MCP_URL: "http://kagent-grafana-mcp.kagent.svc.cluster.local:8000/mcp"
+  GRAFANA_MCP_TIMEOUT_SECONDS: "30"
   KEYCLOAK_TOKEN_URL: "http://auth.munish.org/auth/realms/am-preprod-realm/protocol/openid-connect/token"

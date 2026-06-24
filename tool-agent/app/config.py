@@ -70,6 +70,11 @@ class Settings(BaseSettings):
     KAFKA_UI_CLUSTER: str = Field(default="am-preprod")
     KAFKA_PEEK_MODE: Literal["auto", "native", "kafka_ui"] = Field(default="auto")
 
+    GRAFANA_MCP_URL: str | None = Field(
+        default="http://kagent-grafana-mcp.kagent.svc.cluster.local:8000/mcp"
+    )
+    GRAFANA_MCP_TIMEOUT_SECONDS: float = Field(default=30.0)
+
     PROMPT_SOURCE: Literal["langfuse", "file"] = Field(default="file")
     TOOL_AGENT_PROMPT_CACHE_TTL_SECONDS: int = Field(default=60)
 

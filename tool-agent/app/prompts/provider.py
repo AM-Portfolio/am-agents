@@ -59,7 +59,9 @@ class LangfusePromptProvider:
             return self._file_fallback.get(name, label=label, fallback_path=fallback_path)
 
         host = settings.LANGFUSE_HOST.rstrip("/")
-        url = f"{host}/api/public/v2/prompts/{name}"
+        from urllib.parse import quote
+
+        url = f"{host}/api/public/v2/prompts/{quote(name, safe='')}"
         try:
             resp = httpx.get(
                 url,

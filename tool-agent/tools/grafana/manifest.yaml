@@ -1,0 +1,36 @@
+name: grafana
+display_name: Grafana
+enabled: true
+version: "0.1.0"
+
+infer_keywords:
+  - grafana
+  - loki
+  - logs
+  - logql
+  - prometheus
+  - promql
+  - dashboard
+  - metrics
+  - observability
+
+vault:
+  path_template: ""
+env_prefix: GRAFANA_MCP_
+
+supports_mcp: false
+mcp_server: ""
+has_entities: true
+health_check: skip
+
+prompts:
+  intent:
+    source: file
+    name: tool-agent/intent/grafana
+    label: "{{APP_ENV}}"
+    fallback: prompts/intent.yaml
+  examples:
+    source: file
+    name: tool-agent/intent/grafana/examples
+    fallback: prompts/examples.yaml
+    optional: true

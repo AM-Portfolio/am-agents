@@ -1,0 +1,13 @@
+# Patch kagent-grafana-mcp to reach monitoring Grafana (apply manually).
+# kubectl apply -f grafana-mcp-env-patch.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kagent-grafana-mcp
+  namespace: kagent
+type: Opaque
+stringData:
+  GRAFANA_URL: http://grafana.monitoring.svc.cluster.local:3000
+  GRAFANA_USERNAME: admin
+  # Set GRAFANA_PASSWORD or GRAFANA_SERVICE_ACCOUNT_TOKEN via:
+  # kubectl create secret generic kagent-grafana-mcp -n kagent --from-literal=... --dry-run=client -o yaml | kubectl apply -f -

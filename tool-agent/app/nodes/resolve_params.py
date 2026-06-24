@@ -21,8 +21,13 @@ async def resolve_params_node(state: ToolAgentState) -> ToolAgentState:
             "error_status": 422,
         }
 
+    tool = get_tool(intent.backend)
+
     try:
         resolved, entity = resolve_intent_params(intent, query_text=query)
+        if tool:
+            resolved, tool_entity = tool.resolve(resolved, query)
+            entity = entity or tool_entity
     except ParamResolutionError as exc:
         return {**state, "error": exc.message, "error_status": 400}
     except Exception as exc:
