@@ -20,6 +20,7 @@ _NS_BEFORE_TIME_RE = re.compile(r"\bin\s+([a-z0-9][a-z0-9-]*)\s+last\b", re.I)
 _POD_RE = re.compile(r"\b(?:pod|deployment|app|service)\s+([a-z0-9][a-z0-9-]*)\b", re.I)
 _FOR_SERVICE_RE = re.compile(r"\b(?:logs?|loki)\s+for\s+([a-z0-9][a-z0-9-]*)\b", re.I)
 _AM_SERVICE_RE = re.compile(r"\b(am-[a-z0-9][a-z0-9-]*)\b", re.I)
+_K8S_NS_SUFFIX_RE = re.compile(r"-(?:preprod|prod|dev|staging|test)$", re.I)
 _TIME_RE = re.compile(r"\blast\s+(\d+)\s*(m|min|mins|minutes|h|hr|hours|d|days)\b", re.I)
 _ERROR_LOG_RE = re.compile(r"\berror\s*logs?\b|\berror\s+pattern\b|\berrors?\s+in\b|\bfind\s+errors?\b", re.I)
 _DEBUG_RE = re.compile(r"\b(?:debug|investigate|analyze|diagnose|troubleshoot)\b", re.I)
@@ -63,13 +64,34 @@ def _default_selector() -> str:
     return "{}"
 
 
+def _looks_like_namespace(name: str) -> bool:
+    if "-apps-" in name:
+        return True
+    return bool(name.startswith("am-") and _K8S_NS_SUFFIX_RE.search(name))
+
+
+def _pod_from_query(query: str, namespace: str | None = None) -> re.Match[str] | None:
+    for pattern in (_POD_RE, _FOR_SERVICE_RE):
+        match = pattern.search(query)
+        if match:
+            return match
+    for match in _AM_SERVICE_RE.finditer(query):
+        candidate = match.group(1)
+        if namespace and candidate == namespace:
+            continue
+        if _looks_like_namespace(candidate):
+            continue
+        return match
+    return None
+
+
 def _label_selector_from_query(query: str) -> str | None:
     if "{" in query and "}" in query:
         start = query.find("{")
         end = query.rfind("}") + 1
         return query[start:end]
     namespace = _namespace_from_query(query)
-    pod_match = _POD_RE.search(query) or _FOR_SERVICE_RE.search(query) or _AM_SERVICE_RE.search(query)
+    pod_match = _pod_from_query(query, namespace)
     if namespace and pod_match:
         return f'{{namespace="{namespace}", pod=~"{pod_match.group(1)}.*"}}'
     if namespace:

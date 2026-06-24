@@ -55,7 +55,9 @@ def test_parse_rules_error_logs_uses_query_logs_not_sift():
     assert intent is not None
     assert intent.operation == "query_logs"
     assert intent.params["start"] == "now-1h"
-    assert 'namespace="am-apps-preprod"' in intent.params["query"]
+    assert intent.params["query"] == (
+        '{namespace="am-apps-preprod"} |~ "(?i)(error|exception|failed)"'
+    )
 
 
 def test_extract_trace_id_labeled():
