@@ -21,18 +21,12 @@ vault:
       path: "apps/data/dev/infra/redis"
     kafka:
       path: "apps/data/dev/infra/kafka"
-    qdrant:
-      path: "apps/data/dev/infra/qdrant"
-    influx:
-      path: "apps/data/dev/infra/influxdb"
-    grafana:
-      path: "apps/data/dev/services/am-db-agent"
     identity-oidc:
       path: "apps/data/dev/services/am-identity"
     observability:
-      path: "apps/data/dev/services/am-db-agent"
+      path: "apps/data/dev/services/am-mcp-gateway"
     llm-api-keys:
-      path: "apps/data/dev/services/am-db-agent"
+      path: "apps/data/dev/services/am-mcp-gateway"
 
 ingress:
   annotations:

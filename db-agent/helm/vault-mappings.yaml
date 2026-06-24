@@ -14,18 +14,6 @@ vault:
         KAFKA_BOOTSTRAP_SERVERS: "bootstrap_servers"
         KAFKA_USERNAME: "username"
         KAFKA_PASSWORD: "password"
-    qdrant:
-      mappings:
-        QDRANT_API_KEY: "QDRANT_API_KEY"
-    influx:
-      mappings:
-        INFLUX_URL: "url"
-        INFLUX_TOKEN: "token"
-    grafana:
-      mappings:
-        GRAFANA_URL: "GRAFANA_URL"
-        GRAFANA_API_KEY: "GRAFANA_API_KEY"
-        GRAFANA_SERVICE_ACCOUNT_TOKEN: "GRAFANA_SERVICE_ACCOUNT_TOKEN"
     identity-oidc:
       mappings:
         AM_MCP_CLIENT_SECRET: "AM_MCP_CLIENT_SECRET"

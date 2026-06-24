@@ -15,14 +15,10 @@ vault:
   secretPaths:
     mongodb:
       path: "apps/data/prod/infra/mongodb"
-    qdrant:
-      path: "apps/data/prod/infra/qdrant"
     identity-oidc:
       path: "apps/data/prod/services/am-identity"
     observability:
-      path: "apps/data/prod/services/am-ui-test-agent"
-    ui-test-agent:
-      path: "apps/data/prod/services/am-ui-test-agent"
+      path: "apps/data/prod/services/am-mcp-gateway"
 
 ingress:
   annotations:

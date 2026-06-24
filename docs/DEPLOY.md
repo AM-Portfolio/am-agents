@@ -24,24 +24,32 @@ Helm merge order (CI): `values.yaml` → `vault-mappings.yaml` → `values.{dev|
 1. **Local laptop:** copy `db-agent/.env.example` or `ui-test-agent/.env.example` → `.env.preprod` (gitignored).
 2. **Cluster:** seed Vault via [vault-sync.ps1](../../am-platform/automation/scripts/vault-sync.ps1) from `.secrets.{env}.env`.
 
-### Vault paths to seed
+### Vault paths (reuse existing — no per-agent paths required)
 
-**Infra (reuse existing):**
-- `apps/data/{env}/infra/postgres`
-- `apps/data/{env}/infra/mongodb`
-- `apps/data/{env}/infra/redis`
-- `apps/data/{env}/infra/kafka`
-- `apps/data/{env}/infra/qdrant`
-- `apps/data/{env}/infra/influxdb`
+Agents do **not** need dedicated `am-db-agent` / `am-ui-test-agent` Vault entries. Helm points at paths that already exist from am-platform infra sync.
 
-**Services (new):**
-- `apps/data/{env}/services/am-db-agent` — `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, optional `LITELLM_MASTER_KEY`, `GRAFANA_*`
-- `apps/data/{env}/services/am-ui-test-agent` — `LANGFUSE_*`, optional `TEST_USER_PASSWORD`
+**db-agent** (`helm/vault-mappings.yaml` + `values.{env}.yaml`):
 
-**Shared identity:**
-- `apps/data/{env}/services/am-identity` — `AM_MCP_CLIENT_SECRET`
+| Vault path | Keys injected |
+|------------|---------------|
+| `apps/data/{env}/infra/postgres` | `POSTGRES_URL` ← `url` |
+| `apps/data/{env}/infra/mongodb` | `MONGODB_URI` ← `url` |
+| `apps/data/{env}/infra/redis` | `REDIS_URL` (template from host/port/password) |
+| `apps/data/{env}/infra/kafka` | `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_USERNAME`, `KAFKA_PASSWORD` |
+| `apps/data/{env}/services/am-identity` | `AM_MCP_CLIENT_SECRET` |
+| `apps/data/{env}/services/am-mcp-gateway` | `LANGFUSE_*`, `LITELLM_MASTER_KEY` |
 
-Key names must match `helm/vault-mappings.yaml` in each agent.
+**ui-test-agent:**
+
+| Vault path | Keys injected |
+|------------|---------------|
+| `apps/data/{env}/infra/mongodb` | `MONGO_URI` ← `url` |
+| `apps/data/{env}/services/am-identity` | `AM_MCP_CLIENT_SECRET` |
+| `apps/data/{env}/services/am-mcp-gateway` | `LANGFUSE_*` |
+
+**Plain Helm `env:` (not Vault):** `QDRANT_URL` / `QDRANT_HOST`, `KAFKA_UI_*`, gateway URLs.
+
+Key names must match `helm/vault-mappings.yaml` in each agent. CLI writes use `apps/{env}/...`; Vault Agent reads `apps/data/{env}/...` (KV v2).
 
 ## Local Docker build
 
@@ -71,7 +79,7 @@ cd am-agents
 
 ## First deploy checklist
 
-1. Seed Vault paths above for target env
+1. Confirm shared Vault paths exist (infra + `am-identity` + `am-mcp-gateway`) — see table above
 2. Push to `main` (or run manual deploy workflow)
 3. Verify pods: `kubectl -n am-apps-preprod get pods | findstr am-db-agent`
 4. Health: `curl https://am.asrax.in/db/health`, `curl https://am.asrax.in/ui-test/health`

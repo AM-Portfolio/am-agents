@@ -1,7 +1,9 @@
 import os
 import tempfile
 from pathlib import Path
-from typing import Literal, Optional, Self
+from typing import Literal, Optional
+
+from typing_extensions import Self
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
