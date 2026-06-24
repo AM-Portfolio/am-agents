@@ -49,6 +49,7 @@ def trace_metadata(
     backend: str | None = None,
     backend_hint: str | None = None,
     operation: str | None = None,
+    parse_source: str | None = None,
     agent_caller: str | None = None,
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -59,6 +60,8 @@ def trace_metadata(
         meta["backend_hint"] = backend_hint
     if operation:
         meta["operation"] = operation
+    if parse_source:
+        meta["parse_source"] = parse_source
     if agent_caller:
         meta["agent_caller"] = agent_caller
     if extra:
