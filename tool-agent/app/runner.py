@@ -23,8 +23,36 @@ from app.nodes.validate_safety import validate_safety_node
 from app.observability.tracer import tracer
 from app.observability.trace_labels import tool_fqn, trace_metadata
 from app.observability.usage import UsageLedger
+from tools._shared.resolve import ParamResolutionError
 
 logger = logging.getLogger(__name__)
+
+
+def _trace_context_from_state(state: dict[str, Any]) -> dict[str, Any]:
+    intent = state.get("intent")
+    if not intent:
+        return {}
+    return {
+        "backend": intent.backend,
+        "operation": intent.operation,
+        "parse_source": state.get("parse_source"),
+        "agent_caller": state.get("agent_caller"),
+    }
+
+
+def _trace_context_from_result(result: dict[str, Any]) -> dict[str, Any]:
+    ctx = _trace_context_from_state(result)
+    intent_raw = result.get("intent")
+    if intent_raw and not ctx.get("backend"):
+        if hasattr(intent_raw, "backend"):
+            ctx["backend"] = intent_raw.backend
+            ctx["operation"] = intent_raw.operation
+        elif isinstance(intent_raw, dict):
+            ctx["backend"] = intent_raw.get("backend")
+            ctx["operation"] = intent_raw.get("operation")
+    if result.get("parse_source") and not ctx.get("parse_source"):
+        ctx["parse_source"] = result.get("parse_source")
+    return ctx
 
 
 def _base_state(*, request_id: str, request: ToolsQueryRequest, agent_caller: str | None = None) -> dict[str, Any]:
@@ -51,7 +79,11 @@ async def run_tools_query(request: ToolsQueryRequest, *, agent_caller: str | Non
     await tracer.start_trace(
         request_id,
         query=request.query,
-        metadata=trace_metadata(backend_hint=request.backend, agent_caller=agent_caller),
+        metadata=trace_metadata(
+            backend_hint=request.backend,
+            agent_caller=agent_caller,
+            extra={"description": "tool-agent query: intent → safety → tool → response"},
+        ),
     )
 
     try:
@@ -67,7 +99,7 @@ async def run_tools_query(request: ToolsQueryRequest, *, agent_caller: str | Non
         if status == 422 and result.get("intent"):
             payload["intent"] = result["intent"].model_dump()
             payload["parse_source"] = result.get("parse_source")
-        await tracer.end_trace(request_id, error=result["error"])
+        await tracer.end_trace(request_id, error=result["error"], **_trace_context_from_result(result))
         return payload
 
     return await _finalize_query_result(request_id, result)
@@ -91,17 +123,17 @@ async def run_tools_plan(request: ToolsPlanRequest, *, agent_caller: str | None 
 
     state = await parse_intent_node(state)
     if state.get("error"):
-        await tracer.end_trace(request_id, error=state["error"])
+        await tracer.end_trace(request_id, error=state["error"], **_trace_context_from_state(state))
         return {"error": state["error"], "status": state.get("error_status", 400), "request_id": request_id}
 
     state = await resolve_params_node(state)
     if state.get("error"):
-        await tracer.end_trace(request_id, error=state["error"])
+        await tracer.end_trace(request_id, error=state["error"], **_trace_context_from_state(state))
         return {"error": state["error"], "status": state.get("error_status", 400), "request_id": request_id}
 
     state = await validate_safety_node(state)
     if state.get("error"):
-        await tracer.end_trace(request_id, error=state["error"])
+        await tracer.end_trace(request_id, error=state["error"], **_trace_context_from_state(state))
         return {"error": state["error"], "status": state.get("error_status", 403), "request_id": request_id}
 
     intent = state["intent"]
@@ -114,7 +146,11 @@ async def run_tools_plan(request: ToolsPlanRequest, *, agent_caller: str | None 
         parse_source=parse_source,
         min_confidence=settings.TOOL_AGENT_INTENT_MIN_CONFIDENCE,
     )
-    await tracer.end_trace(request_id, output=plan.model_dump())
+    await tracer.end_trace(
+        request_id,
+        output=plan.model_dump(),
+        **_trace_context_from_state(state),
+    )
     return {"plan": plan, "status": 200}
 
 
@@ -141,26 +177,26 @@ async def run_tools_execute(request: ToolsExecuteRequest, *, agent_caller: str |
     try:
         state = await resolve_params_node(state)
     except ParamResolutionError as exc:
-        await tracer.end_trace(request_id, error=exc.message)
+        await tracer.end_trace(request_id, error=exc.message, **_trace_context_from_state(state))
         return {"error": exc.message, "status": 400, "request_id": request_id}
 
     if state.get("error"):
-        await tracer.end_trace(request_id, error=state["error"])
+        await tracer.end_trace(request_id, error=state["error"], **_trace_context_from_state(state))
         return {"error": state["error"], "status": state.get("error_status", 400), "request_id": request_id}
 
     state = await validate_safety_node(state)
     if state.get("error"):
-        await tracer.end_trace(request_id, error=state["error"])
+        await tracer.end_trace(request_id, error=state["error"], **_trace_context_from_state(state))
         return {"error": state["error"], "status": state.get("error_status", 403), "request_id": request_id}
 
     state = await resolve_and_execute_node(state)
     if state.get("error"):
-        await tracer.end_trace(request_id, error=state["error"])
+        await tracer.end_trace(request_id, error=state["error"], **_trace_context_from_state(state))
         return {"error": state["error"], "status": state.get("error_status", 502), "request_id": request_id}
 
     state = await format_response_node(state)
     if state.get("error"):
-        await tracer.end_trace(request_id, error=state["error"])
+        await tracer.end_trace(request_id, error=state["error"], **_trace_context_from_state(state))
         return {"error": state["error"], "status": state.get("error_status", 500), "request_id": request_id}
 
     return await _finalize_query_result(request_id, state)
@@ -178,5 +214,8 @@ async def _finalize_query_result(request_id: str, result: dict[str, Any]) -> dic
             "operation": response.operation,
             "usage": ledger.totals(),
         },
+        backend=response.backend,
+        operation=response.operation,
+        parse_source=response.parse_source,
     )
     return {"response": response, "status": 200}

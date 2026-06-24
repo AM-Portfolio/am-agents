@@ -22,7 +22,7 @@ def trace_name(backend: str | None = None, operation: str | None = None, *, pend
         return f"tool-agent · {backend}.{operation}"
     if backend:
         return f"tool-agent · {backend}"
-    return "tool-agent · pending intent" if pending else "tool-agent query"
+    return "tool-agent · pending intent" if pending else "tool-agent · query"
 
 
 def trace_tags(

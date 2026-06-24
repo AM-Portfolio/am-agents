@@ -106,6 +106,18 @@ async def resolve_and_execute_node(state: ToolAgentState) -> ToolAgentState:
     await tracer.span(
         request_id,
         f"execute · {intent.backend}.{intent.operation}",
-        output={"tool_source": result.tool_source, "duration_ms": duration_ms},
+        input={
+            "backend": intent.backend,
+            "operation": intent.operation,
+            "params": state.get("resolved_params") or intent.params,
+            "tool_source": tool_call.source,
+        },
+        output={
+            "tool_source": result.tool_source,
+            "tool_name": result.tool_name,
+            "duration_ms": duration_ms,
+            "ok": result.ok,
+        },
+        metadata={"step": "execute_tool"},
     )
     return {**state, "tool_call": tool_call, "tool_result": result, "response": response, "usage_ledger": ledger}

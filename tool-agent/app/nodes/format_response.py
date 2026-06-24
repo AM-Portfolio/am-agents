@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.config import settings
 from app.llm_client import get_llm_client
+from app.observability.tracer import tracer
 from app.observability.usage import LlmUsageRecord, UsageLedger
 from app.state import ToolAgentState
 
@@ -27,8 +28,9 @@ async def format_response_node(state: ToolAgentState) -> ToolAgentState:
         f"Summarize this {response.backend}.{response.operation} result for an operator.\n"
         f"Data preview: {str(response.data)[:4000]}"
     )
+    summary_result = None
     try:
-        result = await llm.chat_with_usage(
+        summary_result = await llm.chat_with_usage(
             system="You summarize infra tool query results briefly in plain English.",
             user=user,
             request_id=state["request_id"],
@@ -38,15 +40,39 @@ async def format_response_node(state: ToolAgentState) -> ToolAgentState:
         ledger.add_llm(
             LlmUsageRecord(
                 name="format_response",
-                model=result.model,
-                prompt_tokens=result.usage.get("prompt_tokens", 0),
-                completion_tokens=result.usage.get("completion_tokens", 0),
-                total_tokens=result.usage.get("total_tokens", 0),
-                latency_ms=result.latency_ms,
+                model=summary_result.model,
+                prompt_tokens=summary_result.usage.get("prompt_tokens", 0),
+                completion_tokens=summary_result.usage.get("completion_tokens", 0),
+                total_tokens=summary_result.usage.get("total_tokens", 0),
+                latency_ms=summary_result.latency_ms,
             )
         )
-        response.summary = result.content.strip()
+        response.summary = summary_result.content.strip()
     except Exception:
-        pass
+        return state
+
+    span_metadata: dict[str, object] = {"step": "format_response"}
+    if summary_result.gateway_trace_id:
+        span_metadata["gateway_trace_id"] = summary_result.gateway_trace_id
+    span_id = await tracer.span(
+        state["request_id"],
+        "format response · summary",
+        input={"backend": response.backend, "operation": response.operation},
+        output={"summary": response.summary},
+        metadata=span_metadata,
+    )
+    if llm.routing == "direct":
+        await tracer.generation(
+            state["request_id"],
+            "tool-agent-summary",
+            model=summary_result.model,
+            input=user,
+            output=summary_result.content,
+            usage=summary_result.usage,
+            cost_usd=summary_result.cost_usd,
+            latency_ms=summary_result.latency_ms,
+            parent_observation_id=span_id,
+            metadata={"step": "format_response", "source_name": "litellm/direct"},
+        )
 
     return {**state, "response": response, "usage_ledger": ledger}

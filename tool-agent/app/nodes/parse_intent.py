@@ -75,7 +75,13 @@ async def parse_intent_node(state: ToolAgentState) -> ToolAgentState:
                 tool.validate_intent(intent)
             except Exception as exc:
                 return {**state, "error": str(exc), "error_status": 422}
-            await tracer.span(request_id, f"parse intent · rules · {tool.name}", input={"query": query})
+            await tracer.span(
+                request_id,
+                f"parse intent · rules · {tool.name}",
+                input={"query": query, "backend_hint": backend_hint},
+                output=intent.model_dump(),
+                metadata={"step": "parse_intent", "parse_source": "rules"},
+            )
             return {**state, "intent": intent, "parse_source": "rules"}
 
     if not settings.LLM_INTENT_ENABLED:
@@ -140,6 +146,40 @@ async def parse_intent_node(state: ToolAgentState) -> ToolAgentState:
             "error_status": 422,
             "usage_ledger": ledger,
         }
+
+    span_metadata: dict[str, object] = {"step": "parse_intent", "parse_source": "llm"}
+    if llm_result.gateway_trace_id:
+        span_metadata["gateway_trace_id"] = llm_result.gateway_trace_id
+    span_metadata.update(
+        {
+            "tokens": llm_result.usage.get("total_tokens", 0),
+            "prompt_tokens": llm_result.usage.get("prompt_tokens", 0),
+            "completion_tokens": llm_result.usage.get("completion_tokens", 0),
+        }
+    )
+    if llm_result.cost_usd is not None:
+        span_metadata["cost_usd"] = llm_result.cost_usd
+
+    span_id = await tracer.span(
+        request_id,
+        f"parse intent · llm · {intent.backend}.{intent.operation}",
+        input={"query": query, "backend_hint": backend_hint},
+        output=intent.model_dump(),
+        metadata=span_metadata,
+    )
+    if llm.routing == "direct":
+        await tracer.generation(
+            request_id,
+            "tool-agent-intent",
+            model=llm_result.model,
+            input={"query": query, "backend_hint": backend_hint},
+            output=llm_result.content,
+            usage=llm_result.usage,
+            cost_usd=llm_result.cost_usd,
+            latency_ms=llm_result.latency_ms,
+            parent_observation_id=span_id,
+            metadata={"step": "parse_intent", "source_name": "litellm/direct"},
+        )
 
     return {
         **state,
