@@ -22,6 +22,7 @@ vault:
 
 ingress:
   annotations:
+    traefik.ingress.kubernetes.io/router.priority: "100"
     traefik.ingress.kubernetes.io/router.middlewares: >-
       am-apps-preprod-global-cors@kubernetescrd,
       am-apps-preprod-strip-prefix-apps@kubernetescrd

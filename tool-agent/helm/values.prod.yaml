@@ -19,7 +19,15 @@ vault:
     llm-api-keys:
       path: "apps/data/prod/services/am-mcp-gateway"
 
+# Keep ingress off until prod pods are healthy. A prod Ingress on am.asrax.in/tools
+# with no endpoints steals Traefik traffic from preprod (503). Match db-agent prod
+# pattern: enable only at cutover.
 ingress:
+  enabled: false
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: >-
+      am-apps-prod-global-cors@kubernetescrd,
+      am-apps-prod-strip-prefix-apps@kubernetescrd
   hosts:
     - host: am.asrax.in
       paths:

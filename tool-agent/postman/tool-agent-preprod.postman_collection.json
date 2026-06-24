@@ -1,0 +1,867 @@
+{
+  "info": {
+    "_postman_id": "tool-agent-preprod-2026",
+    "name": "AM Tool Agent (Preprod)",
+    "description": "Test tool-agent HTTP API at {{baseUrl}}.\n\n**Flow:** `/plan` \u2192 review intent \u2192 `/execute` (structured) or `/query` (NL one-shot).\n\n**Entity-centric execute:** pass `params.entity` + `params.id` instead of database/collection (see per-tool schema under `tools/*/schema/`).\n\n**Response:** check `resolved_params` and `entity` to see what tool-agent actually ran.\n\n**Preprod Mongo:** database is `portfolio` (not `portfolio-db`).\n\n**Preprod ingress:** `https://am.asrax.in/tools` (Traefik strip-prefix must include `/tools`).\n\nRun `python scripts/test_ingress_preprod.py` for scripted smoke tests.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8141",
+      "type": "string"
+    },
+    {
+      "key": "mongoDatabase",
+      "value": "portfolio",
+      "type": "string"
+    },
+    {
+      "key": "portfolioId",
+      "value": "REPLACE_WITH_REAL_PORTFOLIO_ID",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "REPLACE_WITH_REAL_USER_ID",
+      "type": "string"
+    },
+    {
+      "key": "userEmail",
+      "value": "ssd2658@gmail.com",
+      "type": "string"
+    },
+    {
+      "key": "sessionId",
+      "value": "REPLACE_WITH_SESSION_ID",
+      "type": "string"
+    },
+    {
+      "key": "qdrantCollection",
+      "value": "bug_memory",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /ready",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/ready"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Plan (intent only)",
+      "item": [
+        {
+          "name": "Plan \u2014 list Qdrant collections",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Agent-Caller",
+                "value": "postman",
+                "disabled": true
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"list qdrant collections\",\n  \"backend\": \"qdrant\",\n  \"read_only\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/plan"
+          },
+          "response": []
+        },
+        {
+          "name": "Plan \u2014 list Mongo databases",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"list mongo databases\",\n  \"backend\": \"mongodb\",\n  \"read_only\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/plan"
+          },
+          "response": []
+        },
+        {
+          "name": "Plan \u2014 portfolio collections",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"list all collections in portfolio mongodb database\",\n  \"backend\": \"mongodb\",\n  \"read_only\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/plan"
+          },
+          "response": []
+        },
+        {
+          "name": "Plan \u2014 count portfolios (NL)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"how many documents in portfolios collection in portfolio mongodb database\",\n  \"backend\": \"mongodb\",\n  \"read_only\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/plan"
+          },
+          "response": []
+        },
+        {
+          "name": "Plan \u2014 search bug_memory (Qdrant)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"search bug_memory in qdrant for login timeout errors\",\n  \"backend\": \"qdrant\",\n  \"read_only\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/plan"
+          },
+          "response": []
+        },
+        {
+          "name": "Plan \u2014 Redis info",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"redis info server\",\n  \"backend\": \"redis\",\n  \"read_only\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/plan"
+          },
+          "response": []
+        },
+        {
+          "name": "Plan \u2014 Postgres schema search",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"list postgres tables\",\n  \"backend\": \"postgres\",\n  \"read_only\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/plan"
+          },
+          "response": []
+        },
+        {
+          "name": "Plan \u2014 list Kafka topics",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"list kafka topics\",\n  \"backend\": \"kafka\",\n  \"read_only\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/plan"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Execute \u2014 Kafka",
+      "item": [
+        {
+          "name": "Execute \u2014 list topics",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"kafka\",\n    \"operation\": \"list_topics\",\n    \"params\": {},\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"list kafka topics\"\n  },\n  \"include_summary\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        },
+        {
+          "name": "Query \u2014 list Kafka topics (NL)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"list kafka topics in infra cluster\",\n  \"backend\": \"kafka\",\n  \"read_only\": true,\n  \"include_summary\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/query"
+          },
+          "response": []
+        },
+        {
+          "name": "Query \u2014 last message on Kafka topic (NL)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"last message published on kafka topics am-stock-price-update\",\n  \"backend\": \"kafka\",\n  \"read_only\": true,\n  \"include_summary\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/query"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Query (NL \u2192 execute)",
+      "item": [
+        {
+          "name": "Query \u2014 list Qdrant collections",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"list qdrant collections\",\n  \"backend\": \"qdrant\",\n  \"read_only\": true,\n  \"include_summary\": true,\n  \"max_rows\": 100\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/query"
+          },
+          "response": []
+        },
+        {
+          "name": "Query \u2014 find user by email (postgres)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"find user details of email {{userEmail}}\",\n  \"backend\": \"postgres\",\n  \"read_only\": true,\n  \"include_summary\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/query"
+          },
+          "response": []
+        },
+        {
+          "name": "Query \u2014 list Mongo databases",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"list mongo databases\",\n  \"backend\": \"mongodb\",\n  \"read_only\": true,\n  \"include_summary\": false\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/query"
+          },
+          "response": []
+        },
+        {
+          "name": "Query \u2014 Postgres databases",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"show postgres databases\",\n  \"backend\": \"postgres\",\n  \"read_only\": true,\n  \"include_summary\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/query"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Execute \u2014 MongoDB (portfolio)",
+      "item": [
+        {
+          "name": "Execute \u2014 list databases",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"mongodb\",\n    \"operation\": \"list_databases\",\n    \"params\": {},\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"preflight schema discovery\"\n  },\n  \"include_summary\": false,\n  \"max_rows\": 100\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        },
+        {
+          "name": "Execute \u2014 list collections (portfolio)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"mongodb\",\n    \"operation\": \"list_collections\",\n    \"params\": {\n      \"database\": \"{{mongoDatabase}}\"\n    },\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"preflight schema discovery\"\n  },\n  \"include_summary\": false\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        },
+        {
+          "name": "Execute \u2014 count portfolios",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"mongodb\",\n    \"operation\": \"count_documents\",\n    \"params\": {\n      \"database\": \"{{mongoDatabase}}\",\n      \"collection\": \"portfolios\",\n      \"filter\": {}\n    },\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"portfolio count\"\n  },\n  \"include_summary\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        },
+        {
+          "name": "Execute \u2014 find portfolios (sample)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"mongodb\",\n    \"operation\": \"find\",\n    \"params\": {\n      \"database\": \"{{mongoDatabase}}\",\n      \"collection\": \"portfolios\",\n      \"filter\": {},\n      \"projection\": { \"name\": 1, \"ownerId\": 1, \"status\": 1 }\n    },\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"sample portfolio documents\"\n  },\n  \"include_summary\": true,\n  \"max_rows\": 5\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        },
+        {
+          "name": "Execute \u2014 find portfolio by entity (no db/collection)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"mongodb\",\n    \"operation\": \"find\",\n    \"params\": {\n      \"entity\": \"portfolio\",\n      \"id\": \"{{portfolioId}}\"\n    },\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"entity-centric portfolio lookup\"\n  },\n  \"include_summary\": true,\n  \"max_rows\": 10\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        },
+        {
+          "name": "Execute \u2014 find portfolio by ID",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"mongodb\",\n    \"operation\": \"find\",\n    \"params\": {\n      \"database\": \"{{mongoDatabase}}\",\n      \"collection\": \"portfolios\",\n      \"filter\": { \"_id\": \"{{portfolioId}}\" }\n    },\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"lookup single portfolio\"\n  },\n  \"include_summary\": true,\n  \"max_rows\": 10\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        },
+        {
+          "name": "Execute \u2014 find users by portfolio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"mongodb\",\n    \"operation\": \"find\",\n    \"params\": {\n      \"database\": \"{{mongoDatabase}}\",\n      \"collection\": \"users\",\n      \"filter\": { \"portfolioId\": \"{{portfolioId}}\" }\n    },\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"users linked to portfolio\"\n  },\n  \"include_summary\": true,\n  \"max_rows\": 50\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        },
+        {
+          "name": "Execute \u2014 find user by ID",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"mongodb\",\n    \"operation\": \"find\",\n    \"params\": {\n      \"database\": \"{{mongoDatabase}}\",\n      \"collection\": \"users\",\n      \"filter\": { \"_id\": \"{{userId}}\" }\n    },\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"lookup single user\"\n  },\n  \"include_summary\": true,\n  \"max_rows\": 10\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        },
+        {
+          "name": "Execute \u2014 collection schema (portfolios)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"mongodb\",\n    \"operation\": \"collection_schema\",\n    \"params\": {\n      \"database\": \"{{mongoDatabase}}\",\n      \"collection\": \"portfolios\",\n      \"sample_size\": 20\n    },\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"infer portfolio document shape\"\n  },\n  \"include_summary\": false\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Execute \u2014 Qdrant (bug analysis)",
+      "item": [
+        {
+          "name": "Execute \u2014 list collections",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"qdrant\",\n    \"operation\": \"list_collections\",\n    \"params\": {},\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"qdrant preflight\"\n  },\n  \"include_summary\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        },
+        {
+          "name": "Execute \u2014 bug_memory collection info",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"qdrant\",\n    \"operation\": \"collection_info\",\n    \"params\": {\n      \"collection\": \"{{qdrantCollection}}\"\n    },\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"bug_memory metadata\"\n  },\n  \"include_summary\": false\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        },
+        {
+          "name": "Execute \u2014 scroll bug_memory (sample points)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"qdrant\",\n    \"operation\": \"scroll\",\n    \"params\": {\n      \"collection\": \"{{qdrantCollection}}\",\n      \"limit\": 10,\n      \"with_payload\": true,\n      \"with_vector\": false\n    },\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"sample bug_memory entries\"\n  },\n  \"include_summary\": true,\n  \"max_rows\": 10\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        },
+        {
+          "name": "Execute \u2014 search bug_memory (semantic)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"qdrant\",\n    \"operation\": \"search\",\n    \"params\": {\n      \"collection\": \"{{qdrantCollection}}\",\n      \"query_text\": \"login timeout authentication failure portfolio {{portfolioId}}\",\n      \"limit\": 10,\n      \"with_payload\": true\n    },\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"semantic bug search for portfolio context\"\n  },\n  \"include_summary\": true,\n  \"max_rows\": 10\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Execute \u2014 Redis & Postgres",
+      "item": [
+        {
+          "name": "Execute \u2014 Redis INFO server",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"redis\",\n    \"operation\": \"info\",\n    \"params\": { \"section\": \"server\" },\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"redis server info\"\n  },\n  \"include_summary\": false\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        },
+        {
+          "name": "Execute \u2014 Redis get session by entity",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"redis\",\n    \"operation\": \"get\",\n    \"params\": {\n      \"entity\": \"session\",\n      \"id\": \"{{sessionId}}\"\n    },\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"entity-centric session lookup\"\n  },\n  \"include_summary\": false\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        },
+        {
+          "name": "Execute \u2014 Redis SCAN session keys (entity)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"redis\",\n    \"operation\": \"scan_keys\",\n    \"params\": { \"entity\": \"session\" },\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"scan session keys via catalog pattern\"\n  },\n  \"include_summary\": false,\n  \"max_rows\": 50\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        },
+        {
+          "name": "Execute \u2014 Redis SCAN keys (pattern)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"redis\",\n    \"operation\": \"scan_keys\",\n    \"params\": {\n      \"pattern\": \"*\",\n      \"count\": 50\n    },\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"sample redis keys\"\n  },\n  \"include_summary\": false,\n  \"max_rows\": 50\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        },
+        {
+          "name": "Execute \u2014 Postgres find user by email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"postgres\",\n    \"operation\": \"run_sql\",\n    \"params\": {\n      \"entity\": \"user_account\",\n      \"lookup_field\": \"email\",\n      \"lookup_value\": \"{{userEmail}}\"\n    },\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"user lookup by email\"\n  },\n  \"include_summary\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        },
+        {
+          "name": "Execute \u2014 Postgres find portfolio by entity",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"postgres\",\n    \"operation\": \"run_sql\",\n    \"params\": {\n      \"entity\": \"portfolio_pg\",\n      \"id\": \"{{portfolioId}}\"\n    },\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"entity-centric postgres row lookup\"\n  },\n  \"include_summary\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        },
+        {
+          "name": "Execute \u2014 Postgres count portfolios (entity)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"postgres\",\n    \"operation\": \"table_row_count\",\n    \"params\": { \"entity\": \"portfolio_pg\" },\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"count via schema catalog entity\"\n  },\n  \"include_summary\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        },
+        {
+          "name": "Execute \u2014 Postgres search_schema",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"postgres\",\n    \"operation\": \"search_schema\",\n    \"params\": { \"entity\": \"portfolio_pg\" },\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"find portfolio table columns via entity\"\n  },\n  \"include_summary\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        },
+        {
+          "name": "Execute \u2014 Postgres search_schema (pattern)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"postgres\",\n    \"operation\": \"search_schema\",\n    \"params\": { \"pattern\": \"portfolio\" },\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"find portfolio-related tables\"\n  },\n  \"include_summary\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Workflow \u2014 Portfolio bug analysis chain",
+      "description": "Run in order. Replace collection/field names after step 2 if your schema differs.",
+      "item": [
+        {
+          "name": "1 \u2014 List Mongo collections",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"mongodb\",\n    \"operation\": \"list_collections\",\n    \"params\": { \"database\": \"{{mongoDatabase}}\" },\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"chain step 1\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        },
+        {
+          "name": "2 \u2014 Get portfolio by ID",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"mongodb\",\n    \"operation\": \"find\",\n    \"params\": {\n      \"database\": \"{{mongoDatabase}}\",\n      \"collection\": \"portfolios\",\n      \"filter\": { \"_id\": \"{{portfolioId}}\" }\n    },\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"chain step 2\"\n  },\n  \"include_summary\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        },
+        {
+          "name": "3 \u2014 List users for portfolio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"mongodb\",\n    \"operation\": \"find\",\n    \"params\": {\n      \"database\": \"{{mongoDatabase}}\",\n      \"collection\": \"users\",\n      \"filter\": { \"portfolioId\": \"{{portfolioId}}\" }\n    },\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"chain step 3\"\n  },\n  \"include_summary\": true,\n  \"max_rows\": 50\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        },
+        {
+          "name": "4 \u2014 Qdrant bug_memory search",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"qdrant\",\n    \"operation\": \"search\",\n    \"params\": {\n      \"collection\": \"bug_memory\",\n      \"query_text\": \"bugs and failures for portfolio {{portfolioId}}\",\n      \"limit\": 15,\n      \"with_payload\": true\n    },\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"chain step 4 \u2014 bug analysis\"\n  },\n  \"include_summary\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        },
+        {
+          "name": "5 \u2014 Scroll test_cases (optional)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": {\n    \"backend\": \"qdrant\",\n    \"operation\": \"scroll\",\n    \"params\": {\n      \"collection\": \"test_cases\",\n      \"limit\": 10,\n      \"with_payload\": true,\n      \"with_vector\": false\n    },\n    \"read_only\": true,\n    \"confidence\": 1.0,\n    \"rationale\": \"chain step 5 \u2014 related test cases\"\n  },\n  \"include_summary\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/execute"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
