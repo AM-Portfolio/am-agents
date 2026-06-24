@@ -4,18 +4,22 @@
   "private": true,
   "description": "AM AI agents monorepo (db-agent, ui-test, fin, dev)",
   "workspaces": [
-    "db-agent"
+    "db-agent",
+    "ui-test-agent"
   ],
   "scripts": {
     "db-agent:dev": "npm run dev -w @am/db-agent",
     "db-agent:preprod": "npm run preprod -w @am/db-agent",
     "db-agent:test": "npm run test -w @am/db-agent",
     "db-agent:logs:clean": "npm run logs:clean -w @am/db-agent",
+    "ui-test:dev": "npm run preprod -w @am/ui-test-agent",
+    "ui-test:test": "npm run test -w @am/ui-test-agent",
+    "ui-test:e2e:preprod": "npm run test:e2e:preprod -w @am/ui-test-agent",
     "dev": "npm run db-agent:dev",
     "preprod": "npm run db-agent:preprod",
     "start": "npm run dev",
     "start:preprod": "npm run preprod",
-    "test": "npm run db-agent:test",
+    "test": "npm run db-agent:test && npm run ui-test:test",
     "logs:clean": "npm run db-agent:logs:clean"
   }
 }

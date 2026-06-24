@@ -1,0 +1,11 @@
+vault:
+  secretPaths:
+    mongodb:
+      mappings:
+        MONGO_URI: "url"
+    qdrant:
+      mappings:
+        QDRANT_API_KEY: "QDRANT_API_KEY"
+    identity-oidc:
+      mappings:
+        AM_MCP_CLIENT_SECRET: "AM_MCP_CLIENT_SECRET"

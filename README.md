@@ -5,7 +5,8 @@ Unified home for AM AI agents.
 | Agent | Location | Port / entry | Status |
 |-------|----------|--------------|--------|
 | **db-agent** | [`db-agent/`](db-agent/) | HTTP `:8140` | **Implemented** (Phase 2a) |
-| UI test | [`../am-ui-test-agent/`](../am-ui-test-agent/) | HTTP `:8130` | Legacy (monorepo copy planned) |
+| **ui-test-agent** | [`ui-test-agent/`](ui-test-agent/) | HTTP `:8130` | **Implemented** |
+| UI test (legacy) | [`../am-ui-test-agent/`](../am-ui-test-agent/) | HTTP `:8130` | Frozen — use `ui-test-agent/` |
 | Finance | [`../am-fin-agent/`](../am-fin-agent/) | HTTP `:8100` | Legacy |
 | Dev CLI | [`../am-dev-agent/`](../am-dev-agent/) | `am-dev` CLI | Legacy |
 

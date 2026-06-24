@@ -1,0 +1,23 @@
+{
+  "name": "@am/ui-test-agent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AM UI test agent — Playwright + LangGraph autonomous UI testing",
+  "scripts": {
+    "dev": "python scripts/serve.py .env.preprod --reload",
+    "start": "npm run dev",
+    "preprod": "python scripts/serve.py .env.preprod",
+    "test": "python -m pytest tests/ -q",
+    "test:unit": "python -m pytest tests/ -q",
+    "test:auth": "python scripts/run_auth_test.py",
+    "test:auth:report": "python scripts/run_auth_test.py --open-report",
+    "test:auth:preprod": "python scripts/run_auth_test.py --target-file ../../am-modern-ui/testing/targets.preprod.json --target main --open-report",
+    "test:auth:local": "python scripts/run_auth_test.py --target-file ../../am-modern-ui/testing/targets.local.json --env-file ../../am-modern-ui/.env.local --target main --open-report",
+    "test:qdrant": "python scripts/test_qdrant.py",
+    "test:qdrant:preprod": "python scripts/test_qdrant.py --env-file .env.preprod",
+    "test:e2e:preprod": "python scripts/run_integrated_auth_test.py --baseline-mode seed --open-report",
+    "test:e2e:preprod:compare": "python scripts/run_integrated_auth_test.py --baseline-mode compare --open-report",
+    "report:llm:backfill": "python scripts/backfill_llm_report.py",
+    "reports:open": "python -c \"import webbrowser; from pathlib import Path; p=(Path('../..')/'reports'/'ui-test').resolve(); p.mkdir(parents=True, exist_ok=True); webbrowser.open(p.as_uri())\""
+  }
+}
