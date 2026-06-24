@@ -7,9 +7,11 @@ from app.models.intent import IntentDocument
 from app.schema.loader import get_schema_catalog
 
 _NS_RE = re.compile(r"\b(?:in|for)\s+([a-z0-9][a-z0-9-]*)\s+(?:namespace|ns)\b", re.I)
+_NS_BEFORE_TIME_RE = re.compile(r"\bin\s+([a-z0-9][a-z0-9-]*)\s+last\b", re.I)
 _POD_RE = re.compile(r"\b(?:pod|deployment|app)\s+([a-z0-9][a-z0-9-]*)\b", re.I)
 _FOR_SERVICE_RE = re.compile(r"\b(?:logs?|loki)\s+for\s+([a-z0-9][a-z0-9-]*)\b", re.I)
 _TIME_RE = re.compile(r"\blast\s+(\d+)\s*(m|min|mins|minutes|h|hr|hours|d|days)\b", re.I)
+_ERROR_LOG_RE = re.compile(r"\berror\s*logs?\b|\berror\s+pattern\b|\berrors?\s+in\b|\bfind\s+errors?\b", re.I)
 
 
 def _default_time_range() -> tuple[str, str]:
@@ -33,20 +35,34 @@ def _time_range_from_query(query: str) -> tuple[str, str]:
     return _default_time_range()
 
 
-def _logql_from_query(query: str) -> str | None:
+def _namespace_from_query(query: str) -> str | None:
+    ns_match = _NS_RE.search(query) or _NS_BEFORE_TIME_RE.search(query)
+    return ns_match.group(1) if ns_match else None
+
+
+def _label_selector_from_query(query: str) -> str | None:
     if "{" in query and "}" in query:
         start = query.find("{")
         end = query.rfind("}") + 1
         return query[start:end]
-    ns_match = _NS_RE.search(query)
+    namespace = _namespace_from_query(query)
     pod_match = _POD_RE.search(query) or _FOR_SERVICE_RE.search(query)
-    if ns_match and pod_match:
-        return f'{{namespace="{ns_match.group(1)}", pod=~"{pod_match.group(1)}.*"}}'
-    if ns_match:
-        return f'{{namespace="{ns_match.group(1)}"}}'
+    if namespace and pod_match:
+        return f'{{namespace="{namespace}", pod=~"{pod_match.group(1)}.*"}}'
+    if namespace:
+        return f'{{namespace="{namespace}"}}'
     if pod_match:
         return f'{{pod=~"{pod_match.group(1)}.*"}}'
     return None
+
+
+def _logql_from_query(query: str) -> str | None:
+    return _label_selector_from_query(query)
+
+
+def _error_logql_from_query(query: str) -> str:
+    selector = _label_selector_from_query(query) or "{}"
+    return f'{selector} |~ "(?i)(error|exception|failed)"'
 
 
 def parse_rules(
@@ -90,13 +106,13 @@ def parse_rules(
             rationale="Rule: list grafana datasources",
         )
 
-    if any(w in q for w in ("error log", "error pattern", "errors in")):
+    if _ERROR_LOG_RE.search(q):
         return IntentDocument(
             backend="grafana",
-            operation="find_error_logs",
-            params={"start": start, "end": end},
-            confidence=0.8,
-            rationale="Rule: find error log patterns",
+            operation="query_logs",
+            params={"query": _error_logql_from_query(query), "start": start, "end": end},
+            confidence=0.85,
+            rationale="Rule: error logs via LogQL (Sift not required)",
         )
 
     if "label" in q and "value" in q:

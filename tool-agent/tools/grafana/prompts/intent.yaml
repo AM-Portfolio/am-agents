@@ -1,14 +1,16 @@
 content: |
   Grafana / Loki / Prometheus intent rules (via kagent-grafana-mcp satellite):
 
-  Operations: query_logs, list_labels, list_label_values, query_patterns, find_error_logs,
+  Operations: query_logs, list_labels, list_label_values, query_patterns,
   query_metrics, search_dashboards, get_dashboard, list_datasources.
 
   Log queries use LogQL in params.query. Always include start/end (default now-1h .. now).
   datasourceUid is filled from schema defaults when omitted.
+  For error log requests use query_logs with an error LogQL filter — not find_error_logs (Sift).
 
   Examples:
   - logs for pod am-tool-agent in am-apps-preprod namespace
+  - find error logs in am-apps-preprod namespace last 1 hour
   - loki {namespace="am-apps-preprod", app="am-tool-agent"}
   - search grafana dashboard kafka
   - list grafana datasources

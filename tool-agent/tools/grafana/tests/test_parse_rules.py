@@ -33,3 +33,16 @@ def test_parse_rules_search_dashboards():
     assert intent is not None
     assert intent.operation == "search_dashboards"
     assert intent.params["query"] == "kafka"
+
+
+def test_parse_rules_error_logs_uses_query_logs_not_sift():
+    intent = parse_rules(
+        "find error logs in am-apps-preprod last 1 hour",
+        tool_name="grafana",
+        backend_hint="grafana",
+    )
+    assert intent is not None
+    assert intent.operation == "query_logs"
+    assert intent.params["start"] == "now-1h"
+    assert 'namespace="am-apps-preprod"' in intent.params["query"]
+    assert "error" in intent.params["query"].lower()
