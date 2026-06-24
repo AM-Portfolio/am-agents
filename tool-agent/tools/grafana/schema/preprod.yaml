@@ -2,6 +2,7 @@ defaults:
   start: now-1h
   end: now
   loki_datasource_uid: P8E80F9AEF21F6940
+  namespace: am-apps-preprod
 
 entities:
   pod_logs:

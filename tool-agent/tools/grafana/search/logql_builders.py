@@ -51,7 +51,7 @@ def logql_error_filter(selector: str) -> str:
 
 
 def logql_status_filter(selector: str, status: str) -> str:
-    return f'{selector} |~ "(?i)(\\"status\\"\\s*:\\s*{status}|status[_\\s-]?code\\"\\s*:\\s*{status}|\\b{status}\\b)"'
+    return f'{selector} |~ "status[^0-9]*{status}"'
 
 
 def logql_debug_bundle(selector: str, *, status: str | None = None) -> str:

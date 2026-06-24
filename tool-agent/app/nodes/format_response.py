@@ -4,7 +4,9 @@ from app.config import settings
 from app.llm_client import get_llm_client
 from app.observability.tracer import tracer
 from app.observability.usage import LlmUsageRecord, UsageLedger
+from app.prompts.builder import build_summary_prompt
 from app.state import ToolAgentState
+from tools._shared.god_mode import strip_god_mode
 
 
 async def format_response_node(state: ToolAgentState) -> ToolAgentState:
@@ -24,14 +26,20 @@ async def format_response_node(state: ToolAgentState) -> ToolAgentState:
         return state
 
     ledger: UsageLedger = state.get("usage_ledger") or UsageLedger()
-    user = (
-        f"Summarize this {response.backend}.{response.operation} result for an operator.\n"
-        f"Data preview: {str(response.data)[:4000]}"
+    _, god_mode = strip_god_mode(request.query.strip())
+    god_mode = bool(state.get("god_mode") or god_mode)
+    data_preview = str(response.data)[:8000 if god_mode else 4000]
+    system, user = build_summary_prompt(
+        backend=response.backend,
+        operation=response.operation,
+        query=request.query.strip(),
+        data_preview=data_preview,
+        god_mode=god_mode,
     )
     summary_result = None
     try:
         summary_result = await llm.chat_with_usage(
-            system="You summarize infra tool query results briefly in plain English.",
+            system=system,
             user=user,
             request_id=state["request_id"],
             backend=response.backend,
@@ -52,12 +60,14 @@ async def format_response_node(state: ToolAgentState) -> ToolAgentState:
         return state
 
     span_metadata: dict[str, object] = {"step": "format_response"}
+    if god_mode:
+        span_metadata["god_mode"] = True
     if summary_result.gateway_trace_id:
         span_metadata["gateway_trace_id"] = summary_result.gateway_trace_id
     span_id = await tracer.span(
         state["request_id"],
         "format response · summary",
-        input={"backend": response.backend, "operation": response.operation},
+        input={"backend": response.backend, "operation": response.operation, "god_mode": god_mode},
         output={"summary": response.summary},
         metadata=span_metadata,
     )

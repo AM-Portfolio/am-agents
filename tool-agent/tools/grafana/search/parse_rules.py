@@ -5,13 +5,28 @@ from typing import Any
 
 from app.models.intent import IntentDocument
 from app.schema.loader import get_schema_catalog
+from tools.grafana.search.logql_builders import (
+    extract_http_status,
+    extract_portfolio_id,
+    extract_trace_id,
+    logql_debug_bundle,
+    logql_error_filter,
+    logql_grep_id,
+    logql_status_filter,
+)
 
 _NS_RE = re.compile(r"\b(?:in|for)\s+([a-z0-9][a-z0-9-]*)\s+(?:namespace|ns)\b", re.I)
 _NS_BEFORE_TIME_RE = re.compile(r"\bin\s+([a-z0-9][a-z0-9-]*)\s+last\b", re.I)
-_POD_RE = re.compile(r"\b(?:pod|deployment|app)\s+([a-z0-9][a-z0-9-]*)\b", re.I)
+_POD_RE = re.compile(r"\b(?:pod|deployment|app|service)\s+([a-z0-9][a-z0-9-]*)\b", re.I)
 _FOR_SERVICE_RE = re.compile(r"\b(?:logs?|loki)\s+for\s+([a-z0-9][a-z0-9-]*)\b", re.I)
+_AM_SERVICE_RE = re.compile(r"\b(am-[a-z0-9][a-z0-9-]*)\b", re.I)
 _TIME_RE = re.compile(r"\blast\s+(\d+)\s*(m|min|mins|minutes|h|hr|hours|d|days)\b", re.I)
 _ERROR_LOG_RE = re.compile(r"\berror\s*logs?\b|\berror\s+pattern\b|\berrors?\s+in\b|\bfind\s+errors?\b", re.I)
+_DEBUG_RE = re.compile(r"\b(?:debug|investigate|analyze|diagnose|troubleshoot)\b", re.I)
+_OBSERVABILITY_KW = (
+    "grafana", "loki", "log", "logs", "dashboard", "prometheus", "promql", "metric",
+    "trace", "debug", "investigate", "observability", "correlation", "span", "portfolio",
+)
 
 
 def _default_time_range() -> tuple[str, str]:
@@ -40,13 +55,21 @@ def _namespace_from_query(query: str) -> str | None:
     return ns_match.group(1) if ns_match else None
 
 
+def _default_selector() -> str:
+    catalog = get_schema_catalog()
+    namespace = catalog.default_for("grafana", "namespace")
+    if namespace:
+        return f'{{namespace="{namespace}"}}'
+    return "{}"
+
+
 def _label_selector_from_query(query: str) -> str | None:
     if "{" in query and "}" in query:
         start = query.find("{")
         end = query.rfind("}") + 1
         return query[start:end]
     namespace = _namespace_from_query(query)
-    pod_match = _POD_RE.search(query) or _FOR_SERVICE_RE.search(query)
+    pod_match = _POD_RE.search(query) or _FOR_SERVICE_RE.search(query) or _AM_SERVICE_RE.search(query)
     if namespace and pod_match:
         return f'{{namespace="{namespace}", pod=~"{pod_match.group(1)}.*"}}'
     if namespace:
@@ -56,25 +79,53 @@ def _label_selector_from_query(query: str) -> str | None:
     return None
 
 
+def _selector_or_default(query: str) -> str:
+    return _label_selector_from_query(query) or _default_selector()
+
+
 def _logql_from_query(query: str) -> str | None:
     return _label_selector_from_query(query)
 
 
 def _error_logql_from_query(query: str) -> str:
-    selector = _label_selector_from_query(query) or "{}"
-    return f'{selector} |~ "(?i)(error|exception|failed)"'
+    return logql_error_filter(_selector_or_default(query))
+
+
+def _query_logs_intent(
+    query: str,
+    *,
+    logql: str,
+    start: str,
+    end: str,
+    confidence: float,
+    rationale: str,
+) -> IntentDocument:
+    return IntentDocument(
+        backend="grafana",
+        operation="query_logs",
+        params={"query": logql, "start": start, "end": end},
+        read_only=True,
+        confidence=confidence,
+        rationale=rationale,
+    )
+
+
+def _matches_observability(query: str, backend_hint: str | None, tool_name: str) -> bool:
+    q = query.lower()
+    if backend_hint and backend_hint != tool_name:
+        return False
+    if any(k in q for k in _OBSERVABILITY_KW):
+        return True
+    return backend_hint == tool_name
 
 
 def parse_rules(
     query: str, *, tool_name: str, backend_hint: str | None = None
 ) -> IntentDocument | None:
-    q = query.lower()
-    if backend_hint and backend_hint != tool_name:
+    if not _matches_observability(query, backend_hint, tool_name):
         return None
-    if not any(k in q for k in ("grafana", "loki", "log", "logs", "dashboard", "prometheus", "promql", "metric")):
-        if backend_hint != tool_name:
-            return None
 
+    q = query.lower()
     start, end = _time_range_from_query(query)
 
     if "dashboard" in q and ("search" in q or "find" in q or "list" in q):
@@ -106,11 +157,61 @@ def parse_rules(
             rationale="Rule: list grafana datasources",
         )
 
+    trace_id = extract_trace_id(query)
+    if trace_id:
+        selector = _selector_or_default(query)
+        return _query_logs_intent(
+            query,
+            logql=logql_grep_id(selector, trace_id),
+            start=start,
+            end=end,
+            confidence=0.92,
+            rationale="Rule: trace/correlation id log search",
+        )
+
+    portfolio_id = extract_portfolio_id(query)
+    if portfolio_id and any(w in q for w in ("log", "logs", "loki", "trace", "debug", "find", "search")):
+        selector = _selector_or_default(query)
+        return _query_logs_intent(
+            query,
+            logql=logql_grep_id(selector, portfolio_id),
+            start=start,
+            end=end,
+            confidence=0.9,
+            rationale="Rule: portfolio id log search",
+        )
+
+    if _DEBUG_RE.search(q):
+        selector = _selector_or_default(query)
+        status = extract_http_status(query)
+        logql = logql_debug_bundle(selector, status=status)
+        return _query_logs_intent(
+            query,
+            logql=logql,
+            start=start,
+            end=end,
+            confidence=0.88,
+            rationale="Rule: debug/investigate logs",
+        )
+
+    status = extract_http_status(query)
+    if status and any(w in q for w in ("log", "logs", "loki", "request", "http", "api")):
+        selector = _selector_or_default(query)
+        return _query_logs_intent(
+            query,
+            logql=logql_status_filter(selector, status),
+            start=start,
+            end=end,
+            confidence=0.87,
+            rationale=f"Rule: HTTP {status} log search",
+        )
+
     if _ERROR_LOG_RE.search(q):
-        return IntentDocument(
-            backend="grafana",
-            operation="query_logs",
-            params={"query": _error_logql_from_query(query), "start": start, "end": end},
+        return _query_logs_intent(
+            query,
+            logql=_error_logql_from_query(query),
+            start=start,
+            end=end,
             confidence=0.85,
             rationale="Rule: error logs via LogQL (Sift not required)",
         )

@@ -5,10 +5,12 @@ from pathlib import Path
 from app.config import settings
 from app.prompts.provider import compile_prompt, get_prompt_provider
 from app.schema.loader import SchemaCatalog
-from tools._loader import get_enabled_tools, infer_backends_from_query, merged_registry
+from tools._loader import get_enabled_tools, get_tool, infer_backends_from_query
 
 
 def _operations_list(backends: list[str] | None = None) -> str:
+    from tools._loader import merged_registry
+
     registry = merged_registry().get("backends") or {}
     lines: list[str] = []
     for name, cfg in sorted(registry.items()):
@@ -29,6 +31,7 @@ def build_intent_prompt(
     backend_hint: str | None,
     *,
     catalog: SchemaCatalog | None = None,
+    god_mode: bool = False,
 ) -> str:
     provider = get_prompt_provider()
     catalog = catalog or SchemaCatalog()
@@ -62,6 +65,16 @@ def build_intent_prompt(
             )
             if ex.content:
                 snippets.append(ex.content)
+        if god_mode:
+            god_ref = tool.manifest.prompts.get("god_mode")
+            if god_ref:
+                god = provider.get(
+                    god_ref.name or f"tool-agent/intent/{backend}/god_mode",
+                    label=_resolve_label(god_ref.label),
+                    fallback_path=tool.tool_dir / god_ref.fallback,
+                )
+                if god.content:
+                    snippets.append(god.content)
 
     variables = {
         "operations_list": _operations_list(candidates or None),
@@ -71,4 +84,37 @@ def build_intent_prompt(
     body = compile_prompt(base.content, variables)
     if snippets:
         body = body + "\n\n" + "\n\n".join(snippets)
+    if god_mode:
+        body = body + "\n\nGOD MODE is ON — prioritize observability LogQL and high-confidence params."
     return body
+
+
+def build_summary_prompt(
+    *,
+    backend: str,
+    operation: str,
+    query: str,
+    data_preview: str,
+    god_mode: bool = False,
+) -> tuple[str, str]:
+    provider = get_prompt_provider()
+    tool = get_tool(backend)
+    system = "You summarize infra tool query results briefly in plain English."
+    if tool:
+        analysis_ref = tool.manifest.prompts.get("analysis")
+        if analysis_ref:
+            analysis = provider.get(
+                analysis_ref.name or f"tool-agent/analysis/{backend}",
+                label=_resolve_label(analysis_ref.label),
+                fallback_path=tool.tool_dir / analysis_ref.fallback,
+            )
+            if analysis.content:
+                system = analysis.content.strip()
+    if god_mode:
+        system = system + "\n\nGOD MODE: provide full SRE incident analysis, not a one-line summary."
+    user = (
+        f"Original question: {query}\n"
+        f"Executed: {backend}.{operation}\n"
+        f"Data preview:\n{data_preview}"
+    )
+    return system, user

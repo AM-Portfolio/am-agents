@@ -13,6 +13,7 @@ from app.observability.usage import LlmUsageRecord, UsageLedger
 from app.prompts.builder import build_intent_prompt
 from app.state import ToolAgentState
 from tools._loader import get_enabled_tools, get_tool
+from tools._shared.god_mode import strip_god_mode
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +53,10 @@ async def parse_intent_node(state: ToolAgentState) -> ToolAgentState:
 
     request = state["request"]
     request_id = state["request_id"]
-    query = request.query.strip()
+    raw_query = request.query.strip()
+    query, god_mode = strip_god_mode(raw_query)
     backend_hint = request.backend
+    state_updates: dict[str, object] = {"god_mode": god_mode}
 
     if not get_enabled_tools():
         return {
@@ -62,27 +65,28 @@ async def parse_intent_node(state: ToolAgentState) -> ToolAgentState:
             "error_status": 503,
         }
 
-    for tool in get_enabled_tools():
-        if backend_hint and tool.name != backend_hint:
-            continue
-        try:
-            intent = tool.parse_rules(query, backend_hint)
-        except Exception as exc:
-            logger.debug("parse_rules failed for %s: %s", tool.name, exc)
-            intent = None
-        if intent:
+    if not god_mode:
+        for tool in get_enabled_tools():
+            if backend_hint and tool.name != backend_hint:
+                continue
             try:
-                tool.validate_intent(intent)
+                intent = tool.parse_rules(query, backend_hint)
             except Exception as exc:
-                return {**state, "error": str(exc), "error_status": 422}
-            await tracer.span(
-                request_id,
-                f"parse intent · rules · {tool.name}",
-                input={"query": query, "backend_hint": backend_hint},
-                output=intent.model_dump(),
-                metadata={"step": "parse_intent", "parse_source": "rules"},
-            )
-            return {**state, "intent": intent, "parse_source": "rules"}
+                logger.debug("parse_rules failed for %s: %s", tool.name, exc)
+                intent = None
+            if intent:
+                try:
+                    tool.validate_intent(intent)
+                except Exception as exc:
+                    return {**state, **state_updates, "error": str(exc), "error_status": 422}
+                await tracer.span(
+                    request_id,
+                    f"parse intent · rules · {tool.name}",
+                    input={"query": query, "backend_hint": backend_hint, "god_mode": god_mode},
+                    output=intent.model_dump(),
+                    metadata={"step": "parse_intent", "parse_source": "rules"},
+                )
+                return {**state, **state_updates, "intent": intent, "parse_source": "rules"}
 
     if not settings.LLM_INTENT_ENABLED:
         return {
@@ -99,7 +103,7 @@ async def parse_intent_node(state: ToolAgentState) -> ToolAgentState:
             "error_status": 422,
         }
 
-    system = build_intent_prompt(query, backend_hint)
+    system = build_intent_prompt(query, backend_hint, god_mode=god_mode)
     try:
         llm_result = await llm.chat_with_usage(
             system=system,
@@ -148,6 +152,8 @@ async def parse_intent_node(state: ToolAgentState) -> ToolAgentState:
         }
 
     span_metadata: dict[str, object] = {"step": "parse_intent", "parse_source": "llm"}
+    if god_mode:
+        span_metadata["god_mode"] = True
     if llm_result.gateway_trace_id:
         span_metadata["gateway_trace_id"] = llm_result.gateway_trace_id
     span_metadata.update(
@@ -183,6 +189,7 @@ async def parse_intent_node(state: ToolAgentState) -> ToolAgentState:
 
     return {
         **state,
+        **state_updates,
         "intent": intent,
         "parse_source": "llm",
         "usage_ledger": ledger,

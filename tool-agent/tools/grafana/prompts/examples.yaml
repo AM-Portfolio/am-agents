@@ -3,6 +3,22 @@ content: |
   Query: loki logs for am-tool-agent in am-apps-preprod namespace last 30 minutes
   JSON: {"backend":"grafana","operation":"query_logs","params":{"query":"{namespace=\"am-apps-preprod\", pod=~\"am-tool-agent.*\"}","start":"now-30m","end":"now"},"read_only":true,"confidence":0.85,"rationale":"pod logs"}
 
+  Example — trace id search
+  Query: find logs for trace id 04838db7-17f3-4cff-8bf0-4d878b3b8878 in am-apps-preprod last 2 hours
+  JSON: {"backend":"grafana","operation":"query_logs","params":{"query":"{namespace=\"am-apps-preprod\"} |= \"04838db7-17f3-4cff-8bf0-4d878b3b8878\"","start":"now-2h","end":"now"},"read_only":true,"confidence":0.92,"rationale":"trace id grep"}
+
+  Example — portfolio debug in logs
+  Query: debug portfolio id 163d0143-4fcb-480c-ac20-622f14e0e293 in logs last 24 hours
+  JSON: {"backend":"grafana","operation":"query_logs","params":{"query":"{namespace=\"am-apps-preprod\"} |= \"163d0143-4fcb-480c-ac20-622f14e0e293\"","start":"now-24h","end":"now"},"read_only":true,"confidence":0.9,"rationale":"portfolio id in logs"}
+
+  Example — HTTP 500 debug
+  Query: investigate 500 errors for am-parser in am-apps-preprod last 1 hour
+  JSON: {"backend":"grafana","operation":"query_logs","params":{"query":"{namespace=\"am-apps-preprod\", pod=~\"am-parser.*\"} |~ \"status[^0-9]*500\"","start":"now-1h","end":"now"},"read_only":true,"confidence":0.88,"rationale":"500 debug"}
+
+  Example — error logs (LogQL, not Sift)
+  Query: find error logs in am-apps-preprod last 1 hour
+  JSON: {"backend":"grafana","operation":"query_logs","params":{"query":"{namespace=\"am-apps-preprod\"} |~ \"(?i)(error|exception|failed)\"","start":"now-1h","end":"now"},"read_only":true,"confidence":0.85,"rationale":"error logs via LogQL"}
+
   Example — list datasources
   Query: list grafana datasources
   JSON: {"backend":"grafana","operation":"list_datasources","params":{},"read_only":true,"confidence":0.9,"rationale":"discovery"}
@@ -10,7 +26,3 @@ content: |
   Example — search dashboards
   Query: search grafana dashboards for portfolio
   JSON: {"backend":"grafana","operation":"search_dashboards","params":{"query":"portfolio"},"read_only":true,"confidence":0.85,"rationale":"dashboard search"}
-
-  Example — error logs (LogQL, not Sift)
-  Query: find error logs in am-apps-preprod last 1 hour
-  JSON: {"backend":"grafana","operation":"query_logs","params":{"query":"{namespace=\"am-apps-preprod\"} |~ \"(?i)(error|exception|failed)\"","start":"now-1h","end":"now"},"read_only":true,"confidence":0.85,"rationale":"error logs via LogQL"}
