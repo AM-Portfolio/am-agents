@@ -18,7 +18,10 @@ from tools.grafana.search.logql_builders import (
 _NS_RE = re.compile(r"\b(?:in|for)\s+([a-z0-9][a-z0-9-]*)\s+(?:namespace|ns)\b", re.I)
 _NS_BEFORE_TIME_RE = re.compile(r"\bin\s+([a-z0-9][a-z0-9-]*)\s+last\b", re.I)
 _POD_RE = re.compile(r"\b(?:pod|deployment|app|service)\s+([a-z0-9][a-z0-9-]*)\b", re.I)
-_FOR_SERVICE_RE = re.compile(r"\b(?:logs?|loki)\s+for\s+([a-z0-9][a-z0-9-]*)\b", re.I)
+_FOR_SERVICE_RE = re.compile(
+    r"\b(?:logs?|loki)\s+for\s+(?!trace\s+id\b)([a-z0-9][a-z0-9-]*)\b",
+    re.I,
+)
 _AM_SERVICE_RE = re.compile(r"\b(am-[a-z0-9][a-z0-9-]*)\b", re.I)
 _K8S_NS_SUFFIX_RE = re.compile(r"-(?:preprod|prod|dev|staging|test)$", re.I)
 _TIME_RE = re.compile(r"\blast\s+(\d+)\s*(m|min|mins|minutes|h|hr|hours|d|days)\b", re.I)
@@ -101,6 +104,13 @@ def _label_selector_from_query(query: str) -> str | None:
     return None
 
 
+def _namespace_selector(query: str) -> str:
+    namespace = _namespace_from_query(query)
+    if namespace:
+        return f'{{namespace="{namespace}"}}'
+    return _default_selector()
+
+
 def _selector_or_default(query: str) -> str:
     return _label_selector_from_query(query) or _default_selector()
 
@@ -181,7 +191,7 @@ def parse_rules(
 
     trace_id = extract_trace_id(query)
     if trace_id:
-        selector = _selector_or_default(query)
+        selector = _namespace_selector(query)
         return _query_logs_intent(
             query,
             logql=logql_grep_id(selector, trace_id),

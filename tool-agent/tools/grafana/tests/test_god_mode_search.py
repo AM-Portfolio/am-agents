@@ -19,6 +19,7 @@ def test_parse_rules_trace_id():
     assert intent is not None
     assert intent.operation == "query_logs"
     assert trace in intent.params["query"]
+    assert "pod=~" not in intent.params["query"]
     assert intent.params["start"] == "now-2h"
 
 
