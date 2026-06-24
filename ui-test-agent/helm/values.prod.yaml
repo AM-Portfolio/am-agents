@@ -1,0 +1,47 @@
+# Production environment — am-ui-test-agent
+environment: production
+replicaCount: 2
+
+resources:
+  limits:
+    cpu: 1500m
+    memory: 1536Mi
+  requests:
+    cpu: 300m
+    memory: 768Mi
+
+vault:
+  enabled: true
+  secretPaths:
+    mongodb:
+      path: "apps/data/prod/infra/mongodb"
+    qdrant:
+      path: "apps/data/prod/infra/qdrant"
+    identity-oidc:
+      path: "apps/data/prod/services/am-identity"
+    observability:
+      path: "apps/data/prod/services/am-ui-test-agent"
+    ui-test-agent:
+      path: "apps/data/prod/services/am-ui-test-agent"
+
+ingress:
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: >-
+      am-apps-prod-global-cors@kubernetescrd,
+      am-apps-prod-strip-prefix-apps@kubernetescrd
+  hosts:
+    - host: am.asrax.in
+      paths:
+        - path: /ui-test
+          pathType: Prefix
+
+env:
+  APP_ENV: production
+  LOG_LEVEL: INFO
+  MCP_GATEWAY_BASE_URL: "http://am-mcp-gateway.am-apps-prod.svc.cluster.local:8120"
+  QDRANT_HOST: "qdrant.am-ai.svc.cluster.local"
+  QDRANT_PORT: "6333"
+  QDRANT_HTTPS: "false"
+  KEYCLOAK_TOKEN_URL: "http://auth.munish.org/auth/realms/am-prod-realm/protocol/openid-connect/token"
+  LANGFUSE_ENABLED: "true"
+  LANGFUSE_HOST: "https://langfuse.munish.org"

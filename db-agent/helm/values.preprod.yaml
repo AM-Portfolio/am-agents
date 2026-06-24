@@ -1,0 +1,47 @@
+# Preprod environment — am-db-agent
+environment: preprod
+replicaCount: 1
+
+vault:
+  enabled: true
+  secretPaths:
+    postgres:
+      path: "apps/data/preprod/infra/postgres"
+    mongodb:
+      path: "apps/data/preprod/infra/mongodb"
+    redis:
+      path: "apps/data/preprod/infra/redis"
+    kafka:
+      path: "apps/data/preprod/infra/kafka"
+    qdrant:
+      path: "apps/data/preprod/infra/qdrant"
+    influx:
+      path: "apps/data/preprod/infra/influxdb"
+    grafana:
+      path: "apps/data/preprod/services/am-db-agent"
+    identity-oidc:
+      path: "apps/data/preprod/services/am-identity"
+    observability:
+      path: "apps/data/preprod/services/am-db-agent"
+    llm-api-keys:
+      path: "apps/data/preprod/services/am-db-agent"
+
+ingress:
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: >-
+      am-apps-preprod-global-cors@kubernetescrd,
+      am-apps-preprod-strip-prefix-apps@kubernetescrd
+  hosts:
+    - host: am.asrax.in
+      paths:
+        - path: /db
+          pathType: Prefix
+
+env:
+  APP_ENV: preprod
+  LOG_LEVEL: INFO
+  MCP_GATEWAY_BASE_URL: "http://am-mcp-gateway.am-apps-preprod.svc.cluster.local:8120"
+  QDRANT_URL: "https://qdrant.munish.org"
+  KAFKA_UI_URL: "https://am.munish.org/kafka-ui"
+  KAFKA_UI_CLUSTER: am-preprod
+  KEYCLOAK_TOKEN_URL: "http://auth.munish.org/auth/realms/am-preprod-realm/protocol/openid-connect/token"

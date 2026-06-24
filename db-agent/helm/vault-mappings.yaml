@@ -1,0 +1,38 @@
+vault:
+  secretPaths:
+    postgres:
+      mappings:
+        POSTGRES_URL: "url"
+    mongodb:
+      mappings:
+        MONGODB_URI: "url"
+    redis:
+      template: |
+        export REDIS_URL="redis://:{{ .Data.data.password }}@{{ .Data.data.host }}:{{ .Data.data.port }}/0"
+    kafka:
+      mappings:
+        KAFKA_BOOTSTRAP_SERVERS: "bootstrap_servers"
+        KAFKA_USERNAME: "username"
+        KAFKA_PASSWORD: "password"
+    qdrant:
+      mappings:
+        QDRANT_API_KEY: "QDRANT_API_KEY"
+    influx:
+      mappings:
+        INFLUX_URL: "url"
+        INFLUX_TOKEN: "token"
+    grafana:
+      mappings:
+        GRAFANA_URL: "GRAFANA_URL"
+        GRAFANA_API_KEY: "GRAFANA_API_KEY"
+        GRAFANA_SERVICE_ACCOUNT_TOKEN: "GRAFANA_SERVICE_ACCOUNT_TOKEN"
+    identity-oidc:
+      mappings:
+        AM_MCP_CLIENT_SECRET: "AM_MCP_CLIENT_SECRET"
+    observability:
+      mappings:
+        LANGFUSE_PUBLIC_KEY: "LANGFUSE_PUBLIC_KEY"
+        LANGFUSE_SECRET_KEY: "LANGFUSE_SECRET_KEY"
+    llm-api-keys:
+      mappings:
+        LITELLM_MASTER_KEY: "LITELLM_MASTER_KEY"

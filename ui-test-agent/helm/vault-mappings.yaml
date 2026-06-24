@@ -9,3 +9,10 @@ vault:
     identity-oidc:
       mappings:
         AM_MCP_CLIENT_SECRET: "AM_MCP_CLIENT_SECRET"
+    observability:
+      mappings:
+        LANGFUSE_PUBLIC_KEY: "LANGFUSE_PUBLIC_KEY"
+        LANGFUSE_SECRET_KEY: "LANGFUSE_SECRET_KEY"
+    ui-test-agent:
+      mappings:
+        TEST_USER_PASSWORD: "TEST_USER_PASSWORD"

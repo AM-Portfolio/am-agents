@@ -4,14 +4,15 @@ Unified home for AM AI agents.
 
 | Agent | Location | Port / entry | Status |
 |-------|----------|--------------|--------|
-| **db-agent** | [`db-agent/`](db-agent/) | HTTP `:8140` | **Implemented** (Phase 2a) |
 | **ui-test-agent** | [`ui-test-agent/`](ui-test-agent/) | HTTP `:8130` | **Implemented** |
+| **db-agent** | [`db-agent/`](db-agent/) | HTTP `:8140` | **Implemented** |
 | UI test (legacy) | [`../am-ui-test-agent/`](../am-ui-test-agent/) | HTTP `:8130` | Frozen — use `ui-test-agent/` |
 | Finance | [`../am-fin-agent/`](../am-fin-agent/) | HTTP `:8100` | Legacy |
 | Dev CLI | [`../am-dev-agent/`](../am-dev-agent/) | `am-dev` CLI | Legacy |
 
 ## Documentation
 
+- **[Deploy guide](docs/DEPLOY.md)** — Docker, Helm 3-env, Vault, CI/CD
 - **[Monorepo implementation plan](docs/MONOREPO_PLAN.md)** — Phase 1: full copy into `am-agents/`, npm workspaces
 - **[Universal DB agents plan](docs/UNIVERSAL_DB_AGENTS_PLAN.md)** — MCP catalog, phases
 - **[db-agent design spec](docs/DB_AGENT_DESIGN.md)** — API, LangGraph, registry, safety

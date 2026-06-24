@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+node_modules/
+logs/
+*.log
+.git/
+.github/
+**/postman/
+docs/
+k8s/
+scripts/check-no-secrets.ps1
+README.md

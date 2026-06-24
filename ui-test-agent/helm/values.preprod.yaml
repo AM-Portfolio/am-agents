@@ -1,0 +1,39 @@
+# Preprod environment — am-ui-test-agent
+environment: preprod
+replicaCount: 1
+
+vault:
+  enabled: true
+  secretPaths:
+    mongodb:
+      path: "apps/data/preprod/infra/mongodb"
+    qdrant:
+      path: "apps/data/preprod/infra/qdrant"
+    identity-oidc:
+      path: "apps/data/preprod/services/am-identity"
+    observability:
+      path: "apps/data/preprod/services/am-ui-test-agent"
+    ui-test-agent:
+      path: "apps/data/preprod/services/am-ui-test-agent"
+
+ingress:
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: >-
+      am-apps-preprod-global-cors@kubernetescrd,
+      am-apps-preprod-strip-prefix-apps@kubernetescrd
+  hosts:
+    - host: am.asrax.in
+      paths:
+        - path: /ui-test
+          pathType: Prefix
+
+env:
+  APP_ENV: preprod
+  LOG_LEVEL: INFO
+  MCP_GATEWAY_BASE_URL: "http://am-mcp-gateway.am-apps-preprod.svc.cluster.local:8120"
+  QDRANT_HOST: "qdrant.am-ai.svc.cluster.local"
+  QDRANT_PORT: "6333"
+  QDRANT_HTTPS: "false"
+  KEYCLOAK_TOKEN_URL: "http://auth.munish.org/auth/realms/am-preprod-realm/protocol/openid-connect/token"
+  LANGFUSE_ENABLED: "true"
+  LANGFUSE_HOST: "https://langfuse.munish.org"

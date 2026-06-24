@@ -1,0 +1,55 @@
+# Dev environment — am-db-agent
+environment: dev
+replicaCount: 1
+
+resources:
+  limits:
+    cpu: 750m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+vault:
+  enabled: true
+  secretPaths:
+    postgres:
+      path: "apps/data/dev/infra/postgres"
+    mongodb:
+      path: "apps/data/dev/infra/mongodb"
+    redis:
+      path: "apps/data/dev/infra/redis"
+    kafka:
+      path: "apps/data/dev/infra/kafka"
+    qdrant:
+      path: "apps/data/dev/infra/qdrant"
+    influx:
+      path: "apps/data/dev/infra/influxdb"
+    grafana:
+      path: "apps/data/dev/services/am-db-agent"
+    identity-oidc:
+      path: "apps/data/dev/services/am-identity"
+    observability:
+      path: "apps/data/dev/services/am-db-agent"
+    llm-api-keys:
+      path: "apps/data/dev/services/am-db-agent"
+
+ingress:
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: >-
+      am-apps-dev-dev-global-cors@kubernetescrd,
+      am-apps-dev-dev-strip-prefix@kubernetescrd
+  hosts:
+    - host: am-dev.asrax.in
+      paths:
+        - path: /db
+          pathType: Prefix
+
+env:
+  APP_ENV: dev
+  LOG_LEVEL: DEBUG
+  MCP_GATEWAY_BASE_URL: "http://am-mcp-gateway.am-apps-dev.svc.cluster.local:8120"
+  QDRANT_URL: "http://qdrant.am-ai.svc.cluster.local:6333"
+  KAFKA_UI_URL: "https://am-dev.asrax.in/kafka-ui"
+  KAFKA_UI_CLUSTER: am-dev
+  KEYCLOAK_TOKEN_URL: "http://auth.munish.org/auth/realms/am-dev-realm/protocol/openid-connect/token"

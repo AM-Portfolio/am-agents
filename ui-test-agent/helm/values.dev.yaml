@@ -1,0 +1,47 @@
+# Dev environment — am-ui-test-agent
+environment: dev
+replicaCount: 1
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 100m
+    memory: 384Mi
+
+vault:
+  enabled: true
+  secretPaths:
+    mongodb:
+      path: "apps/data/dev/infra/mongodb"
+    qdrant:
+      path: "apps/data/dev/infra/qdrant"
+    identity-oidc:
+      path: "apps/data/dev/services/am-identity"
+    observability:
+      path: "apps/data/dev/services/am-ui-test-agent"
+    ui-test-agent:
+      path: "apps/data/dev/services/am-ui-test-agent"
+
+ingress:
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: >-
+      am-apps-dev-dev-global-cors@kubernetescrd,
+      am-apps-dev-dev-strip-prefix@kubernetescrd
+  hosts:
+    - host: am-dev.asrax.in
+      paths:
+        - path: /ui-test
+          pathType: Prefix
+
+env:
+  APP_ENV: dev
+  LOG_LEVEL: DEBUG
+  MCP_GATEWAY_BASE_URL: "http://am-mcp-gateway.am-apps-dev.svc.cluster.local:8120"
+  QDRANT_HOST: "qdrant.am-ai.svc.cluster.local"
+  QDRANT_PORT: "6333"
+  QDRANT_HTTPS: "false"
+  KEYCLOAK_TOKEN_URL: "http://auth.munish.org/auth/realms/am-dev-realm/protocol/openid-connect/token"
+  LANGFUSE_ENABLED: "true"
+  LANGFUSE_HOST: "https://langfuse.munish.org"

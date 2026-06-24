@@ -1,0 +1,39 @@
+name: Manual Deploy (AM UI Test Agent)
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Select Image Tag"
+        required: true
+        default: "latest"
+        type: choice
+        options:
+          - latest
+          - custom
+      custom_tag:
+        description: "If 'custom' selected, enter tag here"
+        required: false
+        type: string
+      environment:
+        description: "Target Environment"
+        required: true
+        default: "preprod"
+        type: choice
+        options:
+          - dev
+          - preprod
+          - prod
+
+jobs:
+  deploy:
+    name: Deploy AM UI Test Agent to ${{ github.event.inputs.environment }}
+    uses: AM-Portfolio/am-pipelines/.github/workflows/central-deploy.yml@main
+    with:
+      service_name: "am-ui-test-agent"
+      working_directory: "ui-test-agent"
+      language: "python"
+      environment: ${{ github.event.inputs.environment }}
+      image_tag: ${{ github.event.inputs.image_tag == 'custom' && github.event.inputs.custom_tag || github.event.inputs.image_tag }}
+      namespace: ${{ github.event.inputs.environment == 'prod' && 'am-apps-prod' || (github.event.inputs.environment == 'dev' && 'am-apps-dev' || 'am-apps-preprod') }}
+    secrets: inherit

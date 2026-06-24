@@ -28,25 +28,26 @@ security:
 config: {}
 
 env:
-  APP_ENV: production
   APP_NAME: am-ui-test-agent
   APP_PORT: "8130"
   LOG_FORMAT: json
   LOG_LEVEL: INFO
   TZ: Asia/Kolkata
-  MCP_GATEWAY_BASE_URL: "http://am-mcp-gateway.am-apps-preprod.svc.cluster.local:8120"
-  MCP_GATEWAY_AUTH_DISABLED: "false"
-  LLM_ROUTING: "gateway"
+  LLM_ROUTING: gateway
   LITELLM_BASE_URL: "http://litellm.am-ai.svc.cluster.local:4000"
   LLM_PLANNER_MODEL: "deepseek-chat"
   LLM_VISION_MODEL: "Qwen/Qwen2.5-VL-7B-Instruct"
-  QDRANT_HOST: "qdrant.am-ai.svc.cluster.local"
-  QDRANT_PORT: "6333"
   MONGO_DATABASE: "am_ui_testing"
-  KEYCLOAK_TOKEN_URL: "http://auth.munish.org/auth/realms/am-preprod-realm/protocol/openid-connect/token"
   AM_MCP_CLIENT_ID: "am-mcp-service"
   HEADLESS: "true"
-  REPORT_DIR: "/data/reports/ui-test"
+  REPORT_DIR: "/tmp/reports/ui-test"
+  MCP_GATEWAY_AUTH_DISABLED: "false"
+  DESIGN_REVIEW_ENABLED: "true"
+  DESIGN_SIMILARITY_PASS: "0.92"
+  DESIGN_SIMILARITY_REVIEW: "0.78"
+  DESIGN_GATE_STRICT: "false"
+  DESIGN_BUG_MEMORY_THRESHOLD: "0.95"
+  BASELINE_MODE: compare
 
 probes:
   port: 8130
@@ -73,11 +74,3 @@ ingress:
   annotations:
     kubernetes.io/ingress.class: "traefik"
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
-    traefik.ingress.kubernetes.io/router.middlewares: >-
-      am-apps-preprod-global-cors@kubernetescrd,
-      am-apps-preprod-strip-prefix-apps@kubernetescrd
-  hosts:
-    - host: am.asrax.in
-      paths:
-        - path: /ui-test
-          pathType: Prefix
