@@ -3,7 +3,18 @@ display_name: Mongodb
 enabled: true
 version: "0.1.0"
 
-infer_keywords: [mongo, mongodb, collection, portfolio, users]
+infer_keywords:
+  - mongo
+  - mongodb
+  - collection
+  - portfolio
+  - securities
+  - market_data
+  - instruments
+  - trade
+  - am-trade
+  - mutual_funds
+  - etf
 
 vault:
   path_template: "apps/data/{env}/infra/mongodb"

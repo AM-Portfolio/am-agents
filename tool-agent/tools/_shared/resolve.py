@@ -32,6 +32,14 @@ BACKEND_OPERATIONS: dict[str, list[str]] = {
 }
 
 _ENTITY_HINTS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"mutual\s+funds?.*portfolios?|mutual\s+fund\s+portfolio", re.I), "mutual_fund_portfolio"),
+    (re.compile(r"\betfs?\b", re.I), "etf"),
+    (re.compile(r"trade[_\s-]?details?", re.I), "trade_detail"),
+    (re.compile(r"portfolio[_\s-]?trades?", re.I), "portfolio_trade"),
+    (re.compile(r"market[_\s-]?data.*securities|securities.*market[_\s-]?data", re.I), "market_security"),
+    (re.compile(r"market[_\s-]?instruments?|instruments?.*market[_\s-]?data", re.I), "market_instrument"),
+    (re.compile(r"\bsecurities\b", re.I), "portfolio_security"),
+    (re.compile(r"\btrades?\b", re.I), "trade"),
     (re.compile(r"\bsessions?\b"), "session"),
     (re.compile(r"\busers?\b"), "user"),
     (re.compile(r"\bportfolios?\b"), "portfolio"),
@@ -186,16 +194,6 @@ def resolve_intent_params(
             default_db = catalog.default_database("mongodb")
             if default_db:
                 params["database"] = default_db
-        email = extract_email(query_text)
-        if email and intent.operation in ("find", "count_documents") and not params.get("filter"):
-            if re.search(r"\busers?\b", query_text, re.I):
-                mapping = catalog.entity("user")
-                if mapping:
-                    entity_name = entity_name or "user"
-                    params = _apply_entity_mapping(
-                        params, mapping, entity_id=None,
-                        lookup_field="email", lookup_value=email,
-                    )
         if intent.operation == "list_collections" and "portfolio" in query_text.lower():
             if not params.get("database"):
                 params["database"] = catalog.default_database("mongodb") or "portfolio"

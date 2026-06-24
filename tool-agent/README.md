@@ -25,6 +25,8 @@ python scripts/validate_tool.py mongodb
 
 See [docs/ADDING_A_TOOL.md](docs/ADDING_A_TOOL.md) and [docs/PROMPT_MANAGEMENT.md](docs/PROMPT_MANAGEMENT.md).
 
+See [docs/CONNECTING.md](docs/CONNECTING.md) for **Cursor MCP** setup (`mcp.json.example` → live preprod).
+
 ## Postman
 
 Import from [`postman/`](postman/):

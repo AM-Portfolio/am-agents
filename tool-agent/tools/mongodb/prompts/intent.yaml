@@ -1,3 +1,32 @@
 content: |
-  Tool: Mongodb
-  Describe supported operations and vocabulary for intent parsing.
+  MongoDB intent rules (preprod cluster):
+
+  Operations: list_databases, list_collections, find, count_documents, collection_schema, aggregate.
+
+  Database routing (pick the best match from query words):
+  - portfolio — user portfolios and securities (collections: portfolios, securities)
+  - market_data — instruments, market securities, indices, ingestion logs
+  - am-trade — trades, trade_details, portfolio_trades, journals
+  - trade_management — trade UI prefs, notebooks, behavior tracking
+  - mutual_funds — ETF/mutual-fund portfolios and holdings
+  - If unsure: list_databases or list_collections on the most likely database first
+
+  Entity-centric params (preferred over raw database/collection):
+  - portfolio + id → portfolio.portfolios
+  - portfolio_security / securities in portfolio db → portfolio.securities
+  - market_security / market data securities → market_data.securities
+  - market_instrument / instruments → market_data.instruments
+  - trade / trades → am-trade.trades
+  - trade_detail → am-trade.trade_details
+  - portfolio_trade → am-trade.portfolio_trades
+  - mutual_fund_portfolio → mutual_funds.portfolios
+  - etf → mutual_funds.etfs
+
+  User accounts by email are NOT in MongoDB — use postgres backend with entity user_account.
+
+  Disambiguation:
+  - "securities" alone → default portfolio.securities unless query mentions market_data
+  - "portfolios" in mutual fund context → mutual_funds.portfolios
+  - portfolio documents use field owner (UUID), not ownerId
+
+  Never invent collection names. If collection unknown, use list_collections with the target database.

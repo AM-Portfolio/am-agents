@@ -32,6 +32,7 @@ class SchemaCatalog:
         self.environment = settings.APP_ENV
         self._entities: dict[str, EntityMapping] = {}
         self._defaults: dict[str, dict[str, str]] = {}
+        self._databases: dict[str, dict[str, dict[str, Any]]] = {}
         self._load_all()
 
     def _schema_file(self, tool_dir) -> Any:
@@ -52,6 +53,12 @@ class SchemaCatalog:
                 data = yaml.safe_load(f) or {}
             backend = tool.name
             self._defaults[backend] = {str(k): str(v) for k, v in (data.get("defaults") or {}).items()}
+            db_catalog: dict[str, dict[str, Any]] = {}
+            for db_name, cfg in (data.get("databases") or {}).items():
+                if isinstance(cfg, dict):
+                    db_catalog[str(db_name)] = cfg
+            if db_catalog:
+                self._databases[backend] = db_catalog
             for entity_name, cfg in (data.get("entities") or {}).items():
                 if not isinstance(cfg, dict):
                     continue
@@ -106,6 +113,11 @@ class SchemaCatalog:
             if defaults:
                 pairs = ", ".join(f"{k}={v}" for k, v in defaults.items())
                 lines.append(f"Default {backend}: {pairs}")
+            for db_name, cfg in (self._databases.get(backend) or {}).items():
+                collections = cfg.get("collections") or []
+                if collections:
+                    coll_text = ", ".join(str(c) for c in collections)
+                    lines.append(f"Database {backend}.{db_name}: collections=[{coll_text}]")
         return "\n".join(lines) if len(lines) > 1 else "(no entity mappings loaded)"
 
 
