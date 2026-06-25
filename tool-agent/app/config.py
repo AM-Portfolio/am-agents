@@ -75,6 +75,13 @@ class Settings(BaseSettings):
     )
     GRAFANA_MCP_TIMEOUT_SECONDS: float = Field(default=30.0)
 
+    VAULT_MCP_URL: str | None = Field(
+        default="http://kagent-vault-mcp.kagent.svc.cluster.local:8080/mcp"
+    )
+    VAULT_MCP_TIMEOUT_SECONDS: float = Field(default=30.0)
+    VAULT_MCP_MOUNT: str = Field(default="apps")
+    VAULT_MCP_WRITES_ENABLED: bool = Field(default=False)
+
     PROMPT_SOURCE: Literal["langfuse", "file"] = Field(default="file")
     TOOL_AGENT_PROMPT_CACHE_TTL_SECONDS: int = Field(default=60)
 

@@ -9,6 +9,7 @@ from app.models.intent import (
     ToolResult,
     ToolsQueryRequest,
     ToolsQueryResponse,
+    ToolsWriteConfirmation,
 )
 from app.observability.usage import UsageLedger
 
@@ -30,3 +31,4 @@ class ToolAgentState(TypedDict, total=False):
     gateway_trace_id: str | None
     resolved_params: dict[str, Any]
     entity: str | None
+    write_confirmation: ToolsWriteConfirmation | None

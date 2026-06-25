@@ -1,3 +1,18 @@
 content: |
-  Tool: Redis
-  Describe supported operations and vocabulary for intent parsing.
+  Redis intent rules (preprod):
+
+  Operations: scan_keys, get, type, info.
+
+  Key patterns (entity-centric):
+  - session + UUID → get entity session
+  - portfolio cache → portfolio_cache entity or pattern portfolio:*
+  - user cache → user_cache or user:*
+  - rate limits → rate_limit entity pattern ratelimit:*
+
+  Discovery:
+  - "scan redis keys session:*" → scan_keys pattern session:*
+  - "redis info" → info
+
+  Sessions in Redis are ephemeral cache — durable sessions may be in postgres (session_pg entity).
+
+  Never use FLUSHALL/FLUSHDB/DEL on /query. read_only=true on /query.

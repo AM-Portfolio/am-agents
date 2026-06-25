@@ -1,0 +1,85 @@
+# HashiCorp vault-mcp-server satellite for tool-agent (kagent namespace).
+# Apply after creating the VAULT_TOKEN secret (see vault-mcp-auth.md).
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kagent-vault-mcp
+  namespace: kagent
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kagent-vault-mcp
+  namespace: kagent
+  labels:
+    app: kagent-vault-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kagent-vault-mcp
+  template:
+    metadata:
+      labels:
+        app: kagent-vault-mcp
+    spec:
+      serviceAccountName: kagent-vault-mcp
+      containers:
+        - name: vault-mcp
+          image: hashicorp/vault-mcp-server:0.2.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: TRANSPORT_MODE
+              value: http
+            - name: TRANSPORT_HOST
+              value: "0.0.0.0"
+            - name: TRANSPORT_PORT
+              value: "8080"
+            - name: MCP_ENDPOINT
+              value: /mcp
+            - name: MCP_CORS_MODE
+              value: strict
+            - name: VAULT_ADDR
+              value: http://vault-internal.vault.svc.cluster.local:8200
+            - name: VAULT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: kagent-vault-mcp
+                  key: VAULT_TOKEN
+                  optional: true
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kagent-vault-mcp
+  namespace: kagent
+  labels:
+    app: kagent-vault-mcp
+spec:
+  selector:
+    app: kagent-vault-mcp
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

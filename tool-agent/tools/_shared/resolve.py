@@ -40,6 +40,7 @@ BACKEND_OPERATIONS: dict[str, list[str]] = {
         "get_dashboard",
         "list_datasources",
     ],
+    "vault": ["list_mounts", "list_secrets", "read_secret", "write_secret", "delete_secret"],
 }
 
 _ENTITY_HINTS: list[tuple[re.Pattern[str], str]] = [
@@ -277,4 +278,7 @@ def _missing_required_params(backend: str, operation: str, params: dict[str, Any
         params.get("uid") or params.get("dashboardUid")
     ):
         return "Missing uid for grafana.get_dashboard"
+    if backend == "vault" and operation in {"list_secrets", "read_secret", "write_secret", "delete_secret"}:
+        if not params.get("path") and not params.get("entity"):
+            return f"Missing path or entity for vault.{operation}"
     return None

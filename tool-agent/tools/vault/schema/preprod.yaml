@@ -1,0 +1,42 @@
+# Canonical KV v2 paths under mount `apps` (see VPS/vault/VAULT_SCHEMA.md).
+defaults:
+  mount: apps
+  env: preprod
+  path_prefix: data/preprod
+
+read_allowlist:
+  - data/preprod/
+  - data/dev/
+
+write_allowlist:
+  - data/preprod/infra/
+  - data/preprod/services/
+
+entities:
+  postgres_infra:
+    collection: data/preprod/infra/postgres
+    description: Postgres connection credentials
+  mongodb_infra:
+    collection: data/preprod/infra/mongodb
+    description: MongoDB connection credentials
+  redis_infra:
+    collection: data/preprod/infra/redis
+    description: Redis connection credentials
+  kafka_infra:
+    collection: data/preprod/infra/kafka
+    description: Kafka SASL credentials
+  influxdb_infra:
+    collection: data/preprod/infra/influxdb
+    description: InfluxDB credentials
+  shared_api_infra:
+    collection: data/preprod/infra/shared-api
+    description: Shared API keys (GitHub, SSL, Together)
+  am_identity:
+    collection: data/preprod/services/am-identity
+    description: AM Identity OIDC / Keycloak client secrets
+  am_mcp_gateway:
+    collection: data/preprod/services/am-mcp-gateway
+    description: MCP gateway observability and LLM API keys
+  am_keycloak:
+    collection: data/preprod/services/am-keycloak
+    description: Keycloak admin and OIDC configuration

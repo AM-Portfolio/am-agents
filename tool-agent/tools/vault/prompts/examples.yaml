@@ -1,0 +1,20 @@
+content: |
+  Example 1 — list infra secrets
+  Query: list vault secrets under apps/data/preprod/infra
+  JSON: {"backend":"vault","operation":"list_secrets","params":{"path":"apps/data/preprod/infra"},"read_only":true,"confidence":0.9,"rationale":"infra discovery"}
+
+  Example 2 — read postgres credentials
+  Query: read vault secret apps/data/preprod/infra/postgres
+  JSON: {"backend":"vault","operation":"read_secret","params":{"path":"apps/data/preprod/infra/postgres"},"read_only":true,"confidence":0.9,"rationale":"postgres infra read"}
+
+  Example 3 — read by entity alias
+  Query: read vault redis secret in preprod
+  JSON: {"backend":"vault","operation":"read_secret","params":{"entity":"redis_infra"},"read_only":true,"confidence":0.85,"rationale":"entity alias"}
+
+  Example 4 — list services
+  Query: list vault secrets under preprod services
+  JSON: {"backend":"vault","operation":"list_secrets","params":{"path":"apps/data/preprod/services"},"read_only":true,"confidence":0.88,"rationale":"services discovery"}
+
+  Example 5 — list mounts
+  Query: list vault mounts
+  JSON: {"backend":"vault","operation":"list_mounts","params":{},"read_only":true,"confidence":0.9,"rationale":"mount discovery"}

@@ -1,0 +1,28 @@
+content: |
+  Vault intent rules (preprod cluster, KV v2 mount `apps`):
+
+  Operations:
+  - list_mounts — list secret engine mounts (read-only)
+  - list_secrets — list secret paths under a prefix (read-only)
+  - read_secret — read a secret at a path (read-only)
+  - write_secret — write a key/value (WRITE — /plan + /execute only, never /query)
+  - delete_secret — delete a secret or key (WRITE — /plan + /execute only)
+
+  Canonical paths (VAULT_SCHEMA.md):
+  - Infra: apps/data/preprod/infra/{postgres,mongodb,redis,kafka,influxdb,shared-api}
+  - Services: apps/data/preprod/services/{am-identity,am-keycloak,am-mcp-gateway,...}
+
+  Prefer entity params when the query names a component:
+  - postgres → entity postgres_infra
+  - mongodb → entity mongodb_infra
+  - redis → entity redis_infra
+  - kafka → entity kafka_infra
+  - identity / am-identity → entity am_identity
+  - keycloak → entity am_keycloak
+
+  Legacy paths under secret/preprod/... are deprecated — use apps/data/preprod/... only.
+
+  Writes are blocked on /query. For writes, set read_only=false and use /plan to obtain
+  confirmation_token + confirmation_phrase, then /execute with write_confirmation.
+
+  Never invent paths outside the preprod allowlist.

@@ -1,9 +1,20 @@
+defaults:
+  key_pattern: "*"
+  scan_count: 100
+
 entities:
   session:
     key_template: "session:{id}"
     key_pattern: "session:*"
+    description: User session blobs keyed by session UUID
   portfolio_cache:
     key_template: "portfolio:{id}"
     key_pattern: "portfolio:*"
-defaults:
-  key_pattern: "*"
+    description: Cached portfolio snapshots
+  user_cache:
+    key_template: "user:{id}"
+    key_pattern: "user:*"
+    description: Cached user profile data
+  rate_limit:
+    key_pattern: "ratelimit:*"
+    description: API rate limit counters
