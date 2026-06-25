@@ -50,7 +50,7 @@ def _path_from_query(query: str) -> str | None:
     if entity:
         mapping = catalog.entity(entity)
         if mapping and mapping.collection:
-            return str(mapping.collection)
+            return f"apps/{mapping.collection}"
     if re.search(r"\binfra\b", query, re.I):
         prefix = catalog.default_for("vault", "path_prefix") or "data/preprod"
         return f"apps/{prefix}/infra"

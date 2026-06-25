@@ -37,10 +37,11 @@ class VaultMcpAdapter:
 
     def _normalize_path(self, path: str) -> str:
         if path.startswith("apps/data/"):
+            return path[len("apps/data/") :]
+        if path.startswith("apps/"):
             return path[len("apps/") :]
-        if path.startswith("apps/") and not path.startswith("apps/data/"):
-            rest = path[len("apps/") :]
-            return rest if rest.startswith("data/") else f"data/{rest}"
+        if path.startswith("data/preprod/"):
+            return path[len("data/") :]
         return path
 
     def _normalize_params(self, operation: str, params: dict[str, Any]) -> dict[str, Any]:

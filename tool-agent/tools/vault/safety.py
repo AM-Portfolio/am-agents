@@ -31,10 +31,11 @@ def _secret_path(intent: IntentDocument) -> str:
     params = intent.params
     path = str(params.get("path") or "")
     if path.startswith("apps/data/"):
+        return path[len("apps/data/") :]
+    if path.startswith("apps/"):
         return path[len("apps/") :]
-    if path.startswith("apps/") and not path.startswith("apps/data/"):
-        rest = path[len("apps/") :]
-        return f"data/{rest}" if not rest.startswith("data/") else rest
+    if path.startswith("data/preprod/"):
+        return path[len("data/") :]
     return path
 
 
@@ -62,6 +63,8 @@ def validate(
     is_execute_path: bool = False,
 ) -> None:
     if intent.operation in READ_OPERATIONS:
+        if intent.operation == "list_mounts":
+            return
         validate_path(intent, for_write=False)
         return
 

@@ -5,38 +5,38 @@ defaults:
   path_prefix: data/preprod
 
 read_allowlist:
+  - preprod/
   - data/preprod/
-  - data/dev/
 
 write_allowlist:
-  - data/preprod/infra/
-  - data/preprod/services/
+  - preprod/infra/
+  - preprod/services/
 
 entities:
   postgres_infra:
-    collection: data/preprod/infra/postgres
+    collection: preprod/infra/postgres
     description: Postgres connection credentials
   mongodb_infra:
-    collection: data/preprod/infra/mongodb
+    collection: preprod/infra/mongodb
     description: MongoDB connection credentials
   redis_infra:
-    collection: data/preprod/infra/redis
+    collection: preprod/infra/redis
     description: Redis connection credentials
   kafka_infra:
-    collection: data/preprod/infra/kafka
+    collection: preprod/infra/kafka
     description: Kafka SASL credentials
   influxdb_infra:
-    collection: data/preprod/infra/influxdb
+    collection: preprod/infra/influxdb
     description: InfluxDB credentials
   shared_api_infra:
-    collection: data/preprod/infra/shared-api
+    collection: preprod/infra/shared-api
     description: Shared API keys (GitHub, SSL, Together)
   am_identity:
-    collection: data/preprod/services/am-identity
+    collection: preprod/services/am-identity
     description: AM Identity OIDC / Keycloak client secrets
   am_mcp_gateway:
-    collection: data/preprod/services/am-mcp-gateway
+    collection: preprod/services/am-mcp-gateway
     description: MCP gateway observability and LLM API keys
   am_keycloak:
-    collection: data/preprod/services/am-keycloak
+    collection: preprod/services/am-keycloak
     description: Keycloak admin and OIDC configuration

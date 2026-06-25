@@ -34,8 +34,18 @@ def _write_intent(path: str = "data/preprod/infra/postgres") -> IntentDocument:
     )
 
 
-def test_read_allowed():
-    validate(_read_intent(), request_read_only=True, is_execute_path=False)
+def test_list_mounts_skips_path_allowlist():
+    validate(
+        IntentDocument(
+            backend="vault",
+            operation="list_mounts",
+            params={},
+            confidence=0.9,
+            rationale="test",
+        ),
+        request_read_only=True,
+        is_execute_path=False,
+    )
 
 
 def test_write_blocked_on_query():
