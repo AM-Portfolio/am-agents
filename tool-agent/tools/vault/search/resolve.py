@@ -24,6 +24,25 @@ def resolve(intent: IntentDocument, query: str) -> tuple[IntentDocument, str | N
     if params.get("path"):
         params["path"] = normalize_vault_path(str(params["path"]))
 
+    if (
+        not params.get("path")
+        and intent.operation in {"list_secrets", "read_secret", "write_secret", "delete_secret"}
+        and query
+    ):
+        from tools.vault.search.fuzzy import resolve_vault_target, target_to_params
+
+        target = resolve_vault_target(query, default_operation=intent.operation)
+        fuzzy_params = target_to_params(target)
+        if fuzzy_params.get("path"):
+            params["path"] = normalize_vault_path(str(fuzzy_params["path"]))
+        if fuzzy_params.get("entity"):
+            entity_name = str(fuzzy_params["entity"])
+            mapping = catalog.entity(entity_name)
+            if mapping and mapping.collection:
+                params["path"] = normalize_vault_path(str(mapping.collection))
+        if not entity_name and fuzzy_params.get("entity"):
+            entity_name = str(fuzzy_params["entity"])
+
     mount = catalog.default_for("vault", "mount")
     if mount:
         params.setdefault("mount", mount)

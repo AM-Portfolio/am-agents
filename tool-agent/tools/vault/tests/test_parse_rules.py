@@ -1,4 +1,42 @@
+from tools.vault.search.fuzzy import fuzzy_entity_from_query, resolve_vault_target, target_to_params
 from tools.vault.search.parse_rules import parse_rules
+
+
+def test_parse_rules_read_preprod_service_lists():
+    intent = parse_rules(
+        "read secret preprod service",
+        tool_name="vault",
+        backend_hint="vault",
+    )
+    assert intent is not None
+    assert intent.operation == "list_secrets"
+    assert "preprod/services" in intent.params.get("path", "")
+
+
+def test_parse_rules_read_preprod_infra_lists():
+    intent = parse_rules(
+        "read secret preprod infra",
+        tool_name="vault",
+        backend_hint="vault",
+    )
+    assert intent is not None
+    assert intent.operation == "list_secrets"
+    assert "preprod/infra" in intent.params.get("path", "")
+
+
+def test_fuzzy_entity_identity():
+    assert fuzzy_entity_from_query("read secret preprod identity") == "am_identity"
+
+
+def test_fuzzy_entity_postgres_typo():
+    assert fuzzy_entity_from_query("read secret preprod postgress") == "postgres_infra"
+
+
+def test_resolve_target_service_category():
+    target = resolve_vault_target("read secret preprod service")
+    assert target.category == "services"
+    assert target.operation == "list_secrets"
+    assert target.path == "preprod/services"
 
 
 def test_parse_rules_list_infra():
@@ -13,6 +51,17 @@ def test_parse_rules_list_infra():
     assert "preprod" in intent.params["path"]
 
 
+def test_parse_rules_read_postgres_typo():
+    intent = parse_rules(
+        "read secret preprod postgress",
+        tool_name="vault",
+        backend_hint="vault",
+    )
+    assert intent is not None
+    assert intent.operation == "read_secret"
+    assert intent.params.get("entity") == "postgres_infra" or "postgres" in str(intent.params.get("path", ""))
+
+
 def test_parse_rules_read_postgres_entity():
     intent = parse_rules(
         "read vault postgres secret in preprod",
@@ -21,7 +70,7 @@ def test_parse_rules_read_postgres_entity():
     )
     assert intent is not None
     assert intent.operation == "read_secret"
-    assert intent.params["entity"] == "postgres_infra"
+    assert intent.params.get("entity") == "postgres_infra"
 
 
 def test_parse_rules_list_mounts():
