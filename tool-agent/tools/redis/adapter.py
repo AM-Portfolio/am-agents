@@ -35,7 +35,14 @@ class RedisAdapter:
                     keys.append(key)
                     if len(keys) >= max_rows:
                         break
-                return {"pattern": pattern, "keys": keys, "count": len(keys)}
+                db_size = await client.dbsize()
+                return {
+                    "pattern": pattern,
+                    "keys": keys,
+                    "count": len(keys),
+                    "dbsize": db_size,
+                    "note": "Empty keys[] means no keys matched the pattern (Redis is reachable).",
+                }
 
             if operation == "get":
                 key = params.get("key")

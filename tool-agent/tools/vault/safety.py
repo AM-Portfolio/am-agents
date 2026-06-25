@@ -7,6 +7,7 @@ import yaml
 
 from app.config import settings
 from app.models.intent import IntentDocument, SafetyError, ToolsWriteConfirmation
+from tools.vault.paths import normalize_vault_path
 
 READ_OPERATIONS = frozenset({"list_secrets", "read_secret", "list_mounts"})
 WRITE_OPERATIONS = frozenset({"write_secret", "delete_secret"})
@@ -28,15 +29,8 @@ def _load_allowlists() -> tuple[list[str], list[str]]:
 
 
 def _secret_path(intent: IntentDocument) -> str:
-    params = intent.params
-    path = str(params.get("path") or "")
-    if path.startswith("apps/data/"):
-        return path[len("apps/data/") :]
-    if path.startswith("apps/"):
-        return path[len("apps/") :]
-    if path.startswith("data/preprod/"):
-        return path[len("data/") :]
-    return path
+    path = str(intent.params.get("path") or "")
+    return normalize_vault_path(path)
 
 
 def _path_allowed(path: str, prefixes: list[str]) -> bool:

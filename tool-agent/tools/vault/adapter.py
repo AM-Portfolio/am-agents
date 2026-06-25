@@ -5,6 +5,7 @@ from typing import Any
 
 from app.config import settings
 from tools._shared.mcp_remote_client import RemoteMcpClient
+from tools.vault.paths import normalize_vault_path
 from tools.vault.safety import READ_OPERATIONS, WRITE_OPERATIONS
 
 logger = logging.getLogger(__name__)
@@ -36,13 +37,7 @@ class VaultMcpAdapter:
         return settings.VAULT_MCP_MOUNT or "apps"
 
     def _normalize_path(self, path: str) -> str:
-        if path.startswith("apps/data/"):
-            return path[len("apps/data/") :]
-        if path.startswith("apps/"):
-            return path[len("apps/") :]
-        if path.startswith("data/preprod/"):
-            return path[len("data/") :]
-        return path
+        return normalize_vault_path(path)
 
     def _normalize_params(self, operation: str, params: dict[str, Any]) -> dict[str, Any]:
         out = dict(params)
