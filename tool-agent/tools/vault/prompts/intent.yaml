@@ -1,28 +1,27 @@
 content: |
-  Vault intent rules (preprod cluster, KV v2 mount `apps`):
+  Vault intent rules — preprod cluster, KV mount `apps`.
+
+  Path convention: `{env}/{category}/{leaf}` under mount `apps`
+  (MCP path strips `apps/` or `apps/data/` — e.g. `preprod/infra/postgres`).
 
   Operations:
-  - list_mounts — list secret engine mounts (read-only)
-  - list_secrets — list secret paths under a prefix (read-only)
-  - read_secret — read a secret at a path (read-only)
-  - write_secret — write a key/value (WRITE — /plan + /execute only, never /query)
-  - delete_secret — delete a secret or key (WRITE — /plan + /execute only)
+  - list_mounts — list secret engine mounts
+  - list_secrets — list keys under a path prefix
+  - read_secret — read secret data at path
+  - write_secret / delete_secret — WRITE only via /plan + /execute (never /query)
 
-  Canonical paths (VAULT_SCHEMA.md):
-  - Infra: apps/data/preprod/infra/{postgres,mongodb,redis,kafka,influxdb,shared-api}
-  - Services: apps/data/preprod/services/{am-identity,am-keycloak,am-mcp-gateway,...}
+  Categories:
+  | Category | Prefix | Leaf examples |
+  |----------|--------|---------------|
+  | infra | preprod/infra | postgres, mongodb, redis, kafka, influxdb, shared-api |
+  | services | preprod/services | am-* microservices (am-identity, am-portfolio, ...) |
+  | api | preprod/api | github, upstox |
 
-  Prefer entity params when the query names a component:
-  - postgres → entity postgres_infra
-  - mongodb → entity mongodb_infra
-  - redis → entity redis_infra
-  - kafka → entity kafka_infra
-  - identity / am-identity → entity am_identity
-  - keycloak → entity am_keycloak
+  Prefer params.path or params.entity (infra entities: postgres_infra, mongodb_infra, ...).
+  Use list_secrets for discovery — live path cache may appear in catalog_snippet.
 
-  Legacy paths under secret/preprod/... are deprecated — use apps/data/preprod/... only.
-
-  Writes are blocked on /query. For writes, set read_only=false and use /plan to obtain
-  confirmation_token + confirmation_phrase, then /execute with write_confirmation.
-
-  Never invent paths outside the preprod allowlist.
+  NL patterns:
+  - "read secret preprod postgress" → preprod/infra/postgres (typo tolerant)
+  - "read secret preprod service" → preprod/services/{default or named am-* service}
+  - "list vault secrets under preprod infra" → list_secrets path=preprod/infra
+  - "read vault am-analysis secret" → preprod/services/am-analysis

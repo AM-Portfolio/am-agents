@@ -3,7 +3,7 @@ content: |
 
   Operations: search_schema, run_sql, table_row_count.
 
-  Schema: public on database portfolio (from POSTGRES_URL).
+  Schema: public on database postgres (from POSTGRES_URL connection string).
 
   Entity-centric params (preferred over raw SQL):
   - user / user_account + email → user_accounts lookup

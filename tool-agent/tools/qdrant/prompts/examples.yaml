@@ -1,2 +1,20 @@
 content: |
-  # Optional few-shot examples for Qdrant
+  Example 1 — list collections
+  Query: list qdrant collections
+  JSON: {"backend":"qdrant","operation":"list_collections","params":{},"read_only":true,"confidence":0.9,"rationale":"collection discovery"}
+
+  Example 2 — collection info
+  Query: how many points in bug_memory
+  JSON: {"backend":"qdrant","operation":"collection_info","params":{"collection":"bug_memory"},"read_only":true,"confidence":0.85,"rationale":"point count"}
+
+  Example 3 — scroll sample (NL search without embedding)
+  Query: search bug memory for login timeout
+  JSON: {"backend":"qdrant","operation":"scroll","params":{"collection":"bug_memory","limit":10},"read_only":true,"confidence":0.8,"rationale":"NL search maps to scroll until embedder exists"}
+
+  Example 4 — scroll test cases
+  Query: sample points from test_cases collection
+  JSON: {"backend":"qdrant","operation":"scroll","params":{"collection":"test_cases","limit":10},"read_only":true,"confidence":0.82,"rationale":"scroll sample"}
+
+  Example 5 — vector search (structured execute only)
+  Query: (requires precomputed vector)
+  JSON: {"backend":"qdrant","operation":"search","params":{"collection":"bug_memory","vector":[0.1,0.2],"limit":5},"read_only":true,"confidence":1.0,"rationale":"vector similarity search"}

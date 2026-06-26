@@ -1,3 +1,24 @@
 content: |
-  Tool: Kafka
-  Describe supported operations and vocabulary for intent parsing.
+  Kafka intent rules (preprod cluster: am-preprod).
+
+  Source of truth: am-kafka-lib KafkaTopics.java + live list_topics cache.
+  Naming: am-*, dashboard-*, *.DLQ
+
+  Operations: list_topics, describe_topic, peek_messages, consumer_lag.
+
+  Common topics (not exhaustive — use list_topics or entity params):
+  - am-stock-price-update, am-portfolio-update, am-portfolio-stream
+  - am-trade-update, am-user-watching, am-holding-update
+  - dashboard-summary-update, dashboard-movers-update, ...
+  - *.DLQ dead-letter queues
+
+  Entity params (preferred over raw topic):
+  portfolio_stream, portfolio_update, trade_update, stock_price, user_watching
+
+  Legacy aliases: am-portfolio-events → am-portfolio-update, am-trade-executions → am-trade-update
+
+  NL patterns:
+  - "list kafka topics" → list_topics
+  - "describe kafka topic am-stock-price-update" → describe_topic
+  - "peek last message on am-portfolio-stream" → peek_messages from_tail=true limit=1
+  - "kafka consumer lag for group X" → consumer_lag

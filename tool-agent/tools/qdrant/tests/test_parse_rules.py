@@ -12,3 +12,10 @@ def test_parse_rules_collection_info():
     assert intent is not None
     assert intent.operation == "collection_info"
     assert intent.params["collection"] == "bug_memory"
+
+
+def test_parse_rules_nl_search_maps_to_scroll():
+    intent = parse_rules("search bug memory for login timeout", tool_name="qdrant")
+    assert intent is not None
+    assert intent.operation == "scroll"
+    assert intent.params["collection"] == "bug_memory"

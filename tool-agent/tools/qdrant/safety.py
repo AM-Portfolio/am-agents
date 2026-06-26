@@ -10,3 +10,10 @@ def validate(intent: IntentDocument, *, request_read_only: bool) -> None:
         raise SafetyError("Writes are not supported for qdrant")
     if request_read_only and intent.operation in QDRANT_WRITE_OPS:
         raise SafetyError(f"Qdrant operation '{intent.operation}' is blocked in read-only mode")
+
+
+def validate_tool_params(operation: str, params: dict) -> None:
+    if operation in {"collection_info", "scroll", "search"} and not params.get("collection"):
+        raise ValueError(f"collection required for qdrant.{operation}")
+    if operation == "search" and not params.get("vector"):
+        raise ValueError("vector required for qdrant.search")

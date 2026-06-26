@@ -33,6 +33,9 @@ class SchemaCatalog:
         self._entities: dict[str, EntityMapping] = {}
         self._defaults: dict[str, dict[str, str]] = {}
         self._databases: dict[str, dict[str, dict[str, Any]]] = {}
+        self._vault_categories: dict[str, dict[str, Any]] = {}
+        self._vault_path_aliases: dict[str, str] = {}
+        self._kafka_topic_aliases: dict[str, str] = {}
         self._load_all()
 
     def _schema_file(self, tool_dir) -> Any:
@@ -75,6 +78,15 @@ class SchemaCatalog:
                     key_pattern=cfg.get("key_pattern"),
                     lookup_fields=dict(cfg.get("lookup_fields") or {}),
                 )
+            if backend == "vault":
+                self._vault_categories = dict(data.get("categories") or {})
+                self._vault_path_aliases = {
+                    str(k).lower(): str(v) for k, v in (data.get("path_aliases") or {}).items()
+                }
+            if backend == "kafka":
+                self._kafka_topic_aliases = {
+                    str(k).lower(): str(v) for k, v in (data.get("topic_aliases") or {}).items()
+                }
 
     def entity(self, name: str) -> EntityMapping | None:
         return self._entities.get(name)
@@ -88,6 +100,25 @@ class SchemaCatalog:
 
     def default_database(self, backend: str) -> str | None:
         return self.default_for(backend, "database")
+
+    def vault_path_alias(self, token: str) -> str | None:
+        return self._vault_path_aliases.get(token.lower())
+
+    def vault_categories(self) -> dict[str, dict[str, Any]]:
+        return self._vault_categories
+
+    def vault_infra_components(self) -> list[str]:
+        infra = self._vault_categories.get("infra") or {}
+        leaves = infra.get("known_leaves") or []
+        return [str(leaf) for leaf in leaves]
+
+    def vault_category_default_leaf(self, category: str) -> str | None:
+        cfg = self._vault_categories.get(category) or {}
+        leaf = cfg.get("default_leaf")
+        return str(leaf) if leaf else None
+
+    def kafka_topic_alias(self, name: str) -> str | None:
+        return self._kafka_topic_aliases.get(name.lower())
 
     def snippet(self, backends: list[str] | None = None) -> str:
         lines = ["Known entities (use params.entity + params.id when location omitted):"]
@@ -106,6 +137,25 @@ class SchemaCatalog:
             if mapping.key_pattern:
                 parts.append(f"key_pattern={mapping.key_pattern}")
             lines.append(", ".join(parts))
+        if not backends or "vault" in backends:
+            mount = self.default_for("vault", "mount") or "apps"
+            lines.append(
+                f"Vault mount `{mount}` — convention preprod/{{infra|services|api}}/{{leaf}} "
+                f"(MCP path without apps/ prefix). Infra leaves: "
+                f"{', '.join(self.vault_infra_components()) or 'postgres, mongodb, redis, kafka'}. "
+                f"Services: am-* naming. Use list_secrets for discovery."
+            )
+            if self._vault_path_aliases:
+                sample = ", ".join(f"{k}→{v}" for k, v in list(self._vault_path_aliases.items())[:8])
+                lines.append(f"Vault typo aliases: {sample}, ...")
+        if not backends or "kafka" in backends:
+            lines.append(
+                "Kafka topics: naming convention am-*, dashboard-*, *.DLQ — "
+                "use list_topics or entity params (portfolio_stream, trade_update, ...)."
+            )
+            if self._kafka_topic_aliases:
+                sample = ", ".join(f"{k}→{v}" for k, v in list(self._kafka_topic_aliases.items())[:6])
+                lines.append(f"Kafka legacy aliases: {sample}, ...")
         for backend in ("mongodb", "postgres", "redis", "qdrant"):
             if backends and backend not in backends:
                 continue

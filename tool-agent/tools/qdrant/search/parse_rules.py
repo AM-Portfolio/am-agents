@@ -32,10 +32,10 @@ def parse_rules(query: str, *, tool_name: str, backend_hint: str | None = None) 
     if re.search(r"\bsearch\b|\bsimilar\b|\bfind\b.*\blike\b", q):
         return IntentDocument(
             backend=tool_name,
-            operation="search",
-            params={"collection": coll or "bug_memory", "query": query},
-            confidence=0.82,
-            rationale="Rule: qdrant semantic search",
+            operation="scroll",
+            params={"collection": coll or "bug_memory", "limit": 10},
+            confidence=0.78,
+            rationale="Rule: qdrant NL search → scroll sample (vector search requires embedding)",
         )
 
     if re.search(r"\bscroll\b|\blist\s+points\b|\bsample\b", q):

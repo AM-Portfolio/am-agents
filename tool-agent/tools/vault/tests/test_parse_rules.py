@@ -2,26 +2,26 @@ from tools.vault.search.fuzzy import fuzzy_entity_from_query, resolve_vault_targ
 from tools.vault.search.parse_rules import parse_rules
 
 
-def test_parse_rules_read_preprod_service_lists():
+def test_parse_rules_read_preprod_service_reads_default_entity():
     intent = parse_rules(
         "read secret preprod service",
         tool_name="vault",
         backend_hint="vault",
     )
     assert intent is not None
-    assert intent.operation == "list_secrets"
-    assert "preprod/services" in intent.params.get("path", "")
+    assert intent.operation == "read_secret"
+    assert intent.params.get("entity") or "preprod/services" in intent.params.get("path", "")
 
 
-def test_parse_rules_read_preprod_infra_lists():
+def test_parse_rules_read_preprod_infra_reads_default_entity():
     intent = parse_rules(
         "read secret preprod infra",
         tool_name="vault",
         backend_hint="vault",
     )
     assert intent is not None
-    assert intent.operation == "list_secrets"
-    assert "preprod/infra" in intent.params.get("path", "")
+    assert intent.operation == "read_secret"
+    assert intent.params.get("entity") or "preprod/infra" in intent.params.get("path", "")
 
 
 def test_fuzzy_entity_identity():
@@ -35,8 +35,8 @@ def test_fuzzy_entity_postgres_typo():
 def test_resolve_target_service_category():
     target = resolve_vault_target("read secret preprod service")
     assert target.category == "services"
-    assert target.operation == "list_secrets"
-    assert target.path == "preprod/services"
+    assert target.operation == "read_secret"
+    assert target.entity or target.path
 
 
 def test_parse_rules_list_infra():

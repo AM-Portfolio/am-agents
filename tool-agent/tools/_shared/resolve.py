@@ -267,10 +267,14 @@ def _missing_required_params(backend: str, operation: str, params: dict[str, Any
             return f"Missing database/collection for mongodb.{operation}"
     if backend == "postgres" and operation == "run_sql" and not params.get("sql"):
         return "Missing sql for postgres.run_sql"
+    if backend == "postgres" and operation == "table_row_count" and not params.get("table"):
+        return "Missing table for postgres.table_row_count (use params.entity)"
     if backend == "redis" and operation == "get" and not params.get("key"):
         return "Missing key for redis.get"
     if backend == "qdrant" and operation in QDRANT_COLL_OPS and not params.get("collection"):
         return f"Missing collection for qdrant.{operation}"
+    if backend == "kafka" and operation in {"describe_topic", "peek_messages"} and not params.get("topic"):
+        return f"Missing topic for kafka.{operation}"
     if backend == "grafana" and operation == "query_logs":
         if not (params.get("query") or params.get("logql")):
             return "Missing query/logql for grafana.query_logs"

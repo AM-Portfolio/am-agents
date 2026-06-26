@@ -26,7 +26,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
-      - run: pytest tests tools/mongodb/tests tools/postgres/tests tools/redis/tests tools/kafka/tests tools/qdrant/tests -q --import-mode=importlib
+      - run: pytest tests tools/mongodb/tests tools/postgres/tests tools/redis/tests tools/kafka/tests tools/qdrant/tests tools/vault/tests tools/grafana/tests -q --import-mode=importlib
+      - run: python scripts/run_query_corpus.py --local
       - run: sh scripts/check-db-agent-untouched.sh
 
   publish:

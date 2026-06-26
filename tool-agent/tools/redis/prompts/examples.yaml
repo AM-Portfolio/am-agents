@@ -1,2 +1,20 @@
 content: |
-  # Optional few-shot examples for Redis
+  Example 1 — server info
+  Query: redis info server
+  JSON: {"backend":"redis","operation":"info","params":{},"read_only":true,"confidence":0.9,"rationale":"redis INFO"}
+
+  Example 2 — scan keys
+  Query: scan redis keys session:*
+  JSON: {"backend":"redis","operation":"scan_keys","params":{"pattern":"session:*"},"read_only":true,"confidence":0.85,"rationale":"key scan"}
+
+  Example 3 — session get by UUID
+  Query: get redis session abcdef01-2345-6789-abcd-ef0123456789
+  JSON: {"backend":"redis","operation":"get","params":{"entity":"session","id":"abcdef01-2345-6789-abcd-ef0123456789"},"read_only":true,"confidence":0.88,"rationale":"session key lookup"}
+
+  Example 4 — portfolio cache
+  Query: redis get portfolio cache for abcdef01-2345-6789-abcd-ef0123456789
+  JSON: {"backend":"redis","operation":"get","params":{"entity":"portfolio_cache","id":"abcdef01-2345-6789-abcd-ef0123456789"},"read_only":true,"confidence":0.85,"rationale":"portfolio cache key"}
+
+  Example 5 — empty pattern note
+  Query: scan all redis keys
+  JSON: {"backend":"redis","operation":"scan_keys","params":{"pattern":"*"},"read_only":true,"confidence":0.8,"rationale":"full key scan — empty result means no matching keys, not connection failure"}

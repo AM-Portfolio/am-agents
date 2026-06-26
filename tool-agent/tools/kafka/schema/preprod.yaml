@@ -1,1 +1,31 @@
-defaults: {}
+defaults:
+  cluster: am-preprod
+  peek_limit: 10
+
+# Naming convention — full catalog from live list_topics cache (see topic_cache.py)
+naming:
+  am_prefix: am-
+  dashboard_prefix: dashboard-
+  dlq_suffix: .DLQ
+
+topic_aliases:
+  am-portfolio-events: am-portfolio-update
+  am-trade-executions: am-trade-update
+  portfolio-events: am-portfolio-update
+  portfolio_events: am-portfolio-update
+  trade-executions: am-trade-update
+  trade_executions: am-trade-update
+  am-trade: am-trade-update
+  am-portfolio: am-portfolio-update
+
+entities:
+  portfolio_stream:
+    collection: am-portfolio-stream
+  portfolio_update:
+    collection: am-portfolio-update
+  trade_update:
+    collection: am-trade-update
+  stock_price:
+    collection: am-stock-price-update
+  user_watching:
+    collection: am-user-watching

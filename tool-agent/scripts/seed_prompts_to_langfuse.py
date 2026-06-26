@@ -9,12 +9,12 @@ import sys
 from pathlib import Path
 
 import httpx
-import yaml
 
 AGENT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(AGENT_ROOT))
 
 from app.config import settings  # noqa: E402
+from tools._loader import get_enabled_tools  # noqa: E402
 from tools._shared.text import load_yaml_text  # noqa: E402
 
 
@@ -51,16 +51,30 @@ def main() -> int:
     base_path = AGENT_ROOT / "app" / "prompts" / "base.yaml"
     upsert_prompt("tool-agent/intent/base", load_yaml_text(base_path), dry_run=args.dry_run)
 
-    tools_dir = AGENT_ROOT / "tools"
-    for tool_dir in sorted(tools_dir.iterdir()):
-        if not tool_dir.is_dir() or tool_dir.name.startswith("_"):
-            continue
-        for prompt_file in ("intent.yaml", "examples.yaml"):
+    for tool in get_enabled_tools():
+        tool_dir = tool.tool_dir
+        for prompt_key, prompt_file in (
+            ("intent", "intent.yaml"),
+            ("examples", "examples.yaml"),
+            ("god_mode", "god_mode.yaml"),
+            ("analysis", "analysis.yaml"),
+        ):
             path = tool_dir / "prompts" / prompt_file
             if not path.exists():
                 continue
-            suffix = "examples" if prompt_file == "examples.yaml" else ""
-            name = f"tool-agent/intent/{tool_dir.name}" + (f"/{suffix}" if suffix else "")
+            ref = tool.manifest.prompts.get(prompt_key)
+            if prompt_key in ("god_mode", "analysis") and not ref:
+                continue
+            if prompt_key == "examples" and ref and ref.optional and not path.read_text().strip().startswith("content:"):
+                continue
+            if prompt_key == "examples":
+                name = ref.name if ref and ref.name else f"tool-agent/intent/{tool.name}/examples"
+            elif prompt_key == "intent":
+                name = ref.name if ref and ref.name else f"tool-agent/intent/{tool.name}"
+            elif prompt_key == "god_mode":
+                name = ref.name if ref and ref.name else f"tool-agent/intent/{tool.name}/god_mode"
+            else:
+                name = ref.name if ref and ref.name else f"tool-agent/analysis/{tool.name}"
             upsert_prompt(name, load_yaml_text(path), dry_run=args.dry_run)
             print(f"Synced {name}")
 

@@ -65,7 +65,10 @@ async def parse_intent_node(state: ToolAgentState) -> ToolAgentState:
             "error_status": 503,
         }
 
+    min_confidence = settings.TOOL_AGENT_INTENT_MIN_CONFIDENCE
     if not god_mode:
+        best_intent: IntentDocument | None = None
+        best_tool = None
         for tool in get_enabled_tools():
             if backend_hint and tool.name != backend_hint:
                 continue
@@ -74,11 +77,13 @@ async def parse_intent_node(state: ToolAgentState) -> ToolAgentState:
             except Exception as exc:
                 logger.debug("parse_rules failed for %s: %s", tool.name, exc)
                 intent = None
-            if intent:
-                try:
-                    tool.validate_intent(intent)
-                except Exception as exc:
-                    return {**state, **state_updates, "error": str(exc), "error_status": 422}
+            if not intent:
+                continue
+            try:
+                tool.validate_intent(intent)
+            except Exception as exc:
+                return {**state, **state_updates, "error": str(exc), "error_status": 422}
+            if intent.confidence >= min_confidence:
                 await tracer.span(
                     request_id,
                     f"parse intent · rules · {tool.name}",
@@ -87,6 +92,16 @@ async def parse_intent_node(state: ToolAgentState) -> ToolAgentState:
                     metadata={"step": "parse_intent", "parse_source": "rules"},
                 )
                 return {**state, **state_updates, "intent": intent, "parse_source": "rules"}
+            if best_intent is None or intent.confidence > best_intent.confidence:
+                best_intent = intent
+                best_tool = tool
+        if best_intent and best_tool:
+            logger.debug(
+                "Rules intent below confidence %.2f (got %.2f) for %s — falling back to LLM",
+                min_confidence,
+                best_intent.confidence,
+                best_tool.name,
+            )
 
     if not settings.LLM_INTENT_ENABLED:
         return {

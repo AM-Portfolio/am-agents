@@ -31,4 +31,4 @@ prompts:
     source: file
     name: tool-agent/intent/vault/examples
     fallback: prompts/examples.yaml
-    optional: true
+    optional: false

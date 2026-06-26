@@ -12,5 +12,6 @@ content: |
   - "search bug memory for login timeout" → search collection bug_memory
   - "how many points in test_cases" → collection_info test_cases
 
-  Semantic search queries should pass natural language in params.query.
+  Semantic search with a precomputed vector uses params.vector (structured /execute only).
+  Natural-language "search" queries map to scroll samples until an embedder is wired.
   Use list_collections when the user asks what collections exist.

@@ -23,6 +23,12 @@ async def lifespan(app: FastAPI):
     get_registry()
     get_schema_catalog()
     get_tools()
+    if settings.CATALOG_CACHE_WARM_ON_READY:
+        from tools.kafka.topic_cache import refresh_topic_cache
+        from tools.vault.path_cache import refresh_path_cache
+
+        await refresh_path_cache()
+        await refresh_topic_cache()
     await start_worker()
     logger.info(
         "tool-agent starting env=%s tools=%s mcp_enabled=%s prompt_source=%s",
@@ -71,6 +77,12 @@ async def ready():
     registry_ok = bool(get_registry().backends)
     llm = get_llm_client()
     llm_ok = await llm.health_check() if llm.available else False
+    catalog: dict[str, str] = {}
+    if settings.CATALOG_CACHE_WARM_ON_READY:
+        from tools.kafka.topic_cache import catalog_source as kafka_catalog_source
+        from tools.vault.path_cache import catalog_source as vault_catalog_source
+
+        catalog = {"vault": vault_catalog_source(), "kafka": kafka_catalog_source()}
     return {
         "status": "ok" if registry_ok or not get_enabled_tools() else "degraded",
         "registry_loaded": registry_ok,
@@ -81,4 +93,5 @@ async def ready():
         "prompt_source": settings.PROMPT_SOURCE,
         "langfuse_enabled": settings.LANGFUSE_ENABLED,
         "entity_resolution": any(t.manifest.has_entities for t in get_enabled_tools()),
+        "catalog_cache": catalog,
     }

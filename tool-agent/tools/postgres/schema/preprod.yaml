@@ -1,6 +1,16 @@
 defaults:
   schema: public
-  database: portfolio
+  database: postgres
+
+# POSTGRES_URL connects to the `postgres` database; portfolio tables live in public schema.
+databases:
+  postgres:
+    tables:
+      - portfolios
+      - user_accounts
+      - portfolio_securities
+      - subscriptions
+      - sessions
 
 entities:
   portfolio_pg:

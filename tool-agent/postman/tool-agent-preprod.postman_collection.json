@@ -217,6 +217,50 @@
             "url": "{{baseUrl}}/api/v1/tools/plan"
           },
           "response": []
+        },
+        {
+          "name": "Plan \u2014 vault list preprod infra",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Agent-Caller",
+                "value": "postman"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"list vault secrets under preprod infra\",\n  \"backend\": \"vault\",\n  \"read_only\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/plan"
+          },
+          "response": []
+        },
+        {
+          "name": "Plan \u2014 grafana list datasources",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Agent-Caller",
+                "value": "postman"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"list grafana datasources\",\n  \"backend\": \"grafana\",\n  \"read_only\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/tools/plan"
+          },
+          "response": []
         }
       ]
     },
