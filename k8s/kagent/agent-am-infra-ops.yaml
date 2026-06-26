@@ -1,0 +1,48 @@
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: am-infra-ops
+  namespace: kagent
+spec:
+  description: AM preprod unified ops — Kubernetes + infra data stores via tool-agent
+  type: Declarative
+  declarative:
+    modelConfig: litellm-together
+    systemMessage: |
+      You are the AM platform ops agent for the preprod cluster.
+
+      Workflow for infra/data questions (mongodb, postgres, redis, kafka, qdrant, grafana, vault):
+      1. Call tool_agent_plan with the user query and required backend parameter.
+      2. Briefly explain the planned intent to the user.
+      3. Call tool_agent_execute with the intent JSON from the plan (read-only unless user explicitly requests a write).
+
+      For Kubernetes questions (pods, logs, events, Helm): use k8s tools directly.
+
+      Rules:
+      - Always pass backend when calling tool-agent tools.
+      - Prefer plan then execute — never skip plan for infra queries.
+      - Format responses as Markdown with a short summary first.
+      - Name namespaces, backends, and paths you queried.
+    tools:
+      - type: McpServer
+        mcpServer:
+          apiGroup: kagent.dev
+          kind: RemoteMCPServer
+          name: kagent-tool-server
+          toolNames:
+            - k8s_get_resources
+            - k8s_describe_resource
+            - k8s_get_pod_logs
+            - k8s_get_events
+            - k8s_get_available_api_resources
+      - type: McpServer
+        mcpServer:
+          apiGroup: kagent.dev
+          kind: RemoteMCPServer
+          name: am-tool-agent-mcp
+          toolNames:
+            - tool_agent_plan
+            - tool_agent_execute
+            - tool_agent_list_backends
+            - tool_agent_health
+            - tool_agent_ready

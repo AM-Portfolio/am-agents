@@ -1,0 +1,12 @@
+apiVersion: kagent.dev/v1alpha2
+kind: RemoteMCPServer
+metadata:
+  name: am-tool-agent-mcp
+  namespace: kagent
+spec:
+  description: AM tool-agent infra NL queries (plan/execute via REST+SSE)
+  protocol: STREAMABLE_HTTP
+  sseReadTimeout: 5m0s
+  terminateOnClose: true
+  timeout: 120s
+  url: http://am-tool-agent-mcp.kagent.svc.cluster.local:8085/mcp

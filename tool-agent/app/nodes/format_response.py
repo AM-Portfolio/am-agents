@@ -6,6 +6,7 @@ from app.observability.tracer import tracer
 from app.observability.usage import LlmUsageRecord, UsageLedger
 from app.prompts.builder import build_summary_prompt
 from app.state import ToolAgentState
+from app.stream_context import emit_stream, is_streaming_active
 from tools._shared.god_mode import strip_god_mode
 
 
@@ -38,13 +39,26 @@ async def format_response_node(state: ToolAgentState) -> ToolAgentState:
     )
     summary_result = None
     try:
-        summary_result = await llm.chat_with_usage(
-            system=system,
-            user=user,
-            request_id=state["request_id"],
-            backend=response.backend,
-            generation_name="tool-agent-summary",
-        )
+        if is_streaming_active() and llm.routing == "direct":
+            async def _on_token(token: str) -> None:
+                await emit_stream("token", {"stage": "summary", "text": token})
+
+            summary_result = await llm.chat_stream_with_usage(
+                system=system,
+                user=user,
+                request_id=state["request_id"],
+                backend=response.backend,
+                generation_name="tool-agent-summary",
+                on_token=_on_token,
+            )
+        else:
+            summary_result = await llm.chat_with_usage(
+                system=system,
+                user=user,
+                request_id=state["request_id"],
+                backend=response.backend,
+                generation_name="tool-agent-summary",
+            )
         ledger.add_llm(
             LlmUsageRecord(
                 name="format_response",

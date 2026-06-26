@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+import json
 import time
-from typing import Any, Literal, Protocol
+from typing import Any, AsyncIterator, Literal, Protocol
 
 import httpx
 from pydantic import BaseModel, Field
@@ -37,6 +38,18 @@ class LLMClient(Protocol):
         backend: str | None = None,
         generation_name: str = "tool-agent",
         temperature: float | None = None,
+    ) -> LlmCallResult: ...
+
+    async def chat_stream_with_usage(
+        self,
+        *,
+        system: str,
+        user: str,
+        request_id: str,
+        backend: str | None = None,
+        generation_name: str = "tool-agent",
+        temperature: float | None = None,
+        on_token: Any | None = None,
     ) -> LlmCallResult: ...
 
     async def health_check(self) -> bool: ...
@@ -104,6 +117,77 @@ class DirectLiteLLMClient:
                 "completion_tokens": int(usage_raw.get("completion_tokens") or 0),
                 "total_tokens": int(usage_raw.get("total_tokens") or 0),
             },
+            latency_ms=int((time.perf_counter() - started) * 1000),
+        )
+
+    async def chat_stream_with_usage(
+        self,
+        *,
+        system: str,
+        user: str,
+        request_id: str,
+        backend: str | None = None,
+        generation_name: str = "tool-agent",
+        temperature: float | None = None,
+        on_token: Any | None = None,
+    ) -> LlmCallResult:
+        url = f"{self.base_url}/chat/completions"
+        payload = {
+            "model": settings.LLM_PLANNER_MODEL,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "temperature": temperature if temperature is not None else settings.LLM_TEMPERATURE,
+            "max_tokens": settings.LLM_MAX_TOKENS,
+            "stream": True,
+            "stream_options": {"include_usage": True},
+            "metadata": {
+                "source": "tool-agent",
+                "request_id": request_id,
+                "generation_name": generation_name,
+                "backend": backend,
+            },
+        }
+        started = time.perf_counter()
+        parts: list[str] = []
+        usage_raw: dict[str, int] = {}
+        model = settings.LLM_PLANNER_MODEL
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with client.stream("POST", url, headers=self._headers(), json=payload) as resp:
+                if resp.status_code != 200:
+                    body = await resp.aread()
+                    raise RuntimeError(f"LiteLLM stream failed [{resp.status_code}]: {body[:500]!r}")
+                async for line in resp.aiter_lines():
+                    if not line or not line.startswith("data: "):
+                        continue
+                    raw = line[6:].strip()
+                    if raw == "[DONE]":
+                        break
+                    try:
+                        data = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
+                    if data.get("model"):
+                        model = str(data["model"])
+                    if data.get("usage"):
+                        u = data["usage"]
+                        usage_raw = {
+                            "prompt_tokens": int(u.get("prompt_tokens") or 0),
+                            "completion_tokens": int(u.get("completion_tokens") or 0),
+                            "total_tokens": int(u.get("total_tokens") or 0),
+                        }
+                    delta = (data.get("choices") or [{}])[0].get("delta") or {}
+                    token = delta.get("content")
+                    if token:
+                        parts.append(token)
+                        if on_token:
+                            await on_token(token)
+        content = "".join(parts)
+        return LlmCallResult(
+            content=content,
+            model=model,
+            usage=usage_raw,
             latency_ms=int((time.perf_counter() - started) * 1000),
         )
 
@@ -200,6 +284,26 @@ class GatewayLLMClient:
             },
             latency_ms=int((time.perf_counter() - started) * 1000),
             gateway_trace_id=data.get("traceId"),
+        )
+
+    async def chat_stream_with_usage(
+        self,
+        *,
+        system: str,
+        user: str,
+        request_id: str,
+        backend: str | None = None,
+        generation_name: str = "tool-agent",
+        temperature: float | None = None,
+        on_token: Any | None = None,
+    ) -> LlmCallResult:
+        return await self.chat_with_usage(
+            system=system,
+            user=user,
+            request_id=request_id,
+            backend=backend,
+            generation_name=generation_name,
+            temperature=temperature,
         )
 
     async def health_check(self) -> bool:

@@ -87,6 +87,7 @@ class Settings(BaseSettings):
     KAFKA_TOPIC_CACHE_ENABLED: bool = Field(default=True)
     KAFKA_TOPIC_CACHE_TTL_SECONDS: int = Field(default=1800)
     CATALOG_CACHE_WARM_ON_READY: bool = Field(default=False)
+    TOOL_AGENT_STREAMING_ENABLED: bool = Field(default=True)
 
     PROMPT_SOURCE: Literal["langfuse", "file"] = Field(default="file")
     TOOL_AGENT_PROMPT_CACHE_TTL_SECONDS: int = Field(default=60)

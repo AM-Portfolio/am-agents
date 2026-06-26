@@ -148,3 +148,35 @@ python scripts/run_query_corpus.py --preprod --mode plan --agent-caller corpus-t
 | Vector collections, bug memory | `qdrant` |
 | Logs, metrics, dashboards | `grafana` |
 | Infra/service secrets | `vault` |
+
+## kagent UI (SRE ops)
+
+Unified agent **`am-infra-ops`** combines K8s tools + tool-agent MCP.
+
+```bash
+kubectl apply -f am-agents/k8s/kagent/tool-agent-mcp-deployment.yaml
+kubectl apply -f am-agents/k8s/kagent/remote-mcpserver-tool-agent.yaml
+kubectl apply -f am-agents/k8s/kagent/agent-am-infra-ops.yaml
+```
+
+Open `https://kagent.munish.org`, select **am-infra-ops**, use **Ctrl+Enter** to send.
+
+See [`docs/MCP_CONTRACT.md`](MCP_CONTRACT.md) for portable MCP tool names.
+
+## IDE MCP (any editor)
+
+Same stdio bridge works in **Cursor, VS Code, Windsurf, Claude Desktop** — set `TOOL_AGENT_CALLER` per IDE (`vscode-mcp`, `windsurf-mcp`, etc.).
+
+## SSE streaming
+
+Stage-by-stage events for `/query`, `/plan`, `/execute`:
+
+```bash
+curl -N -X POST http://localhost:8141/api/v1/tools/plan/stream \
+  -H "Content-Type: application/json" \
+  -d '{"query":"list kafka topics","backend":"kafka","read_only":true}'
+```
+
+Event types: `stage`, `intent`, `resolved`, `result`, `token`, `done`, `error`.
+
+Disable via `TOOL_AGENT_STREAMING_ENABLED=false`. MCP bridge uses stream endpoints when `TOOL_AGENT_MCP_USE_STREAM=true`.

@@ -77,6 +77,20 @@ kagent chat does **not** submit on Enter alone.
 
 If chat hangs on "Thinking…", refresh and use **+ New Chat**.
 
+## tool-agent MCP (am-infra-ops)
+
+After deploying tool-agent to preprod:
+
+```powershell
+kubectl apply -f tool-agent-mcp-deployment.yaml
+kubectl apply -f remote-mcpserver-tool-agent.yaml
+kubectl apply -f agent-am-infra-ops.yaml
+kubectl get RemoteMCPServer,Agent -n kagent | findstr am-tool-agent
+kubectl get RemoteMCPServer,Agent -n kagent | findstr am-infra-ops
+```
+
+Use agent **am-infra-ops** for K8s + mongo/kafka/vault/grafana queries. Prefer plan→execute flow (configured in agent system prompt).
+
 ## Uninstall
 
 ```bash
