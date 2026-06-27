@@ -23,47 +23,61 @@ mcp = FastMCP("AM Tool Agent", host=HOST, port=PORT)
 
 
 @mcp.tool()
+def kafka_list_topics(max_rows: int = 100) -> str:
+    """List all Kafka topics in preprod (read-only). Call this for ANY user question about kafka topics."""
+    return mcp_tools.kafka_list_topics(max_rows=max_rows)
+
+
+@mcp.tool()
+def mongodb_list_databases(max_rows: int = 100) -> str:
+    """List MongoDB databases in preprod (read-only). Call for mongo database listing questions."""
+    return mcp_tools.mongodb_list_databases(max_rows=max_rows)
+
+
+@mcp.tool()
+def tool_agent_infra_query(backend: str, query: str = "") -> str:
+    """Read-only infra query. backend: kafka|mongodb|postgres|redis|vault|qdrant|grafana. query: short NL e.g. list topics."""
+    q = query.strip() or f"list {backend}"
+    return mcp_tools.tool_agent_query_slim(q, backend=backend)
+
+
+@mcp.tool()
 def tool_agent_health() -> str:
     """Check tool-agent health."""
     return mcp_tools.tool_agent_health()
 
 
 @mcp.tool()
-def tool_agent_ready() -> str:
-    """Check tool-agent readiness."""
-    return mcp_tools.tool_agent_ready()
-
-
-@mcp.tool()
 def tool_agent_list_backends() -> str:
-    """List enabled backends."""
+    """List enabled infra backends."""
     return mcp_tools.tool_agent_list_backends()
 
 
 @mcp.tool()
 def tool_agent_plan(query: str, backend: str | None = None, read_only: bool = True) -> str:
-    """Plan only — parse intent and resolve params without executing."""
+    """Plan only — parse intent without executing."""
     return mcp_tools.tool_agent_plan(query, backend=backend, read_only=read_only)
 
 
 @mcp.tool()
 def tool_agent_execute(intent_json: str, include_summary: bool = True, max_rows: int = 100) -> str:
-    """Execute intent JSON from tool_agent_plan (accepts intent object or full plan body)."""
+    """Execute intent JSON from tool_agent_plan."""
     return mcp_tools.tool_agent_execute(intent_json, include_summary=include_summary, max_rows=max_rows)
 
 
 @mcp.tool()
 def tool_agent_query(query: str, backend: str | None = None, read_only: bool = True, max_rows: int = 100) -> str:
-    """One-shot read-only NL query (plan+execute inside tool-agent). Prefer for simple lists."""
-    raw = mcp_tools.tool_agent_query(query, backend=backend, read_only=read_only, max_rows=max_rows)
-    return json.dumps(mcp_tools._slim_for_agent(json.loads(raw)), indent=2, default=str)
+    """One-shot read-only NL query. Prefer kafka_list_topics for kafka topic lists."""
+    return mcp_tools.tool_agent_query_slim(
+        query, backend=backend, read_only=read_only, max_rows=max_rows
+    )
 
 
 @mcp.tool()
 def tool_agent_plan_and_execute(
     query: str, backend: str | None = None, read_only: bool = True, max_rows: int = 100
 ) -> str:
-    """Plan then execute in one call. Use for infra read-only queries in kagent."""
+    """Plan then execute in one call."""
     return mcp_tools.tool_agent_plan_and_execute(
         query, backend=backend, read_only=read_only, max_rows=max_rows
     )

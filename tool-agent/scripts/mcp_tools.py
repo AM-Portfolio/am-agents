@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from typing import Any
 
 import httpx
@@ -101,8 +102,50 @@ def tool_agent_list_backends() -> str:
     return format_result({"backends": enabled}, status_code=data.get("status_code", 200))
 
 
+def normalize_infra_query(query: str, backend: str | None = None) -> str:
+    """Strip kagent-style noise so NL rules route correctly (e.g. read-only → list_topics)."""
+    q = query.strip()
+    q = re.sub(r"\bread-only\b", " ", q, flags=re.I)
+    q = re.sub(r"\breadonly\b", " ", q, flags=re.I)
+    if backend:
+        q = re.sub(rf"\bbackend\s+{re.escape(backend)}\b", " ", q, flags=re.I)
+    q = re.sub(r"\s+", " ", q).strip(" .,")
+    if not q:
+        return f"list {backend} topics" if backend == "kafka" else f"list {backend or 'infra'}"
+    return q
+
+
+def tool_agent_query_slim(
+    query: str,
+    backend: str | None = None,
+    read_only: bool = True,
+    include_summary: bool = True,
+    max_rows: int = 100,
+) -> str:
+    """Query tool-agent and return a slim JSON string for LLM consumption."""
+    normalized = normalize_infra_query(query, backend)
+    raw = tool_agent_query(
+        normalized,
+        backend=backend,
+        read_only=read_only,
+        include_summary=include_summary,
+        max_rows=max_rows,
+    )
+    return json.dumps(_slim_for_agent(json.loads(raw)), indent=2, default=str)
+
+
+def kafka_list_topics(max_rows: int = 100) -> str:
+    """List Kafka topics in preprod (read-only)."""
+    return tool_agent_query_slim("list kafka topics", backend="kafka", max_rows=max_rows)
+
+
+def mongodb_list_databases(max_rows: int = 100) -> str:
+    """List MongoDB databases in preprod (read-only)."""
+    return tool_agent_query_slim("list mongodb databases", backend="mongodb", max_rows=max_rows)
+
+
 def tool_agent_plan(query: str, backend: str | None = None, read_only: bool = True) -> str:
-    body: dict[str, Any] = {"query": query, "read_only": read_only}
+    body: dict[str, Any] = {"query": normalize_infra_query(query, backend), "read_only": read_only}
     if backend:
         body["backend"] = backend
     use_stream = os.environ.get("TOOL_AGENT_MCP_USE_STREAM", "true").lower() in ("1", "true", "yes")
@@ -118,7 +161,7 @@ def tool_agent_query(
     max_rows: int = 100,
 ) -> str:
     body: dict[str, Any] = {
-        "query": query,
+        "query": normalize_infra_query(query, backend),
         "read_only": read_only,
         "include_summary": include_summary,
         "max_rows": max_rows,

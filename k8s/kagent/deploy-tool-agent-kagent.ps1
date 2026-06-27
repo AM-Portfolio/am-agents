@@ -34,8 +34,9 @@ kubectl apply -f (Join-Path $Root "remote-mcpserver-tool-agent.yaml")
 Write-Host "`n[4/5] Agent: am-infra-ops (K8s + tool-agent)..." -ForegroundColor Yellow
 kubectl apply -f (Join-Path $Root "agent-am-infra-ops.yaml")
 
-Write-Host "`n[5/5] Wait for MCP pod..." -ForegroundColor Yellow
-kubectl rollout status deployment/am-tool-agent-mcp -n kagent --timeout=120s
+Write-Host "`n[5/6] Restart MCP pod (pick up ConfigMap)..." -ForegroundColor Yellow
+kubectl rollout restart deployment/am-tool-agent-mcp -n kagent
+kubectl rollout status deployment/am-tool-agent-mcp -n kagent --timeout=180s
 kubectl wait --for=condition=Accepted remotemcpserver/am-tool-agent-mcp -n kagent --timeout=120s 2>$null
 if ($LASTEXITCODE -ne 0) {
     Write-Host "RemoteMCPServer not Accepted yet - check kmcp controller logs." -ForegroundColor Yellow
@@ -50,7 +51,7 @@ Write-Host ""
 Write-Host "Done. kagent UI test (Ctrl+Enter to send):" -ForegroundColor Green
 Write-Host "  1. Open https://kagent.munish.org"
 Write-Host "  2. Select agent am-infra-ops"
-Write-Host "  3. Prompt: List kafka topics in preprod read-only, backend kafka"
+Write-Host "  3. Prompt: List kafka topics read-only, backend kafka"
 Write-Host ""
 Write-Host "Local smoke:" -ForegroundColor Green
 Write-Host "  kubectl port-forward -n kagent svc/am-tool-agent-mcp 8085:8085"
