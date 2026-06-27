@@ -1,0 +1,18 @@
+# Allow in-cluster MCP clients (tool-agent, etc.) to call kagent-grafana-mcp.
+# Without this, streamable-http returns 403 "host not allowed" (DNS-rebinding protection).
+# Ref: https://grafana.com/docs/grafana/latest/developer-resources/mcp/configure/command-line-flags/
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kagent-grafana-mcp
+  namespace: kagent
+spec:
+  template:
+    spec:
+      containers:
+        - name: grafana-mcp
+          args:
+            - --transport
+            - streamable-http
+            - --allowed-hosts
+            - "*"

@@ -159,6 +159,38 @@ def _maybe_upgrade_redis_operation(intent: IntentDocument, params: dict[str, Any
     return intent
 
 
+def _resolve_vault_entity_param(
+    entity_name: str,
+    params: dict[str, Any],
+    *,
+    query_text: str,
+    catalog: Any,
+) -> tuple[dict[str, Any], str | None]:
+    """Map vault service/infra entity tokens to KV paths without catalog entries."""
+    from tools.vault.paths import normalize_vault_path
+    from tools.vault.search.convention import build_path, env_from_query
+
+    if params.get("path"):
+        return params, None
+
+    env = env_from_query(query_text) if query_text else (catalog.default_for("vault", "env") or "preprod")
+    name = entity_name.lower()
+    if name.endswith("_infra"):
+        leaf = name[:-6].replace("_", "-")
+        params["path"] = normalize_vault_path(build_path(env, "infra", leaf))
+        return params, None
+    if name.startswith("am_"):
+        leaf = name.replace("_", "-")
+        params["path"] = normalize_vault_path(build_path(env, "services", leaf))
+        return params, None
+    alias = catalog.vault_path_alias(name.replace("_", "-"))
+    if alias:
+        category = "infra" if alias in (catalog.vault_infra_components() or []) else "services"
+        params["path"] = normalize_vault_path(build_path(env, category, alias))
+        return params, None
+    raise ParamResolutionError(f"Unknown entity '{entity_name}' in schema catalog")
+
+
 def resolve_intent_params(
     intent: IntentDocument,
     *,
@@ -172,17 +204,29 @@ def resolve_intent_params(
     lookup_value: str | None = params.pop("lookup_value", None) or None
 
     if entity_name:
-        mapping = catalog.entity(entity_name)
-        if not mapping:
-            raise ParamResolutionError(f"Unknown entity '{entity_name}' in schema catalog")
-        if mapping.backend != intent.backend:
-            raise ParamResolutionError(
-                f"Entity '{entity_name}' maps to backend '{mapping.backend}', not '{intent.backend}'"
-            )
-        params = _apply_entity_mapping(
-            params, mapping, entity_id=entity_id,
-            lookup_field=lookup_field, lookup_value=lookup_value,
-        )
+        if intent.backend == "vault" and params.get("path"):
+            from tools.vault.paths import normalize_vault_path
+
+            params["path"] = normalize_vault_path(str(params["path"]))
+            entity_name = None
+        else:
+            mapping = catalog.entity(entity_name)
+            if not mapping:
+                if intent.backend == "vault":
+                    params, entity_name = _resolve_vault_entity_param(
+                        entity_name, params, query_text=query_text, catalog=catalog
+                    )
+                else:
+                    raise ParamResolutionError(f"Unknown entity '{entity_name}' in schema catalog")
+            elif mapping.backend != intent.backend:
+                raise ParamResolutionError(
+                    f"Entity '{entity_name}' maps to backend '{mapping.backend}', not '{intent.backend}'"
+                )
+            else:
+                params = _apply_entity_mapping(
+                    params, mapping, entity_id=entity_id,
+                    lookup_field=lookup_field, lookup_value=lookup_value,
+                )
     elif lookup_field and lookup_value:
         inferred = infer_entity_from_text(query_text, backend=intent.backend)
         if inferred:
