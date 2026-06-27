@@ -1,0 +1,873 @@
+<mxfile host="65bd71144e">
+    <diagram id="enterprise-master" name="Enterprise Master - Agents Features Integrations">
+        <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="1800" pageHeight="1150" background="#ffffff" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="em_title" value="Enterprise Agent Platform — Overview&#10;Layers stack top → bottom · Details on other pages (Chat Flow, Portal B, Phases)" style="text;html=0;strokeColor=none;fillColor=none;fontSize=18;fontColor=#0F172A;align=center;whiteSpace=wrap;html=0" vertex="1" parent="1">
+                    <mxGeometry x="200" y="15" width="1400" height="45" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_life" value="Lifecycle (REQ status)" style="swimlane;startSize=24;fillColor=#FFFBEB;strokeColor=#F59E0B;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="40" y="70" width="1720" height="58" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_ls1" value="Discovery" style="rounded=1;fillColor=#FDE68A;strokeColor=#D97706;" vertex="1" parent="em_life">
+                    <mxGeometry x="15" y="32" width="95" height="22" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_ls2" value="Requirements" style="rounded=1;fillColor=#FDE68A;strokeColor=#D97706;" vertex="1" parent="em_life">
+                    <mxGeometry x="120" y="32" width="105" height="22" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_ls3" value="Development" style="rounded=1;fillColor=#FDE68A;strokeColor=#D97706;" vertex="1" parent="em_life">
+                    <mxGeometry x="235" y="32" width="105" height="22" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_ls4" value="Test" style="rounded=1;fillColor=#FDE68A;strokeColor=#D97706;" vertex="1" parent="em_life">
+                    <mxGeometry x="350" y="32" width="70" height="22" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_ls5" value="Release" style="rounded=1;fillColor=#FDE68A;strokeColor=#D97706;" vertex="1" parent="em_life">
+                    <mxGeometry x="430" y="32" width="80" height="22" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_ls6" value="Marketing" style="rounded=1;fillColor=#FDE68A;strokeColor=#D97706;" vertex="1" parent="em_life">
+                    <mxGeometry x="520" y="32" width="95" height="22" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_ls7" value="Support" style="rounded=1;fillColor=#FDE68A;strokeColor=#D97706;" vertex="1" parent="em_life">
+                    <mxGeometry x="625" y="32" width="80" height="22" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_ls8" value="Admin" style="rounded=1;fillColor=#FDE68A;strokeColor=#D97706;" vertex="1" parent="em_life">
+                    <mxGeometry x="715" y="32" width="70" height="22" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_lstat" value="draft → approved → in_progress → tested → released → supported" style="text;html=0;fillColor=none;strokeColor=none;fontColor=#92400E;fontStyle=2;fontSize=11;" vertex="1" parent="em_life">
+                    <mxGeometry x="820" y="34" width="420" height="18" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_ui" value="L1 UI + L2 Gateway (all chat goes through gateway)" style="swimlane;startSize=24;fillColor=#EEF2FF;strokeColor=#4F46E5;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="40" y="145" width="1720" height="95" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_pa" value="Portal A&#10;am-modern-ui&#10;Finance · end users" style="rounded=1;fillColor=#4F46E5;fontColor=#FFFFFF;whiteSpace=wrap;html=0;fontSize=11;" vertex="1" parent="em_ui">
+                    <mxGeometry x="20" y="35" width="130" height="52" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_pb" value="Portal B — main workspace&#10;ai-bots React&#10;All business agents" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;whiteSpace=wrap;html=0;fontSize=11;" vertex="1" parent="em_ui">
+                    <mxGeometry x="170" y="32" width="160" height="58" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_pc" value="Portal C&#10;kagent UI&#10;SRE only" style="rounded=1;fillColor=#EA580C;fontColor=#FFFFFF;whiteSpace=wrap;html=0;fontSize=11;" vertex="1" parent="em_ui">
+                    <mxGeometry x="350" y="35" width="120" height="52" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_gw" value="am-mcp-gateway :8120&#10;Router · RBAC · SSE" style="rounded=1;fillColor=#0284C7;fontColor=#FFFFFF;whiteSpace=wrap;html=0;fontSize=11;" vertex="1" parent="em_ui">
+                    <mxGeometry x="500" y="35" width="160" height="52" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_aib" value="ai-bots API :5000&#10;Integrations + dev agent" style="rounded=1;fillColor=#047857;fontColor=#FFFFFF;whiteSpace=wrap;html=0;fontSize=11;" vertex="1" parent="em_ui">
+                    <mxGeometry x="680" y="35" width="160" height="52" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_kc" value="Keycloak + Traefik" style="rounded=1;fillColor=#64748B;fontColor=#FFFFFF;whiteSpace=wrap;html=0;fontSize=11;" vertex="1" parent="em_ui">
+                    <mxGeometry x="860" y="40" width="130" height="42" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_uinote" value="Portal B tabs: Chat · Integrations · Requirements · Meetings · Profile · Company profile" style="text;html=0;fillColor=#ECFDF5;strokeColor=#059669;fontColor=#065F46;rounded=1;whiteSpace=wrap;html=0;fontSize=11;" vertex="1" parent="em_ui">
+                    <mxGeometry x="1010" y="38" width="690" height="44" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_agents" value="L3 Domain agents (routed by gateway — no lines on this page; see Chat Flow page)" style="swimlane;startSize=24;fillColor=#F5F3FF;strokeColor=#7C3AED;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="40" y="255" width="1720" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_scribe" value="scribe :8150&#10;Meetings · MOM · REQ" style="rounded=1;fillColor=#7C3AED;fontColor=#FFFFFF;whiteSpace=wrap;html=0;fontSize=11;" vertex="1" parent="em_agents">
+                    <mxGeometry x="15" y="35" width="115" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_dev" value="dev :8152&#10;Code · PR · RAG" style="rounded=1;fillColor=#7C3AED;fontColor=#FFFFFF;whiteSpace=wrap;html=0;fontSize=11;" vertex="1" parent="em_agents">
+                    <mxGeometry x="140" y="35" width="115" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_test" value="test :8130&#10;Playwright QA" style="rounded=1;fillColor=#7C3AED;fontColor=#FFFFFF;whiteSpace=wrap;html=0;fontSize=11;" vertex="1" parent="em_agents">
+                    <mxGeometry x="265" y="35" width="115" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_devops" value="devops :8151&#10;K8s · deploy" style="rounded=1;fillColor=#DB2777;fontColor=#FFFFFF;whiteSpace=wrap;html=0;fontSize=11;" vertex="1" parent="em_agents">
+                    <mxGeometry x="390" y="35" width="115" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_fin" value="fin :8100&#10;Finance widgets" style="rounded=1;fillColor=#DB2777;fontColor=#FFFFFF;whiteSpace=wrap;html=0;fontSize=11;" vertex="1" parent="em_agents">
+                    <mxGeometry x="515" y="35" width="115" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_mkt" value="marketing :8153&#10;Campaigns · video" style="rounded=1;fillColor=#7C3AED;fontColor=#FFFFFF;whiteSpace=wrap;html=0;fontSize=11;" vertex="1" parent="em_agents">
+                    <mxGeometry x="640" y="35" width="115" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_sup" value="support :8154&#10;Tickets · FAQ" style="rounded=1;fillColor=#7C3AED;fontColor=#FFFFFF;whiteSpace=wrap;html=0;fontSize=11;" vertex="1" parent="em_agents">
+                    <mxGeometry x="765" y="35" width="115" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_adm" value="admin :8155&#10;Compliance" style="rounded=1;fillColor=#7C3AED;fontColor=#FFFFFF;whiteSpace=wrap;html=0;fontSize=11;" vertex="1" parent="em_agents">
+                    <mxGeometry x="890" y="35" width="115" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_kagent" value="kagent / infra-ops&#10;SRE · Portal C" style="rounded=1;fillColor=#EA580C;fontColor=#FFFFFF;whiteSpace=wrap;html=0;fontSize=11;" vertex="1" parent="em_agents">
+                    <mxGeometry x="1015" y="35" width="115" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_agentnote" value="Ph 1: gateway + fin/test/devops/dev · Ph 2: scribe + memory · Ph 4: marketing/support/admin" style="text;html=0;fillColor=none;strokeColor=none;fontColor=#6D28D9;fontStyle=2;fontSize=11;whiteSpace=wrap;html=0;" vertex="1" parent="em_agents">
+                    <mxGeometry x="1150" y="42" width="550" height="36" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_agentnote2" value="LIVE today: fin · test · ai-bots dev" style="text;html=0;fillColor=none;strokeColor=none;fontColor=#6D28D9;fontSize=11;" vertex="1" parent="em_agents">
+                    <mxGeometry x="1150" y="78" width="280" height="18" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_integ" value="Integrations (Portal B IntegrationsHub → ai-bots API)" style="swimlane;startSize=24;fillColor=#F0FDF4;strokeColor=#059669;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="40" y="400" width="1120" height="72" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_jira" value="Jira" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;fontSize=11;" vertex="1" parent="em_integ">
+                    <mxGeometry x="15" y="34" width="70" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_gh" value="GitHub" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;fontSize=11;" vertex="1" parent="em_integ">
+                    <mxGeometry x="95" y="34" width="70" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_conf" value="Confluence" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;fontSize=11;" vertex="1" parent="em_integ">
+                    <mxGeometry x="175" y="34" width="85" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_graf" value="Grafana" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;fontSize=11;" vertex="1" parent="em_integ">
+                    <mxGeometry x="270" y="34" width="75" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_meet" value="Meet / Teams" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;fontSize=11;" vertex="1" parent="em_integ">
+                    <mxGeometry x="355" y="34" width="90" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_crm" value="CRM" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;fontSize=11;" vertex="1" parent="em_integ">
+                    <mxGeometry x="455" y="34" width="60" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_recall" value="Recall.ai" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;fontSize=11;" vertex="1" parent="em_integ">
+                    <mxGeometry x="525" y="34" width="75" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_slack" value="Slack" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;fontSize=11;" vertex="1" parent="em_integ">
+                    <mxGeometry x="610" y="34" width="65" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_mem" value="company-memory :8157 — Postgres + Qdrant" style="swimlane;startSize=24;fillColor=#ECFEFF;strokeColor=#0891B2;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="40" y="487" width="1120" height="68" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_m1" value="meetings" style="rounded=1;fillColor=#0891B2;fontColor=#FFFFFF;fontSize=11;" vertex="1" parent="em_mem">
+                    <mxGeometry x="15" y="32" width="90" height="28" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_m2" value="requirements" style="rounded=1;fillColor=#0891B2;fontColor=#FFFFFF;fontSize=11;" vertex="1" parent="em_mem">
+                    <mxGeometry x="115" y="32" width="100" height="28" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_m3" value="tasks" style="rounded=1;fillColor=#0891B2;fontColor=#FFFFFF;fontSize=11;" vertex="1" parent="em_mem">
+                    <mxGeometry x="225" y="32" width="70" height="28" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_m4" value="decisions" style="rounded=1;fillColor=#0891B2;fontColor=#FFFFFF;fontSize=11;" vertex="1" parent="em_mem">
+                    <mxGeometry x="305" y="32" width="85" height="28" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_m5" value="lifecycle events" style="rounded=1;fillColor=#0891B2;fontColor=#FFFFFF;fontSize=11;" vertex="1" parent="em_mem">
+                    <mxGeometry x="400" y="32" width="110" height="28" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_m6" value="company profile" style="rounded=1;fillColor=#0891B2;fontColor=#FFFFFF;fontSize=11;" vertex="1" parent="em_mem">
+                    <mxGeometry x="520" y="32" width="115" height="28" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_l4" value="L4 Capabilities (MCP / REST — used by agents, not drawn here)" style="swimlane;startSize=24;fillColor=#F0FDFA;strokeColor=#0D9488;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="40" y="570" width="1120" height="68" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_ta" value="tool-agent" style="rounded=1;fillColor=#0D9488;fontColor=#FFFFFF;fontSize=11;" vertex="1" parent="em_l4">
+                    <mxGeometry x="15" y="32" width="95" height="28" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_va" value="video-agent" style="rounded=1;fillColor=#0D9488;fontColor=#FFFFFF;fontSize=11;" vertex="1" parent="em_l4">
+                    <mxGeometry x="120" y="32" width="95" height="28" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_k8s" value="k8s MCP" style="rounded=1;fillColor=#0D9488;fontColor=#FFFFFF;fontSize=11;" vertex="1" parent="em_l4">
+                    <mxGeometry x="225" y="32" width="80" height="28" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_llm" value="LiteLLM" style="rounded=1;fillColor=#0D9488;fontColor=#FFFFFF;fontSize=11;" vertex="1" parent="em_l4">
+                    <mxGeometry x="315" y="32" width="75" height="28" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_lf" value="Langfuse" style="rounded=1;fillColor=#6366F1;fontColor=#FFFFFF;fontSize=11;" vertex="1" parent="em_l4">
+                    <mxGeometry x="400" y="32" width="80" height="28" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_flows" value="Main workflows (text only — see Chat Flow / Integration Flow pages for sequences)" style="swimlane;startSize=24;fillColor=#FFF7ED;strokeColor=#EA580C;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="40" y="655" width="1720" height="115" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_f1" value="Meeting → scribe → REQ → dev" style="rounded=1;fillColor=#FFEDD5;strokeColor=#EA580C;fontSize=11;whiteSpace=wrap;html=0;" vertex="1" parent="em_flows">
+                    <mxGeometry x="15" y="32" width="200" height="36" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_f2" value="dev → test → devops release" style="rounded=1;fillColor=#FFEDD5;strokeColor=#EA580C;fontSize=11;whiteSpace=wrap;html=0;" vertex="1" parent="em_flows">
+                    <mxGeometry x="225" y="32" width="200" height="36" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_f3" value="Release → marketing" style="rounded=1;fillColor=#FFEDD5;strokeColor=#EA580C;fontSize=11;whiteSpace=wrap;html=0;" vertex="1" parent="em_flows">
+                    <mxGeometry x="435" y="32" width="160" height="36" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_f4" value="support → new REQ → dev" style="rounded=1;fillColor=#FFEDD5;strokeColor=#EA580C;fontSize=11;whiteSpace=wrap;html=0;" vertex="1" parent="em_flows">
+                    <mxGeometry x="605" y="32" width="180" height="36" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_f5" value="IntegrationsHub connect" style="rounded=1;fillColor=#FFEDD5;strokeColor=#EA580C;fontSize=11;whiteSpace=wrap;html=0;" vertex="1" parent="em_flows">
+                    <mxGeometry x="795" y="32" width="170" height="36" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_f6" value="B2B white-label Portal B" style="rounded=1;fillColor=#FFEDD5;strokeColor=#EA580C;fontSize=11;whiteSpace=wrap;html=0;" vertex="1" parent="em_flows">
+                    <mxGeometry x="975" y="32" width="170" height="36" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_fnote" value="↓ read top to bottom = request path · use page tabs for detail diagrams" style="text;html=0;fillColor=none;strokeColor=none;fontColor=#9A3412;fontStyle=2;fontSize=11;" vertex="1" parent="em_flows">
+                    <mxGeometry x="15" y="72" width="500" height="18" as="geometry"/>
+                </mxCell>
+                <mxCell id="em_legend" value="Legend&#10;Blue = Portal A · Green = Portal B / integrations&#10;Orange = Portal C / SRE · Purple = agents · Teal = memory + L4" style="rounded=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;fontColor=#334155;align=left;spacingLeft=8;whiteSpace=wrap;html=0;fontSize=11;" vertex="1" parent="1">
+                    <mxGeometry x="1180" y="400" width="580" height="238" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="three-surfaces-overview" name="Three Surfaces Overview">
+        <mxGraphModel dx="988" dy="553" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1100" background="#ffffff" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="three_surfaces_overview_title" value="Enterprise Agent Ecosystem — Three Surfaces, One Gateway" style="text;html=0;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=18;fontColor=#0F172A" parent="1" vertex="1">
+                    <mxGeometry x="400" y="20" width="800" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_lane-exec" value="Execution Pipeline — SSE Chat" style="swimlane;horizontal=1;startSize=28;fillColor=#FFF7ED;strokeColor=#F59E0B;fontColor=#92400E;fontStyle=1;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="70" width="1520" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_ex1" value="1 User message" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#F59E0B;fontColor=#FFFFFF;strokeColor=#D97706" parent="three_surfaces_overview_lane-exec" vertex="1">
+                    <mxGeometry x="20" y="40" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_ex2" value="2 Auth + RBAC" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#F59E0B;fontColor=#FFFFFF;strokeColor=#D97706" parent="three_surfaces_overview_lane-exec" vertex="1">
+                    <mxGeometry x="180" y="40" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_ex3" value="3 Route agent" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#F59E0B;fontColor=#FFFFFF;strokeColor=#D97706" parent="three_surfaces_overview_lane-exec" vertex="1">
+                    <mxGeometry x="340" y="40" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_ex4" value="4 Agent run" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#F59E0B;fontColor=#FFFFFF;strokeColor=#D97706" parent="three_surfaces_overview_lane-exec" vertex="1">
+                    <mxGeometry x="500" y="40" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_ex5" value="5 L4 execute" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#F59E0B;fontColor=#FFFFFF;strokeColor=#D97706" parent="three_surfaces_overview_lane-exec" vertex="1">
+                    <mxGeometry x="660" y="40" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_ex6" value="6 SSE response" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#F59E0B;fontColor=#FFFFFF;strokeColor=#D97706" parent="three_surfaces_overview_lane-exec" vertex="1">
+                    <mxGeometry x="820" y="40" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_e-ex1-ex2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="three_surfaces_overview_lane-exec" source="three_surfaces_overview_ex1" target="three_surfaces_overview_ex2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_e-ex2-ex3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="three_surfaces_overview_lane-exec" source="three_surfaces_overview_ex2" target="three_surfaces_overview_ex3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_e-ex3-ex4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="three_surfaces_overview_lane-exec" source="three_surfaces_overview_ex3" target="three_surfaces_overview_ex4" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_e-ex4-ex5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="three_surfaces_overview_lane-exec" source="three_surfaces_overview_ex4" target="three_surfaces_overview_ex5" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_e-ex5-ex6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="three_surfaces_overview_lane-exec" source="three_surfaces_overview_ex5" target="three_surfaces_overview_ex6" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_lane-ingress" value="Ingress and Auth" style="swimlane;horizontal=1;startSize=28;fillColor=#F1F5F9;strokeColor=#64748B;fontColor=#0F172A;fontStyle=1;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="180" width="1520" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_traefik" value="Traefik&#10;host routing" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#64748B;fontColor=#FFFFFF;strokeColor=#475569" parent="three_surfaces_overview_lane-ingress" vertex="1">
+                    <mxGeometry x="400" y="38" width="140" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_keycloak" value="Keycloak JWT&#10;roles · tenant_id" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#64748B;fontColor=#FFFFFF;strokeColor=#475569" parent="three_surfaces_overview_lane-ingress" vertex="1">
+                    <mxGeometry x="580" y="38" width="160" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_e-tr-kc" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="three_surfaces_overview_lane-ingress" source="three_surfaces_overview_traefik" target="three_surfaces_overview_keycloak" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_lane-l1" value="L1 UI — Three Surfaces" style="swimlane;horizontal=1;startSize=28;fillColor=#EEF2FF;strokeColor=#4F46E5;fontColor=#312E81;fontStyle=1;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="280" width="1520" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_pa" value="Portal A&#10;am-modern-ui · Flutter&#10;app.asrax.in&#10;end users" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#4F46E5;fontColor=#FFFFFF;strokeColor=#312E81" parent="three_surfaces_overview_lane-l1" vertex="1">
+                    <mxGeometry x="120" y="40" width="200" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_pb" value="Portal B&#10;ai-bots · React&#10;workspace.asrax.in&#10;B2B workspace" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#059669;fontColor=#FFFFFF;strokeColor=#047857" parent="three_surfaces_overview_lane-l1" vertex="1">
+                    <mxGeometry x="400" y="40" width="200" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_pc" value="Portal C&#10;kagent UI&#10;kagent.munish.org&#10;SRE infra" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#EA580C;fontColor=#FFFFFF;strokeColor=#C2410C" parent="three_surfaces_overview_lane-l1" vertex="1">
+                    <mxGeometry x="680" y="40" width="200" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_lane-l2" value="L2 Gateway — am-mcp-gateway :8120" style="swimlane;horizontal=1;startSize=28;fillColor=#F0F9FF;strokeColor=#0284C7;fontColor=#0C4A6E;fontStyle=1;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="410" width="1520" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_gw" value="am-mcp-gateway&#10;POST /api/v1/chat/stream" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#0284C7;fontColor=#FFFFFF;strokeColor=#0369A1" parent="three_surfaces_overview_lane-l2" vertex="1">
+                    <mxGeometry x="500" y="38" width="220" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_router" value="Intent router" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#0EA5E9;fontColor=#FFFFFF;strokeColor=#0284C7" parent="three_surfaces_overview_lane-l2" vertex="1">
+                    <mxGeometry x="460" y="95" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_rbac" value="RBAC · agents.yaml" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#0EA5E9;fontColor=#FFFFFF;strokeColor=#0284C7" parent="three_surfaces_overview_lane-l2" vertex="1">
+                    <mxGeometry x="610" y="95" width="140" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_sse" value="Unified SSE" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#0EA5E9;fontColor=#FFFFFF;strokeColor=#0284C7" parent="three_surfaces_overview_lane-l2" vertex="1">
+                    <mxGeometry x="780" y="95" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_e-gw-r" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="three_surfaces_overview_lane-l2" source="three_surfaces_overview_gw" target="three_surfaces_overview_router" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_e-r-rb" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="three_surfaces_overview_lane-l2" source="three_surfaces_overview_router" target="three_surfaces_overview_rbac" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_e-rb-s" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="three_surfaces_overview_lane-l2" source="three_surfaces_overview_rbac" target="three_surfaces_overview_sse" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_lane-l3" value="L3 Domain Agents — Reasoning" style="swimlane;horizontal=1;startSize=28;fillColor=#F5F3FF;strokeColor=#7C3AED;fontColor=#4C1D95;fontStyle=1;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="550" width="1520" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_scribe" value="scribe-agent" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#7C3AED;fontColor=#FFFFFF;strokeColor=#6D28D9" parent="three_surfaces_overview_lane-l3" vertex="1">
+                    <mxGeometry x="80" y="40" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_dev" value="dev · ai-bots" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#7C3AED;fontColor=#FFFFFF;strokeColor=#6D28D9" parent="three_surfaces_overview_lane-l3" vertex="1">
+                    <mxGeometry x="220" y="40" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_test" value="ui-test-agent" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#7C3AED;fontColor=#FFFFFF;strokeColor=#6D28D9" parent="three_surfaces_overview_lane-l3" vertex="1">
+                    <mxGeometry x="360" y="40" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_fin" value="fin-agent" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#DB2777;fontColor=#FFFFFF;strokeColor=#BE185D" parent="three_surfaces_overview_lane-l3" vertex="1">
+                    <mxGeometry x="500" y="40" width="110" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_devops" value="devops-agent" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#DB2777;fontColor=#FFFFFF;strokeColor=#BE185D" parent="three_surfaces_overview_lane-l3" vertex="1">
+                    <mxGeometry x="630" y="40" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_biz" value="marketing · support · admin" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#7C3AED;fontColor=#FFFFFF;strokeColor=#6D28D9" parent="three_surfaces_overview_lane-l3" vertex="1">
+                    <mxGeometry x="770" y="40" width="200" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_lane-l4" value="L4 Capabilities — MCP · REST" style="swimlane;horizontal=1;startSize=28;fillColor=#F0FDFA;strokeColor=#0D9488;fontColor=#134E4A;fontStyle=1;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="660" width="1520" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_aib" value="ai-bots API :5000" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#0D9488;fontColor=#FFFFFF;strokeColor=#0F766E" parent="three_surfaces_overview_lane-l4" vertex="1">
+                    <mxGeometry x="80" y="40" width="140" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_mem" value="company-memory" style="shape=cylinder3;whiteSpace=wrap;html=0;boundedLbl=1;backgroundOutline=1;size=12;fillColor=#0891B2;fontColor=#FFFFFF;strokeColor=#0E7490" parent="three_surfaces_overview_lane-l4" vertex="1">
+                    <mxGeometry x="250" y="35" width="120" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_ta" value="tool-agent :8141" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#0D9488;fontColor=#FFFFFF;strokeColor=#0F766E" parent="three_surfaces_overview_lane-l4" vertex="1">
+                    <mxGeometry x="400" y="40" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_va" value="video-agent" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#0D9488;fontColor=#FFFFFF;strokeColor=#0F766E" parent="three_surfaces_overview_lane-l4" vertex="1">
+                    <mxGeometry x="550" y="40" width="110" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_k8s" value="k8s MCP" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#0D9488;fontColor=#FFFFFF;strokeColor=#0F766E" parent="three_surfaces_overview_lane-l4" vertex="1">
+                    <mxGeometry x="680" y="40" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_lane-obs" value="Observability" style="swimlane;horizontal=1;startSize=28;fillColor=#EEF2FF;strokeColor=#6366F1;fontColor=#312E81;fontStyle=1;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="770" width="400" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_lf" value="Langfuse traces" style="rounded=1;whiteSpace=wrap;html=0;fillColor=#6366F1;fontColor=#FFFFFF;strokeColor=#4F46E5" parent="three_surfaces_overview_lane-obs" vertex="1">
+                    <mxGeometry x="30" y="38" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_redis" value="Redis Ph5" style="shape=cylinder3;whiteSpace=wrap;html=0;boundedLbl=1;backgroundOutline=1;size=12;fillColor=#0891B2;fontColor=#FFFFFF;strokeColor=#0E7490" parent="three_surfaces_overview_lane-obs" vertex="1">
+                    <mxGeometry x="190" y="33" width="100" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_e-kc-pa" value="" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="three_surfaces_overview_keycloak" target="three_surfaces_overview_pa" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_e-kc-pb" value="" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="three_surfaces_overview_keycloak" target="three_surfaces_overview_pb" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_e-kc-pc" value="" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="three_surfaces_overview_keycloak" target="three_surfaces_overview_pc" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_e-pa-gw" value="finance pinned" style="strokeColor=#4F46E5;strokeWidth=2;endArrow=classic;fontColor=#312E81;" parent="1" source="three_surfaces_overview_pa" target="three_surfaces_overview_gw" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_e-pb-gw" value="all business agents" style="strokeColor=#059669;strokeWidth=2;endArrow=classic;fontColor=#065F46;" parent="1" source="three_surfaces_overview_pb" target="three_surfaces_overview_gw" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_e-pb-aib" value="IntegrationsHub" style="dashed=1;strokeColor=#059669;strokeWidth=2;endArrow=classic;fontColor=#065F46;" parent="1" source="three_surfaces_overview_pb" target="three_surfaces_overview_aib" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_e-pc-k8s" value="am-infra-ops" style="strokeColor=#EA580C;strokeWidth=2;endArrow=classic;fontColor=#9A3412;" parent="1" source="three_surfaces_overview_pc" target="three_surfaces_overview_k8s" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_e-pc-ta" value="am-infra-ops" style="strokeColor=#EA580C;strokeWidth=2;endArrow=classic;fontColor=#9A3412;" parent="1" source="three_surfaces_overview_pc" target="three_surfaces_overview_ta" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_e-sse-scribe" value="" style="strokeColor=#334155;strokeWidth=1;endArrow=classic;" parent="1" source="three_surfaces_overview_sse" target="three_surfaces_overview_scribe" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_e-sse-dev" value="" style="strokeColor=#334155;strokeWidth=1;endArrow=classic;" parent="1" source="three_surfaces_overview_sse" target="three_surfaces_overview_dev" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_e-dev-aib" value="" style="strokeColor=#334155;strokeWidth=1;endArrow=classic;" parent="1" source="three_surfaces_overview_dev" target="three_surfaces_overview_aib" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_e-devops-ta" value="" style="strokeColor=#334155;strokeWidth=1;endArrow=classic;" parent="1" source="three_surfaces_overview_devops" target="three_surfaces_overview_ta" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_e-scribe-mem" value="" style="strokeColor=#334155;strokeWidth=1;endArrow=classic;" parent="1" source="three_surfaces_overview_scribe" target="three_surfaces_overview_mem" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_e-gw-lf" value="" style="strokeColor=#6366F1;strokeWidth=1;endArrow=classic;" parent="1" source="three_surfaces_overview_gw" target="three_surfaces_overview_lf" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="three_surfaces_overview_legend" value="Legend&#10;Indigo = Portal A · Green = Portal B · Orange = Portal C&#10;Blue = Gateway · Purple = Agents · Teal = L4 capabilities" style="text;html=0;strokeColor=#CBD5E1;fillColor=#FFFFFF;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;fontColor=#0F172A;rounded=1;whiteSpace=wrap" parent="1" vertex="1">
+                    <mxGeometry x="480" y="770" width="420" height="80" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="four-layers" name="Four Layers">
+        <mxGraphModel dx="988" dy="553" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="600" background="#ffffff" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="four_layers_t" value="Four Layers — Ownership" style="text;html=0;strokeColor=none;fillColor=none;fontSize=16;fontColor=#0F172A" parent="1" vertex="1">
+                    <mxGeometry x="400" y="20" width="400" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="four_layers_l1" value="L1 UI&#10;chat · widgets · tabs · profile" style="rounded=1;fillColor=#4F46E5;fontColor=#FFFFFF;strokeColor=#312E81;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="80" y="80" width="200" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="four_layers_l2" value="L2 Gateway&#10;auth · route · SSE · sessions" style="rounded=1;fillColor=#0284C7;fontColor=#FFFFFF;strokeColor=#0369A1;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="320" y="80" width="200" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="four_layers_l3" value="L3 Agents&#10;prompts · workflows · domain logic" style="rounded=1;fillColor=#7C3AED;fontColor=#FFFFFF;strokeColor=#6D28D9;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="560" y="80" width="200" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="four_layers_l4" value="L4 Capabilities&#10;MCP · REST · STT · DB clients" style="rounded=1;fillColor=#0D9488;fontColor=#FFFFFF;strokeColor=#0F766E;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="800" y="80" width="200" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="four_layers_e12" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="four_layers_l1" target="four_layers_l2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="four_layers_e23" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="four_layers_l2" target="four_layers_l3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="four_layers_e34" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="four_layers_l3" target="four_layers_l4" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="four_layers_never" value="Never owns" style="swimlane;startSize=24;fillColor=#FEF2F2;strokeColor=#DC2626;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="220" width="920" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="four_layers_n1" value="UI: tool calls · LLM prompts" style="rounded=1;fillColor=#FECACA;strokeColor=#DC2626;" parent="four_layers_never" vertex="1">
+                    <mxGeometry x="20" y="40" width="200" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="four_layers_n2" value="Gateway: domain reasoning" style="rounded=1;fillColor=#FECACA;strokeColor=#DC2626;" parent="four_layers_never" vertex="1">
+                    <mxGeometry x="250" y="40" width="200" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="four_layers_n3" value="Agents: raw infra SDKs" style="rounded=1;fillColor=#FECACA;strokeColor=#DC2626;" parent="four_layers_never" vertex="1">
+                    <mxGeometry x="480" y="40" width="200" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="four_layers_n4" value="Capabilities: chat personality" style="rounded=1;fillColor=#FECACA;strokeColor=#DC2626;" parent="four_layers_never" vertex="1">
+                    <mxGeometry x="710" y="40" width="200" height="50" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="b2b-routing" name="B2B Routing">
+        <mxGraphModel dx="988" dy="553" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="700" background="#ffffff" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="b2b_routing_t" value="B2B SaaS — Who Uses Which Portal" style="text;html=0;strokeColor=none;fillColor=none;fontSize=16" parent="1" vertex="1">
+                    <mxGeometry x="300" y="20" width="500" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="b2b_routing_emp" value="Customer org employees&#10;eng · marketing · support · admin" style="rounded=1;fillColor=#E0E7FF;strokeColor=#4F46E5;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="80" y="80" width="240" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="b2b_routing_endu" value="Downstream end users&#10;investors · shoppers" style="rounded=1;fillColor=#E0E7FF;strokeColor=#4F46E5;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="80" y="180" width="240" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="b2b_routing_sre" value="Your SRE / infra team" style="rounded=1;fillColor=#E0E7FF;strokeColor=#4F46E5;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="280" width="240" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="b2b_routing_pb" value="Portal B&#10;ai-bots frontend&#10;MAIN B2B PRODUCT&#10;&#10;Chat · IntegrationsHub&#10;Profile · Requirements · Meetings" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;strokeColor=#047857;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="450" y="60" width="260" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="b2b_routing_pa" value="Portal A&#10;am-modern-ui&#10;optional narrow front door&#10;&#10;Finance chat · widgets" style="rounded=1;fillColor=#4F46E5;fontColor=#FFFFFF;strokeColor=#312E81;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="450" y="190" width="260" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="b2b_routing_pc" value="Portal C&#10;kagent UI&#10;SRE only&#10;&#10;Pod logs · events · tool cards" style="rounded=1;fillColor=#EA580C;fontColor=#FFFFFF;strokeColor=#C2410C;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="450" y="310" width="260" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="b2b_routing_e1" value="all agents · integrations · profile" style="strokeColor=#059669;strokeWidth=2;endArrow=classic;fontColor=#065F46;" parent="1" source="b2b_routing_emp" target="b2b_routing_pb" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="b2b_routing_e2" value="1-2 pinned agents" style="strokeColor=#4F46E5;strokeWidth=2;endArrow=classic;" parent="1" source="b2b_routing_endu" target="b2b_routing_pa" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="b2b_routing_e3" value="K8s deep ops" style="strokeColor=#EA580C;strokeWidth=2;endArrow=classic;" parent="1" source="b2b_routing_sre" target="b2b_routing_pc" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="portal-b-screens" name="Portal B Screens">
+        <mxGraphModel dx="988" dy="553" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="500" background="#ffffff" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="portal_b_screens_t" value="Portal B — Screen Map (ai-bots frontend)" style="text;html=0;strokeColor=none;fillColor=none;fontSize=16" parent="1" vertex="1">
+                    <mxGeometry x="350" y="20" width="500" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="portal_b_screens_lane" value="Portal B tabs" style="swimlane;startSize=28;fillColor=#ECFDF5;strokeColor=#059669;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="70" width="1120" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="portal_b_screens_chat" value="Chat" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;" parent="portal_b_screens_lane" vertex="1">
+                    <mxGeometry x="20" y="40" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="portal_b_screens_integ" value="Integrations" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;" parent="portal_b_screens_lane" vertex="1">
+                    <mxGeometry x="140" y="40" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="portal_b_screens_req" value="Requirements" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;" parent="portal_b_screens_lane" vertex="1">
+                    <mxGeometry x="280" y="40" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="portal_b_screens_meet" value="Meetings" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;" parent="portal_b_screens_lane" vertex="1">
+                    <mxGeometry x="420" y="40" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="portal_b_screens_prof" value="Profile" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;" parent="portal_b_screens_lane" vertex="1">
+                    <mxGeometry x="540" y="40" width="90" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="portal_b_screens_sum" value="Integration summary" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;" parent="portal_b_screens_lane" vertex="1">
+                    <mxGeometry x="650" y="40" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="portal_b_screens_co" value="Company profile" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;" parent="portal_b_screens_lane" vertex="1">
+                    <mxGeometry x="830" y="40" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="portal_b_screens_gw" value="am-mcp-gateway&#10;/chat/stream" style="rounded=1;fillColor=#0284C7;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="120" y="220" width="160" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="portal_b_screens_aib" value="ai-bots API&#10;/api/services/*" style="rounded=1;fillColor=#0D9488;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="400" y="220" width="160" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="portal_b_screens_mem" value="company-memory" style="shape=cylinder3;fillColor=#0891B2;fontColor=#FFFFFF;strokeColor=#0E7490;size=10;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="215" width="120" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="portal_b_screens_ec" value="Phase 1" style="strokeColor=#334155;endArrow=classic;" parent="1" source="portal_b_screens_chat" target="portal_b_screens_gw" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="portal_b_screens_ei" value="now" style="strokeColor=#334155;endArrow=classic;" parent="1" source="portal_b_screens_integ" target="portal_b_screens_aib" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="portal_b_screens_es" value="Phase 4" style="strokeColor=#334155;endArrow=classic;" parent="1" source="portal_b_screens_sum" target="portal_b_screens_aib" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="portal_b_screens_ep" value="Phase 4" style="strokeColor=#334155;endArrow=classic;" parent="1" source="portal_b_screens_prof" target="portal_b_screens_aib" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="portal_b_screens_er" value="Phase 2" style="strokeColor=#334155;endArrow=classic;" parent="1" source="portal_b_screens_req" target="portal_b_screens_mem" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="portal_b_screens_em" value="Phase 2" style="strokeColor=#334155;endArrow=classic;" parent="1" source="portal_b_screens_meet" target="portal_b_screens_mem" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="portal_b_screens_eco" value="Phase 4" style="strokeColor=#334155;endArrow=classic;" parent="1" source="portal_b_screens_co" target="portal_b_screens_mem" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="chat-flow" name="Chat Flow">
+        <mxGraphModel dx="988" dy="553" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="900" pageHeight="900" background="#ffffff" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="chat_flow_t" value="Chat Request Flow — Portal B (SSE)" style="text;html=0;strokeColor=none;fillColor=none;fontSize=16" parent="1" vertex="1">
+                    <mxGeometry x="250" y="20" width="400" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="chat_flow_user" value="User" style="rounded=1;fillColor=#64748B;fontColor=#FFFFFF;" parent="1" vertex="1">
+                    <mxGeometry x="380" y="60" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="chat_flow_pb" value="Portal B React" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;" parent="1" vertex="1">
+                    <mxGeometry x="360" y="130" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="chat_flow_gw" value="am-mcp-gateway&#10;POST /chat/stream" style="rounded=1;fillColor=#0284C7;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="340" y="200" width="200" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="chat_flow_router" value="Intent router + RBAC" style="rounded=1;fillColor=#0EA5E9;fontColor=#FFFFFF;" parent="1" vertex="1">
+                    <mxGeometry x="340" y="280" width="200" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="chat_flow_agent" value="Domain agent&#10;scribe · dev · test · …" style="rounded=1;fillColor=#7C3AED;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="340" y="350" width="200" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="chat_flow_mem" value="company-memory&#10;REQ context" style="rounded=1;fillColor=#0891B2;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="120" y="350" width="160" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="chat_flow_cap" value="L4 capability&#10;tool plan / execute" style="rounded=1;fillColor=#0D9488;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="600" y="350" width="180" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="chat_flow_sse" value="SSE stream&#10;tokens + widgets" style="rounded=1;fillColor=#F59E0B;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="360" y="440" width="160" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="chat_flow_e1" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="chat_flow_user" target="chat_flow_pb" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="chat_flow_e2" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="chat_flow_pb" target="chat_flow_gw" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="chat_flow_e3" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="chat_flow_gw" target="chat_flow_router" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="chat_flow_e4" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="chat_flow_router" target="chat_flow_agent" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="chat_flow_e5" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;dashed=1;" parent="1" source="chat_flow_agent" target="chat_flow_mem" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="chat_flow_e6" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="chat_flow_agent" target="chat_flow_cap" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="chat_flow_e7" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="chat_flow_cap" target="chat_flow_agent" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="chat_flow_e8" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="chat_flow_agent" target="chat_flow_sse" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="chat_flow_e9" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="chat_flow_sse" target="chat_flow_pb" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="integration-flow" name="Integration Flow">
+        <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="900" pageHeight="700" background="#ffffff" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="integration_flow_t" value="Integration Connect Flow — Portal B" style="text;html=0;strokeColor=none;fillColor=none;fontSize=16" parent="1" vertex="1">
+                    <mxGeometry x="220" y="20" width="460" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="integration_flow_admin" value="Portal B user" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;" parent="1" vertex="1">
+                    <mxGeometry x="380" y="70" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="integration_flow_hub" value="IntegrationsHub" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;" parent="1" vertex="1">
+                    <mxGeometry x="360" y="150" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="integration_flow_api" value="ai-bots API&#10;/api/services/connect" style="rounded=1;fillColor=#0D9488;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="330" y="230" width="220" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="integration_flow_svc" value="External service&#10;Jira · GitHub · Confluence" style="rounded=1;fillColor=#64748B;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="320" y="320" width="240" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="integration_flow_note" value="Agents use connected services via ai-bots execute or MCP — not direct UI calls" style="shape=note;fillColor=#FFF7ED;strokeColor=#F59E0B;size=14;" parent="1" vertex="1">
+                    <mxGeometry x="620" y="200" width="220" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="integration_flow_hub2" value="Integration summary (Phase 4)&#10;GET /api/services/status" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="300" y="430" width="280" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="integration_flow_e1" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="integration_flow_admin" target="integration_flow_hub" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="integration_flow_e2" value="connect Jira" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="integration_flow_hub" target="integration_flow_api" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="integration_flow_e3" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="integration_flow_api" target="integration_flow_svc" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="integration_flow_e4" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;dashed=1;" parent="1" source="integration_flow_svc" target="integration_flow_api" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="integration_flow_e5" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;dashed=1;" parent="1" source="integration_flow_api" target="integration_flow_hub" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="integration_flow_e6" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="integration_flow_admin" target="integration_flow_hub2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="integration_flow_e7" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="integration_flow_hub2" target="integration_flow_api" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="devops-dual-entry" name="DevOps Dual Entry">
+        <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="1000" pageHeight="600" background="#ffffff" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="devops_dual_entry_t" value="DevOps — Two Entry Points, One Brain (am-infra-ops)" style="text;html=0;strokeColor=none;fillColor=none;fontSize=16" parent="1" vertex="1">
+                    <mxGeometry x="200" y="20" width="600" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="devops_dual_entry_pbchat" value="Portal B chat&#10;light devops questions" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="80" y="100" width="200" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="devops_dual_entry_kui" value="Portal C kagent UI&#10;pod logs · events · tool cards" style="rounded=1;fillColor=#EA580C;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="720" y="100" width="220" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="devops_dual_entry_gw" value="am-mcp-gateway" style="rounded=1;fillColor=#0284C7;fontColor=#FFFFFF;" parent="1" vertex="1">
+                    <mxGeometry x="100" y="220" width="160" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="devops_dual_entry_devops" value="devops-agent :8151&#10;same prompt as am-infra-ops" style="rounded=1;fillColor=#DB2777;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="80" y="320" width="220" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="devops_dual_entry_ta" value="tool-agent MCP" style="rounded=1;fillColor=#0D9488;fontColor=#FFFFFF;" parent="1" vertex="1">
+                    <mxGeometry x="400" y="400" width="160" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="devops_dual_entry_k8s" value="k8s MCP" style="rounded=1;fillColor=#0D9488;fontColor=#FFFFFF;" parent="1" vertex="1">
+                    <mxGeometry x="620" y="400" width="140" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="devops_dual_entry_e1" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="devops_dual_entry_pbchat" target="devops_dual_entry_gw" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="devops_dual_entry_e2" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="devops_dual_entry_gw" target="devops_dual_entry_devops" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="devops_dual_entry_e3" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="devops_dual_entry_devops" target="devops_dual_entry_ta" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="devops_dual_entry_e4" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="devops_dual_entry_devops" target="devops_dual_entry_k8s" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="devops_dual_entry_e5" value="am-infra-ops CRD" style="strokeColor=#EA580C;strokeWidth=2;endArrow=classic;" parent="1" source="devops_dual_entry_kui" target="devops_dual_entry_ta" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="devops_dual_entry_e6" value="am-infra-ops CRD" style="strokeColor=#EA580C;strokeWidth=2;endArrow=classic;" parent="1" source="devops_dual_entry_kui" target="devops_dual_entry_k8s" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="repo-reuse" name="Repo Reuse">
+        <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="1100" pageHeight="700" background="#ffffff" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="repo_reuse_t" value="Repo Reuse Map — Anti-Duplication" style="text;html=0;strokeColor=none;fillColor=none;fontSize=16" parent="1" vertex="1">
+                    <mxGeometry x="350" y="20" width="400" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="repo_reuse_reuse" value="Reuse — do not rebuild" style="swimlane;startSize=28;fillColor=#F0FDF4;strokeColor=#059669;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="60" width="1020" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="repo_reuse_aib" value="ai-bots&#10;dev · IntegrationsHub · RAG" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="repo_reuse_reuse" vertex="1">
+                    <mxGeometry x="20" y="50" width="140" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="repo_reuse_ta" value="tool-agent&#10;infra NL MCP" style="rounded=1;fillColor=#0D9488;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="repo_reuse_reuse" vertex="1">
+                    <mxGeometry x="180" y="50" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="repo_reuse_kag" value="kagent&#10;am-infra-ops" style="rounded=1;fillColor=#EA580C;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="repo_reuse_reuse" vertex="1">
+                    <mxGeometry x="320" y="50" width="110" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="repo_reuse_vid" value="ai-video-editor&#10;STT · video" style="rounded=1;fillColor=#0D9488;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="repo_reuse_reuse" vertex="1">
+                    <mxGeometry x="450" y="50" width="130" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="repo_reuse_fin" value="am-fin-agent&#10;finance" style="rounded=1;fillColor=#DB2777;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="repo_reuse_reuse" vertex="1">
+                    <mxGeometry x="600" y="50" width="110" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="repo_reuse_test" value="ui-test-agent&#10;Playwright" style="rounded=1;fillColor=#7C3AED;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="repo_reuse_reuse" vertex="1">
+                    <mxGeometry x="730" y="50" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="repo_reuse_mui" value="am-modern-ui&#10;Flutter widgets" style="rounded=1;fillColor=#4F46E5;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="repo_reuse_reuse" vertex="1">
+                    <mxGeometry x="870" y="50" width="130" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="repo_reuse_portal" value="Maps to portal" style="swimlane;startSize=28;fillColor=#EEF2FF;strokeColor=#4F46E5;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="280" y="320" width="540" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="repo_reuse_pb" value="Portal B&#10;B2B workspace" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="repo_reuse_portal" vertex="1">
+                    <mxGeometry x="40" y="45" width="140" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="repo_reuse_pa" value="Portal A&#10;end users" style="rounded=1;fillColor=#4F46E5;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="repo_reuse_portal" vertex="1">
+                    <mxGeometry x="200" y="45" width="140" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="repo_reuse_pc" value="Portal C&#10;SRE" style="rounded=1;fillColor=#EA580C;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="repo_reuse_portal" vertex="1">
+                    <mxGeometry x="360" y="45" width="140" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="repo_reuse_e1" style="strokeColor=#334155;endArrow=classic;" parent="1" source="repo_reuse_aib" target="repo_reuse_pb" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="repo_reuse_e2" style="strokeColor=#334155;endArrow=classic;" parent="1" source="repo_reuse_mui" target="repo_reuse_pa" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="repo_reuse_e3" style="strokeColor=#334155;endArrow=classic;" parent="1" source="repo_reuse_kag" target="repo_reuse_pc" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="repo_reuse_e4" style="strokeColor=#334155;endArrow=classic;" parent="1" source="repo_reuse_ta" target="repo_reuse_pb" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="repo_reuse_e5" style="strokeColor=#334155;endArrow=classic;" parent="1" source="repo_reuse_ta" target="repo_reuse_pc" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="repo_reuse_e6" style="strokeColor=#334155;endArrow=classic;" parent="1" source="repo_reuse_vid" target="repo_reuse_pb" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="repo_reuse_e7" style="strokeColor=#334155;endArrow=classic;" parent="1" source="repo_reuse_fin" target="repo_reuse_pa" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="repo_reuse_e8" style="strokeColor=#334155;endArrow=classic;" parent="1" source="repo_reuse_fin" target="repo_reuse_pb" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="repo_reuse_e9" style="strokeColor=#334155;endArrow=classic;" parent="1" source="repo_reuse_test" target="repo_reuse_pb" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="phases" name="Phases">
+        <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="1400" pageHeight="400" background="#ffffff" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="phases_t" value="Phased Delivery — UI Focus" style="text;html=0;strokeColor=none;fillColor=none;fontSize=16" parent="1" vertex="1">
+                    <mxGeometry x="500" y="20" width="400" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="phases_p0" value="Phase 0&#10;tool-agent + kagent deploy&#10;Portal C live" style="rounded=1;fillColor=#64748B;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="40" y="80" width="180" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="phases_p1" value="Phase 1&#10;gateway router&#10;Portal A + B chat" style="rounded=1;fillColor=#0284C7;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="250" y="80" width="180" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="phases_p2" value="Phase 2&#10;scribe + memory&#10;Req + Meetings tabs" style="rounded=1;fillColor=#7C3AED;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="460" y="80" width="180" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="phases_p3" value="Phase 3&#10;lifecycle linking&#10;meeting bot v1" style="rounded=1;fillColor=#7C3AED;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="670" y="80" width="180" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="phases_p4" value="Phase 4&#10;Profile + summary&#10;company profile admin" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="880" y="80" width="180" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="phases_p5" value="Phase 5&#10;multi-tenant B2B&#10;white-label Portal B" style="rounded=1;fillColor=#4F46E5;fontColor=#FFFFFF;whiteSpace=wrap;html=0" parent="1" vertex="1">
+                    <mxGeometry x="1090" y="80" width="180" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="phases_e01" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="phases_p0" target="phases_p1" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="phases_e12" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="phases_p1" target="phases_p2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="phases_e23" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="phases_p2" target="phases_p3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="phases_e34" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="phases_p3" target="phases_p4" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="phases_e45" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="phases_p4" target="phases_p5" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="url-rbac" name="URL RBAC">
+        <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="1000" pageHeight="650" background="#ffffff" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="url_rbac_t" value="URL and RBAC Layout" style="text;html=0;strokeColor=none;fillColor=none;fontSize=16" parent="1" vertex="1">
+                    <mxGeometry x="380" y="20" width="240" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="url_rbac_ingress" value="Traefik + Keycloak" style="swimlane;startSize=28;fillColor=#F1F5F9;strokeColor=#64748B;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="200" y="60" width="600" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="url_rbac_h1" value="app.asrax.in" style="rounded=1;fillColor=#4F46E5;fontColor=#FFFFFF;" parent="url_rbac_ingress" vertex="1">
+                    <mxGeometry x="30" y="40" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="url_rbac_h2" value="workspace.asrax.in" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;" parent="url_rbac_ingress" vertex="1">
+                    <mxGeometry x="220" y="40" width="180" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="url_rbac_h3" value="kagent.munish.org" style="rounded=1;fillColor=#EA580C;fontColor=#FFFFFF;" parent="url_rbac_ingress" vertex="1">
+                    <mxGeometry x="430" y="40" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="url_rbac_pa" value="Portal A" style="rounded=1;fillColor=#4F46E5;fontColor=#FFFFFF;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="200" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="url_rbac_pb" value="Portal B" style="rounded=1;fillColor=#059669;fontColor=#FFFFFF;" parent="1" vertex="1">
+                    <mxGeometry x="440" y="200" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="url_rbac_pc" value="Portal C" style="rounded=1;fillColor=#EA580C;fontColor=#FFFFFF;" parent="1" vertex="1">
+                    <mxGeometry x="640" y="200" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="url_rbac_roles" value="Role access" style="swimlane;startSize=28;fillColor=#EEF2FF;strokeColor=#6366F1;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="300" width="760" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="url_rbac_r1" value="user / customer → Portal A only" style="rounded=1;fillColor=#E0E7FF;" parent="url_rbac_roles" vertex="1">
+                    <mxGeometry x="20" y="40" width="220" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="url_rbac_r2" value="engineering · marketing · support · admin → Portal B" style="rounded=1;fillColor=#D1FAE5;" parent="url_rbac_roles" vertex="1">
+                    <mxGeometry x="260" y="40" width="320" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="url_rbac_r3" value="sre → Portal C primary · B devops chat optional" style="rounded=1;fillColor=#FFEDD5;" parent="url_rbac_roles" vertex="1">
+                    <mxGeometry x="600" y="40" width="140" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="url_rbac_e1" style="strokeColor=#334155;endArrow=classic;" parent="1" source="url_rbac_h1" target="url_rbac_pa" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="url_rbac_e2" style="strokeColor=#334155;endArrow=classic;" parent="1" source="url_rbac_h2" target="url_rbac_pb" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="url_rbac_e3" style="strokeColor=#334155;endArrow=classic;" parent="1" source="url_rbac_h3" target="url_rbac_pc" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="url_rbac_e4" style="strokeColor=#6366F1;dashed=1;endArrow=classic;" parent="1" source="url_rbac_r1" target="url_rbac_h1" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="url_rbac_e5" style="strokeColor=#6366F1;dashed=1;endArrow=classic;" parent="1" source="url_rbac_r2" target="url_rbac_h2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="url_rbac_e6" style="strokeColor=#6366F1;dashed=1;endArrow=classic;" parent="1" source="url_rbac_r3" target="url_rbac_h3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
