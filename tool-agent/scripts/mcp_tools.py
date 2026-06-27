@@ -130,13 +130,60 @@ def tool_agent_query(
     return http_post(path, body, stream=use_stream)
 
 
+def _extract_intent(obj: dict[str, Any]) -> dict[str, Any]:
+    """Accept raw intent, plan body, or MCP wrapper from the LLM."""
+    if "intent" in obj and isinstance(obj["intent"], dict):
+        return obj["intent"]
+    body = obj.get("body")
+    if isinstance(body, dict):
+        if "intent" in body and isinstance(body["intent"], dict):
+            return body["intent"]
+        if body.get("backend") and body.get("operation"):
+            return body
+    if obj.get("backend") and obj.get("operation"):
+        return obj
+    raise ValueError(
+        "Could not find intent object. Pass plan.body.intent or the intent dict "
+        "(backend, operation, params, read_only)."
+    )
+
+
+def _slim_for_agent(data: Any) -> Any:
+    """Reduce payload size so the LLM quotes real data instead of inventing rows."""
+    if not isinstance(data, dict):
+        return data
+    body = data.get("body") if "body" in data and "status_code" in data else data
+    if not isinstance(body, dict):
+        return data
+    inner = body.get("data") if isinstance(body.get("data"), dict) else body
+    if isinstance(inner, dict) and "topics" in inner:
+        topics = inner["topics"]
+        names = [t.get("name") if isinstance(t, dict) else t for t in topics]
+        return {
+            "backend": body.get("backend", "kafka"),
+            "operation": body.get("operation", "list_topics"),
+            "topic_count": len(names),
+            "topics": names[:50],
+        }
+    if isinstance(inner, dict) and "rows" in inner:
+        return {
+            "backend": body.get("backend"),
+            "operation": body.get("operation"),
+            "row_count": len(inner.get("rows") or []),
+            "rows": (inner.get("rows") or [])[:20],
+            "summary": body.get("summary"),
+        }
+    return body
+
+
 def tool_agent_execute(intent_json: str, include_summary: bool = False, max_rows: int = 100) -> str:
     try:
-        intent = json.loads(intent_json)
+        parsed = json.loads(intent_json)
     except json.JSONDecodeError as exc:
         raise ValueError(f"intent_json must be valid JSON: {exc}") from exc
-    if not isinstance(intent, dict):
+    if not isinstance(parsed, dict):
         raise ValueError("intent_json must be a JSON object")
+    intent = _extract_intent(parsed)
     body: dict[str, Any] = {
         "intent": intent,
         "include_summary": include_summary,
@@ -144,4 +191,20 @@ def tool_agent_execute(intent_json: str, include_summary: bool = False, max_rows
     }
     use_stream = os.environ.get("TOOL_AGENT_MCP_USE_STREAM", "true").lower() in ("1", "true", "yes")
     path = "/api/v1/tools/execute/stream" if use_stream else "/api/v1/tools/execute"
-    return http_post(path, body, stream=use_stream)
+    raw = http_post(path, body, stream=use_stream)
+    slim = _slim_for_agent(json.loads(raw))
+    return json.dumps(slim, indent=2, default=str)
+
+
+def tool_agent_plan_and_execute(
+    query: str,
+    backend: str | None = None,
+    read_only: bool = True,
+    max_rows: int = 100,
+) -> str:
+    """One MCP call: plan + execute. Best for kagent read-only infra queries."""
+    plan_raw = json.loads(tool_agent_plan(query, backend=backend, read_only=read_only))
+    plan_body = plan_raw.get("body") or plan_raw
+    intent = _extract_intent(plan_body if isinstance(plan_body, dict) else plan_raw)
+    exec_raw = tool_agent_execute(json.dumps(intent), include_summary=True, max_rows=max_rows)
+    return exec_raw

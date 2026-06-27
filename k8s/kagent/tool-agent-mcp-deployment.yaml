@@ -26,9 +26,15 @@ spec:
       serviceAccountName: am-tool-agent-mcp
       containers:
         - name: mcp
-          image: ghcr.io/am-portfolio/am-tool-agent:latest
+          image: python:3.12-slim
           imagePullPolicy: IfNotPresent
-          command: ["python", "scripts/mcp_http_server.py"]
+          command: ["/bin/sh", "-c"]
+          args:
+            - pip install -q mcp httpx && exec python /app/scripts/mcp_http_server.py
+          volumeMounts:
+            - name: bridge-scripts
+              mountPath: /app/scripts
+              readOnly: true
           env:
             - name: TOOL_AGENT_BASE_URL
               value: http://am-tool-agent.am-apps-preprod.svc.cluster.local:8141
@@ -60,6 +66,10 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+      volumes:
+        - name: bridge-scripts
+          configMap:
+            name: am-tool-agent-mcp-bridge
 ---
 apiVersion: v1
 kind: Service

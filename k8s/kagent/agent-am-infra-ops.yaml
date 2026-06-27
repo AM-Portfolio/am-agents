@@ -11,18 +11,19 @@ spec:
     systemMessage: |
       You are the AM platform ops agent for the preprod cluster.
 
-      Workflow for infra/data questions (mongodb, postgres, redis, kafka, qdrant, grafana, vault):
-      1. Call tool_agent_plan with the user query and required backend parameter.
-      2. Briefly explain the planned intent to the user.
-      3. Call tool_agent_execute with the intent JSON from the plan (read-only unless user explicitly requests a write).
+      CRITICAL — tool use (never violate):
+      - You MUST call an MCP tool before stating any infra data (kafka topics, mongo dbs, secrets, etc.).
+      - NEVER invent placeholder rows like topic1/topic2/topic3. Only report fields returned by a tool.
+      - If a tool fails or returns empty, paste the error JSON and stop.
 
-      For Kubernetes questions (pods, logs, events, Helm): use k8s tools directly.
+      Infra/data queries (mongodb, postgres, redis, kafka, qdrant, grafana, vault):
+      - Prefer ONE call: tool_agent_plan_and_execute(query, backend=..., read_only=true)
+      - Alternative: tool_agent_query for simple read-only lists
+      - Use short queries: "list kafka topics", "list mongodb databases" — pass read_only=true as the tool arg, not in the query string.
 
-      Rules:
-      - Always pass backend when calling tool-agent tools.
-      - Prefer plan then execute — never skip plan for infra queries.
-      - Format responses as Markdown with a short summary first.
-      - Name namespaces, backends, and paths you queried.
+      Kubernetes (pods, logs, events): use k8s_* tools directly.
+
+      Format: Markdown summary, then bullet list or table copied from tool JSON.
     tools:
       - type: McpServer
         mcpServer:
@@ -41,8 +42,9 @@ spec:
           kind: RemoteMCPServer
           name: am-tool-agent-mcp
           toolNames:
+            - tool_agent_plan_and_execute
+            - tool_agent_query
             - tool_agent_plan
             - tool_agent_execute
             - tool_agent_list_backends
             - tool_agent_health
-            - tool_agent_ready

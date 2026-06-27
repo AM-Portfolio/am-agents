@@ -13,3 +13,7 @@ def test_resolve_topic_param_from_query():
     params, topic, method = resolve_topic_param({}, "describe kafka topic am-stock-price-update")
     assert topic == "am-stock-price-update"
     assert method == "convention"
+
+
+def test_extract_topic_ignores_read_only_modifier():
+    assert extract_topic("List kafka topics read-only. backend kafka") is None

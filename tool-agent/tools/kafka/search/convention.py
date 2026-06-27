@@ -8,6 +8,22 @@ from app.schema.loader import get_schema_catalog
 
 KAFKA_TOPIC_PATTERN = re.compile(r"\b([a-z][a-z0-9_-]*(?:-[a-z0-9_-]+)+)\b", re.IGNORECASE)
 
+_TOPIC_STOPWORDS = frozenset(
+    {
+        "kafka",
+        "topics",
+        "topic",
+        "cluster",
+        "infra",
+        "message",
+        "messages",
+        "read-only",
+        "readonly",
+        "only",
+        "backend",
+    }
+)
+
 _TOPIC_ALIASES: dict[str, str] = {
     "am-portfolio-events": "am-portfolio-update",
     "am-trade-executions": "am-trade-update",
@@ -61,8 +77,8 @@ def extract_topic(query: str) -> str | None:
     ):
         match = re.search(pattern, q)
         if match:
-            candidate = match.group(1)
-            if candidate not in {"kafka", "topics", "topic", "cluster", "infra", "message", "messages"}:
+            candidate = match.group(1).rstrip(".,")
+            if candidate not in _TOPIC_STOPWORDS:
                 return normalize_topic(candidate)
     for match in KAFKA_TOPIC_PATTERN.finditer(query):
         candidate = match.group(1)

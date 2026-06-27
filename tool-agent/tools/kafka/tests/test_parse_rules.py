@@ -32,3 +32,11 @@ def test_parse_rules_alias_wrong_portfolio_events():
 def test_parse_rules_peek_without_topic_returns_none():
     intent = parse_rules("peek last kafka message", tool_name="kafka")
     assert intent is None
+
+
+def test_parse_rules_list_topics_read_only_modifier():
+    """kagent-style prompt must not peek a fake 'read-only.' topic."""
+    intent = parse_rules("List kafka topics read-only. backend kafka", tool_name="kafka")
+    assert intent is not None
+    assert intent.operation == "list_topics"
+    assert intent.params == {}

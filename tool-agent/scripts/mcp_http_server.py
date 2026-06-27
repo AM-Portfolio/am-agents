@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -47,8 +48,25 @@ def tool_agent_plan(query: str, backend: str | None = None, read_only: bool = Tr
 
 @mcp.tool()
 def tool_agent_execute(intent_json: str, include_summary: bool = True, max_rows: int = 100) -> str:
-    """Execute intent JSON from tool_agent_plan."""
+    """Execute intent JSON from tool_agent_plan (accepts intent object or full plan body)."""
     return mcp_tools.tool_agent_execute(intent_json, include_summary=include_summary, max_rows=max_rows)
+
+
+@mcp.tool()
+def tool_agent_query(query: str, backend: str | None = None, read_only: bool = True, max_rows: int = 100) -> str:
+    """One-shot read-only NL query (plan+execute inside tool-agent). Prefer for simple lists."""
+    raw = mcp_tools.tool_agent_query(query, backend=backend, read_only=read_only, max_rows=max_rows)
+    return json.dumps(mcp_tools._slim_for_agent(json.loads(raw)), indent=2, default=str)
+
+
+@mcp.tool()
+def tool_agent_plan_and_execute(
+    query: str, backend: str | None = None, read_only: bool = True, max_rows: int = 100
+) -> str:
+    """Plan then execute in one call. Use for infra read-only queries in kagent."""
+    return mcp_tools.tool_agent_plan_and_execute(
+        query, backend=backend, read_only=read_only, max_rows=max_rows
+    )
 
 
 def main() -> None:

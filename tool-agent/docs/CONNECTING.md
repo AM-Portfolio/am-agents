@@ -153,13 +153,20 @@ python scripts/run_query_corpus.py --preprod --mode plan --agent-caller corpus-t
 
 Unified agent **`am-infra-ops`** combines K8s tools + tool-agent MCP.
 
+Uses the same **`litellm-together`** model as `am-k8s-ops` (`together_ai/meta-llama/Meta-Llama-3-8B-Instruct-Lite`).
+
 ```bash
 kubectl apply -f am-agents/k8s/kagent/tool-agent-mcp-deployment.yaml
 kubectl apply -f am-agents/k8s/kagent/remote-mcpserver-tool-agent.yaml
 kubectl apply -f am-agents/k8s/kagent/agent-am-infra-ops.yaml
 ```
 
+Or: `.\deploy-tool-agent-kagent.ps1`
+
 Open `https://kagent.munish.org`, select **am-infra-ops**, use **Ctrl+Enter** to send.
+
+**Read-only infra prompt:** `list kafka topics` with `backend=kafka` (avoid embedding `read-only` in the query text — it was misparsed as a topic name before vNext).  
+Prefer the single MCP tool `tool_agent_plan_and_execute` (returns real topic names).
 
 See [`docs/MCP_CONTRACT.md`](MCP_CONTRACT.md) for portable MCP tool names.
 

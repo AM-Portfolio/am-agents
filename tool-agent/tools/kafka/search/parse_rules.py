@@ -14,19 +14,24 @@ def parse_rules(query: str, *, tool_name: str) -> IntentDocument | None:
 
     topic = extract_topic(query)
     wants_lag = any(w in q for w in ("lag", "consumer group", "consumer_group"))
+    # "read-only" must not match the bare "read" token (would mis-route to peek_messages).
+    q_no_readonly = q.replace("read-only", " ").replace("readonly", " ")
     wants_messages = any(
-        w in q
+        w in q_no_readonly
         for w in (
             "message",
             "messages",
             "peek",
-            "read",
             "published",
             "publish",
             "last",
             "recent",
             "latest",
         )
+    ) or (
+        re.search(r"\bread\b", q_no_readonly) is not None
+        and "read-only" not in q
+        and "readonly" not in q
     )
     wants_describe = topic and any(w in q for w in ("describe", "metadata", "partitions", "partition"))
 
