@@ -22,7 +22,6 @@ COPY app/ app/
 COPY tools/ tools/
 COPY config/ config/
 COPY mcp/ mcp/
-COPY scripts/ scripts/
 
 EXPOSE 8141
 
