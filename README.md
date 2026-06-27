@@ -12,6 +12,7 @@ Unified home for AM AI agents.
 
 ## Documentation
 
+- **[Enterprise agent ecosystem](docs/ENTERPRISE_AGENT_ECOSYSTEM.md)** — Gap analysis, components, anti-duplication rules, phase plan
 - **[Deploy guide](docs/DEPLOY.md)** — Docker, Helm 3-env, Vault, CI/CD
 - **[Monorepo implementation plan](docs/MONOREPO_PLAN.md)** — Phase 1: full copy into `am-agents/`, npm workspaces
 - **[Universal DB agents plan](docs/UNIVERSAL_DB_AGENTS_PLAN.md)** — MCP catalog, phases

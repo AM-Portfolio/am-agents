@@ -146,6 +146,15 @@ async def run_tools_plan(request: ToolsPlanRequest, *, agent_caller: str | None 
         parse_source=parse_source,
         min_confidence=settings.TOOL_AGENT_INTENT_MIN_CONFIDENCE,
     )
+    if intent.backend == "vault":
+        from tools.vault.safety import is_write_operation
+        from app.vault_write_confirm import issue_write_confirmation
+
+        if is_write_operation(intent.operation):
+            token, phrase = issue_write_confirmation(intent)
+            plan.requires_write_confirmation = True
+            plan.confirmation_token = token
+            plan.confirmation_phrase = phrase
     await tracer.end_trace(
         request_id,
         output=plan.model_dump(),
@@ -167,6 +176,7 @@ async def run_tools_execute(request: ToolsExecuteRequest, *, agent_caller: str |
     state = _base_state(request_id=request_id, request=query_request, agent_caller=agent_caller)
     state["intent"] = request.intent.model_copy()
     state["parse_source"] = "structured"
+    state["write_confirmation"] = request.write_confirmation
 
     await tracer.start_trace(
         request_id,

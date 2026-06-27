@@ -1,0 +1,160 @@
+# Query corpus for tool-agent regression (normal + advanced tiers).
+# Run: python scripts/run_query_corpus.py --local
+#      python scripts/run_query_corpus.py --preprod --mode plan
+
+normal:
+  - label: mongo-list-databases
+    query: list mongo databases
+    backend: mongodb
+    expect_operation: list_databases
+    min_confidence: 0.75
+
+  - label: mongo-count-portfolios
+    query: count portfolios in mongo
+    backend: mongodb
+    expect_operation: count_documents
+    resolve: true
+
+  - label: postgres-schema
+    query: search postgres schema for portfolio tables
+    backend: postgres
+    expect_operation: search_schema
+    min_confidence: 0.75
+
+  - label: postgres-user-email
+    query: find postgres user by email test@example.com
+    backend: postgres
+    expect_operation: run_sql
+    resolve: true
+    expect_params: [sql]
+
+  - label: postgres-count
+    query: how many portfolios in postgres
+    backend: postgres
+    expect_operation: table_row_count
+    resolve: true
+    expect_params: [table]
+
+  - label: redis-info
+    query: redis info server
+    backend: redis
+    expect_operation: info
+    min_confidence: 0.75
+
+  - label: redis-scan-all
+    query: scan redis keys *
+    backend: redis
+    expect_operation: scan_keys
+    resolve: true
+    expect_params: [pattern]
+
+  - label: kafka-list-topics
+    query: list kafka topics
+    backend: kafka
+    expect_operation: list_topics
+    min_confidence: 0.75
+
+  - label: kafka-describe
+    query: describe kafka topic am-stock-price-update
+    backend: kafka
+    expect_operation: describe_topic
+    resolve: true
+    expect_params: [topic]
+
+  - label: qdrant-list-collections
+    query: list qdrant collections
+    backend: qdrant
+    expect_operation: list_collections
+    min_confidence: 0.75
+
+  - label: qdrant-collection-info
+    query: how many points in bug_memory
+    backend: qdrant
+    expect_operation: collection_info
+    resolve: true
+    expect_params: [collection]
+
+  - label: grafana-datasources
+    query: list grafana datasources
+    backend: grafana
+    expect_operation: list_datasources
+    min_confidence: 0.75
+
+  - label: vault-list-infra
+    query: list vault secrets under preprod infra
+    backend: vault
+    expect_operation: list_secrets
+    resolve: true
+    expect_params: [path]
+
+  - label: vault-list-mounts
+    query: list vault mounts
+    backend: vault
+    expect_operation: list_mounts
+    min_confidence: 0.75
+
+advanced:
+  - label: vault-typo-postgress
+    query: read secret preprod postgress
+    backend: vault
+    expect_operation: read_secret
+    resolve: true
+    expect_params: [path]
+
+  - label: vault-category-service
+    query: read secret preprod service
+    backend: vault
+    expect_operation: read_secret
+    resolve: true
+    expect_params: [path]
+
+  - label: vault-read-postgres
+    query: read vault postgres secret in preprod
+    backend: vault
+    expect_operation: read_secret
+    resolve: true
+    expect_params: [path]
+
+  - label: grafana-namespace-logs
+    query: show error logs in am-apps-preprod namespace
+    backend: grafana
+    expect_operation: query_logs
+    min_confidence: 0.75
+
+  - label: mongo-portfolio-vs-market
+    query: count market data securities in mongo
+    backend: mongodb
+    expect_operation: count_documents
+    resolve: true
+
+  - label: redis-session-uuid
+    query: get redis session abcdef01-2345-6789-abcd-ef0123456789
+    backend: redis
+    expect_operation: get
+    resolve: true
+    expect_params: [key]
+
+  - label: kafka-peek-tail
+    query: peek last message on am-portfolio-stream topic
+    backend: kafka
+    expect_operation: peek_messages
+    resolve: true
+    expect_params: [topic]
+
+  - label: kafka-consumer-lag
+    query: kafka consumer lag for group am-analysis-group
+    backend: kafka
+    expect_operation: consumer_lag
+    min_confidence: 0.75
+
+  - label: qdrant-nl-search-scroll
+    query: search bug memory for login timeout
+    backend: qdrant
+    expect_operation: scroll
+    resolve: true
+    expect_params: [collection]
+
+  - label: postgres-mongo-disambiguation
+    query: how many portfolio documents in mongo
+    backend: mongodb
+    expect_operation: count_documents

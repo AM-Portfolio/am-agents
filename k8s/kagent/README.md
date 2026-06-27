@@ -77,6 +77,52 @@ kagent chat does **not** submit on Enter alone.
 
 If chat hangs on "Thinking…", refresh and use **+ New Chat**.
 
+## tool-agent MCP (am-infra-ops)
+
+After tool-agent is running in `am-apps-preprod`:
+
+```powershell
+cd am-agents\k8s\kagent
+.\deploy-tool-agent-kagent.ps1
+```
+
+This creates a ConfigMap with MCP bridge scripts (no image rebuild), deploys `am-tool-agent-mcp`, registers `RemoteMCPServer`, and applies agent **am-infra-ops**.
+
+### kagent UI — simple test flow
+
+1. Open **https://kagent.munish.org**
+2. Select agent **am-infra-ops** (not am-k8s-ops)
+3. **Ctrl+Enter** to send:
+
+```
+List kafka topics in preprod (read-only). Use backend kafka.
+```
+
+Expected: agent calls `tool_agent_plan` → explains intent → `tool_agent_execute` → topic list in Results.
+
+| Prompt | Backend | Expected |
+|--------|---------|----------|
+| List kafka topics (read-only) | kafka | plan + execute, topic names |
+| List mongo databases | mongodb | plan + execute |
+| List pods in infra namespace | (k8s tools) | k8s_get_resources, no tool-agent |
+
+### CLI smoke test (before UI)
+
+```powershell
+cd am-agents\tool-agent
+$env:TOOL_AGENT_BASE_URL = "https://am.asrax.in/tools"
+$env:TOOL_AGENT_CALLER = "kagent-test"
+python scripts/test_kagent_tool_agent_flow.py
+```
+
+Manual apply (same as script):
+
+```powershell
+kubectl apply -f tool-agent-mcp-deployment.yaml
+kubectl apply -f remote-mcpserver-tool-agent.yaml
+kubectl apply -f agent-am-infra-ops.yaml
+```
+
 ## Uninstall
 
 ```bash

@@ -1,0 +1,27 @@
+content: |
+  Vault intent rules — preprod cluster, KV mount `apps`.
+
+  Path convention: `{env}/{category}/{leaf}` under mount `apps`
+  (MCP path strips `apps/` or `apps/data/` — e.g. `preprod/infra/postgres`).
+
+  Operations:
+  - list_mounts — list secret engine mounts
+  - list_secrets — list keys under a path prefix
+  - read_secret — read secret data at path
+  - write_secret / delete_secret — WRITE only via /plan + /execute (never /query)
+
+  Categories:
+  | Category | Prefix | Leaf examples |
+  |----------|--------|---------------|
+  | infra | preprod/infra | postgres, mongodb, redis, kafka, influxdb, shared-api |
+  | services | preprod/services | am-* microservices (am-identity, am-portfolio, ...) |
+  | api | preprod/api | github, upstox |
+
+  Prefer params.path or params.entity (infra entities: postgres_infra, mongodb_infra, ...).
+  Use list_secrets for discovery — live path cache may appear in catalog_snippet.
+
+  NL patterns:
+  - "read secret preprod postgress" → preprod/infra/postgres (typo tolerant)
+  - "read secret preprod service" → preprod/services/{default or named am-* service}
+  - "list vault secrets under preprod infra" → list_secrets path=preprod/infra
+  - "read vault am-analysis secret" → preprod/services/am-analysis

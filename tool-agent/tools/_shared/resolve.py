@@ -40,6 +40,7 @@ BACKEND_OPERATIONS: dict[str, list[str]] = {
         "get_dashboard",
         "list_datasources",
     ],
+    "vault": ["list_mounts", "list_secrets", "read_secret", "write_secret", "delete_secret"],
 }
 
 _ENTITY_HINTS: list[tuple[re.Pattern[str], str]] = [
@@ -158,6 +159,38 @@ def _maybe_upgrade_redis_operation(intent: IntentDocument, params: dict[str, Any
     return intent
 
 
+def _resolve_vault_entity_param(
+    entity_name: str,
+    params: dict[str, Any],
+    *,
+    query_text: str,
+    catalog: Any,
+) -> tuple[dict[str, Any], str | None]:
+    """Map vault service/infra entity tokens to KV paths without catalog entries."""
+    from tools.vault.paths import normalize_vault_path
+    from tools.vault.search.convention import build_path, env_from_query
+
+    if params.get("path"):
+        return params, None
+
+    env = env_from_query(query_text) if query_text else (catalog.default_for("vault", "env") or "preprod")
+    name = entity_name.lower()
+    if name.endswith("_infra"):
+        leaf = name[:-6].replace("_", "-")
+        params["path"] = normalize_vault_path(build_path(env, "infra", leaf))
+        return params, None
+    if name.startswith("am_"):
+        leaf = name.replace("_", "-")
+        params["path"] = normalize_vault_path(build_path(env, "services", leaf))
+        return params, None
+    alias = catalog.vault_path_alias(name.replace("_", "-"))
+    if alias:
+        category = "infra" if alias in (catalog.vault_infra_components() or []) else "services"
+        params["path"] = normalize_vault_path(build_path(env, category, alias))
+        return params, None
+    raise ParamResolutionError(f"Unknown entity '{entity_name}' in schema catalog")
+
+
 def resolve_intent_params(
     intent: IntentDocument,
     *,
@@ -171,17 +204,29 @@ def resolve_intent_params(
     lookup_value: str | None = params.pop("lookup_value", None) or None
 
     if entity_name:
-        mapping = catalog.entity(entity_name)
-        if not mapping:
-            raise ParamResolutionError(f"Unknown entity '{entity_name}' in schema catalog")
-        if mapping.backend != intent.backend:
-            raise ParamResolutionError(
-                f"Entity '{entity_name}' maps to backend '{mapping.backend}', not '{intent.backend}'"
-            )
-        params = _apply_entity_mapping(
-            params, mapping, entity_id=entity_id,
-            lookup_field=lookup_field, lookup_value=lookup_value,
-        )
+        if intent.backend == "vault" and params.get("path"):
+            from tools.vault.paths import normalize_vault_path
+
+            params["path"] = normalize_vault_path(str(params["path"]))
+            entity_name = None
+        else:
+            mapping = catalog.entity(entity_name)
+            if not mapping:
+                if intent.backend == "vault":
+                    params, entity_name = _resolve_vault_entity_param(
+                        entity_name, params, query_text=query_text, catalog=catalog
+                    )
+                else:
+                    raise ParamResolutionError(f"Unknown entity '{entity_name}' in schema catalog")
+            elif mapping.backend != intent.backend:
+                raise ParamResolutionError(
+                    f"Entity '{entity_name}' maps to backend '{mapping.backend}', not '{intent.backend}'"
+                )
+            else:
+                params = _apply_entity_mapping(
+                    params, mapping, entity_id=entity_id,
+                    lookup_field=lookup_field, lookup_value=lookup_value,
+                )
     elif lookup_field and lookup_value:
         inferred = infer_entity_from_text(query_text, backend=intent.backend)
         if inferred:
@@ -266,10 +311,14 @@ def _missing_required_params(backend: str, operation: str, params: dict[str, Any
             return f"Missing database/collection for mongodb.{operation}"
     if backend == "postgres" and operation == "run_sql" and not params.get("sql"):
         return "Missing sql for postgres.run_sql"
+    if backend == "postgres" and operation == "table_row_count" and not params.get("table"):
+        return "Missing table for postgres.table_row_count (use params.entity)"
     if backend == "redis" and operation == "get" and not params.get("key"):
         return "Missing key for redis.get"
     if backend == "qdrant" and operation in QDRANT_COLL_OPS and not params.get("collection"):
         return f"Missing collection for qdrant.{operation}"
+    if backend == "kafka" and operation in {"describe_topic", "peek_messages"} and not params.get("topic"):
+        return f"Missing topic for kafka.{operation}"
     if backend == "grafana" and operation == "query_logs":
         if not (params.get("query") or params.get("logql")):
             return "Missing query/logql for grafana.query_logs"
@@ -277,4 +326,7 @@ def _missing_required_params(backend: str, operation: str, params: dict[str, Any
         params.get("uid") or params.get("dashboardUid")
     ):
         return "Missing uid for grafana.get_dashboard"
+    if backend == "vault" and operation in {"list_secrets", "read_secret", "write_secret", "delete_secret"}:
+        if not params.get("path") and not params.get("entity"):
+            return f"Missing path or entity for vault.{operation}"
     return None

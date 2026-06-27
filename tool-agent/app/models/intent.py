@@ -33,10 +33,16 @@ class ToolsPlanRequest(BaseModel):
     read_only: bool = True
 
 
+class ToolsWriteConfirmation(BaseModel):
+    confirmation_token: str
+    confirmation_phrase: str
+
+
 class ToolsExecuteRequest(BaseModel):
     intent: IntentDocument
     include_summary: bool = False
     max_rows: int = Field(default=100, ge=1, le=1000)
+    write_confirmation: ToolsWriteConfirmation | None = None
 
 
 class ToolsPlanResponse(BaseModel):
@@ -46,6 +52,9 @@ class ToolsPlanResponse(BaseModel):
     confidence_ok: bool
     parse_source: ParseSource
     min_confidence: float
+    requires_write_confirmation: bool = False
+    confirmation_token: str | None = None
+    confirmation_phrase: str | None = None
 
 
 class ToolsQueryResponse(BaseModel):

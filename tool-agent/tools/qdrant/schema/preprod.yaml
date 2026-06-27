@@ -1,3 +1,21 @@
+defaults:
+  collection: bug_memory
+
+collections:
+  bug_memory:
+    description: Stored bug patterns and fixes for agent memory
+  test_cases:
+    description: QA / regression test case embeddings
+  ui_patterns:
+    description: UI component pattern vectors
+
 entities:
   bug_memory:
     collection: bug_memory
+    description: Semantic search over past bugs and resolutions
+  test_cases:
+    collection: test_cases
+    description: Test case similarity search
+  ui_patterns:
+    collection: ui_patterns
+    description: UI pattern embeddings

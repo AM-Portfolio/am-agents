@@ -1,0 +1,71 @@
+# Vault contract — paths discovered live via list_secrets cache (see path_cache.py)
+defaults:
+  mount: apps
+  env: preprod
+  path_prefix: preprod
+
+read_allowlist:
+  - preprod/
+  - data/preprod/
+
+write_allowlist:
+  - preprod/infra/
+  - preprod/services/
+
+categories:
+  infra:
+    prefix: preprod/infra
+    description: Shared infrastructure credentials (postgres, mongo, redis, kafka, influxdb, shared-api)
+    known_leaves:
+      - postgres
+      - mongodb
+      - redis
+      - kafka
+      - influxdb
+      - shared-api
+    default_leaf: postgres
+  services:
+    prefix: preprod/services
+    description: Application service secrets (am-* microservices)
+    default_leaf: am-portfolio
+  api:
+    prefix: preprod/api
+    description: External API credentials
+    default_leaf: github
+
+# Typo / shorthand token → leaf name (infra component or am-* service)
+path_aliases:
+  postgress: postgres
+  postgre: postgres
+  pg: postgres
+  mongo: mongodb
+  mcp-gateway: am-mcp-gateway
+  mcp: am-mcp-gateway
+  gateway: am-gateway
+  identity: am-identity
+  keycloak: am-keycloak
+  portfolio: am-portfolio
+  analysis: am-analysis
+  trade: am-trade-management
+  notification: am-notification
+  parser: am-parser
+  subscription: am-subscription
+  market-data: am-market-data
+  lago: am-lago
+  novu: am-novu
+  tool-agent: am-tool-agent
+
+# Minimal infra entities for params.entity backward compatibility
+entities:
+  postgres_infra:
+    collection: preprod/infra/postgres
+  mongodb_infra:
+    collection: preprod/infra/mongodb
+  redis_infra:
+    collection: preprod/infra/redis
+  kafka_infra:
+    collection: preprod/infra/kafka
+  influxdb_infra:
+    collection: preprod/infra/influxdb
+  shared_api_infra:
+    collection: preprod/infra/shared-api

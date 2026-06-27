@@ -7,7 +7,8 @@
       ],
       "env": {
         "TOOL_AGENT_BASE_URL": "https://am.asrax.in/tools",
-        "TOOL_AGENT_CALLER": "cursor-mcp"
+        "TOOL_AGENT_CALLER": "cursor-mcp",
+        "TOOL_AGENT_MCP_USE_STREAM": "true"
       }
     }
   }

@@ -1,2 +1,20 @@
 content: |
-  # Optional few-shot examples for Postgres
+  Example 1 — user by email
+  Query: find postgres user with email alice@example.com
+  JSON: {"backend":"postgres","operation":"run_sql","params":{"entity":"user_account","lookup_field":"email","lookup_value":"alice@example.com"},"read_only":true,"confidence":0.9,"rationale":"email lookup"}
+
+  Example 2 — portfolio by id
+  Query: get portfolio 163d0143-4fcb-480c-ac20-622f14e0e293 from postgres
+  JSON: {"backend":"postgres","operation":"run_sql","params":{"entity":"portfolio_pg","id":"163d0143-4fcb-480c-ac20-622f14e0e293"},"read_only":true,"confidence":0.9,"rationale":"portfolio id"}
+
+  Example 3 — count portfolios
+  Query: how many portfolios in postgres
+  JSON: {"backend":"postgres","operation":"table_row_count","params":{"entity":"portfolio_pg"},"read_only":true,"confidence":0.85,"rationale":"count"}
+
+  Example 4 — schema search
+  Query: postgres search schema for subscription tables
+  JSON: {"backend":"postgres","operation":"search_schema","params":{"pattern":"subscription"},"read_only":true,"confidence":0.8,"rationale":"discovery"}
+
+  Example 5 — portfolio securities
+  Query: list portfolio securities for portfolio id abc in postgres
+  JSON: {"backend":"postgres","operation":"run_sql","params":{"entity":"portfolio_security_pg","lookup_field":"portfolio_id","lookup_value":"abc"},"read_only":true,"confidence":0.8,"rationale":"securities by portfolio"}

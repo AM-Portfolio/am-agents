@@ -11,7 +11,7 @@ env_prefix: KAFKA_
 
 supports_mcp: true
 mcp_server: kafka
-has_entities: false
+has_entities: true
 health_check: skip
 
 prompts:

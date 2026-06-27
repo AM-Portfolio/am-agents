@@ -1,0 +1,22 @@
+adapter: vault
+operations:
+  list_secrets:
+    mcp_tool: list_secrets
+    adapter_method: list_secrets
+    read_only: true
+  read_secret:
+    mcp_tool: read_secret
+    adapter_method: read_secret
+    read_only: true
+  list_mounts:
+    mcp_tool: list_mounts
+    adapter_method: list_mounts
+    read_only: true
+  write_secret:
+    mcp_tool: write_secret
+    adapter_method: write_secret
+    read_only: false
+  delete_secret:
+    mcp_tool: delete_secret
+    adapter_method: delete_secret
+    read_only: false

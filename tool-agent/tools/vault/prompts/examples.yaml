@@ -1,0 +1,56 @@
+content: |
+  Example 1 — list infra
+  Query: list vault secrets under preprod infra
+  JSON: {"backend":"vault","operation":"list_secrets","params":{"path":"preprod/infra"},"read_only":true,"confidence":0.9,"rationale":"infra discovery"}
+
+  Example 2 — list services
+  Query: list vault secrets under preprod services
+  JSON: {"backend":"vault","operation":"list_secrets","params":{"path":"preprod/services"},"read_only":true,"confidence":0.88,"rationale":"services discovery"}
+
+  Example 3 — read postgres (entity)
+  Query: read vault postgres secret in preprod
+  JSON: {"backend":"vault","operation":"read_secret","params":{"entity":"postgres_infra"},"read_only":true,"confidence":0.9,"rationale":"postgres infra entity"}
+
+  Example 4 — read postgres (path)
+  Query: read secret preprod infra postgres
+  JSON: {"backend":"vault","operation":"read_secret","params":{"path":"preprod/infra/postgres"},"read_only":true,"confidence":0.88,"rationale":"explicit MCP path"}
+
+  Example 5 — typo postgress
+  Query: read secret preprod postgress
+  JSON: {"backend":"vault","operation":"read_secret","params":{"entity":"postgres_infra"},"read_only":true,"confidence":0.9,"rationale":"typo → postgres_infra"}
+
+  Example 6 — read redis
+  Query: get vault redis credentials preprod
+  JSON: {"backend":"vault","operation":"read_secret","params":{"entity":"redis_infra"},"read_only":true,"confidence":0.88,"rationale":"redis entity"}
+
+  Example 7 — read kafka infra
+  Query: read vault kafka secret preprod
+  JSON: {"backend":"vault","operation":"read_secret","params":{"entity":"kafka_infra"},"read_only":true,"confidence":0.88,"rationale":"kafka infra"}
+
+  Example 8 — am-identity service
+  Query: read vault am-identity secrets in preprod
+  JSON: {"backend":"vault","operation":"read_secret","params":{"entity":"am_identity"},"read_only":true,"confidence":0.9,"rationale":"identity service"}
+
+  Example 9 — mcp gateway
+  Query: read secret preprod am-mcp-gateway
+  JSON: {"backend":"vault","operation":"read_secret","params":{"entity":"am_mcp_gateway"},"read_only":true,"confidence":0.88,"rationale":"mcp gateway service"}
+
+  Example 10 — am-analysis
+  Query: show vault secret for am-analysis preprod
+  JSON: {"backend":"vault","operation":"read_secret","params":{"entity":"am_analysis"},"read_only":true,"confidence":0.85,"rationale":"analysis service"}
+
+  Example 11 — category service (default entity)
+  Query: read secret preprod service
+  JSON: {"backend":"vault","operation":"read_secret","params":{"entity":"am_identity"},"read_only":true,"confidence":0.78,"rationale":"services category default"}
+
+  Example 12 — list mounts
+  Query: list vault mounts
+  JSON: {"backend":"vault","operation":"list_mounts","params":{},"read_only":true,"confidence":0.9,"rationale":"mount discovery"}
+
+  Example 13 — shared-api / github token
+  Query: read vault shared-api preprod
+  JSON: {"backend":"vault","operation":"read_secret","params":{"entity":"shared_api_infra"},"read_only":true,"confidence":0.85,"rationale":"shared API keys"}
+
+  Example 14 — legacy path normalization
+  Query: read vault secret apps/preprod/infra/mongodb
+  JSON: {"backend":"vault","operation":"read_secret","params":{"path":"apps/preprod/infra/mongodb"},"read_only":true,"confidence":0.9,"rationale":"canonical apps path normalized to preprod/infra/mongodb"}

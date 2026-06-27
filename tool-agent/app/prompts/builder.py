@@ -26,6 +26,25 @@ def _resolve_label(label_template: str) -> str:
     return label_template.replace("{{APP_ENV}}", settings.langfuse_prompt_label())
 
 
+def _catalog_snippet(catalog: SchemaCatalog, backends: list[str] | None) -> str:
+    parts = [catalog.snippet(backends=backends)]
+    if not backends or "vault" in backends:
+        try:
+            from tools.vault.path_cache import snippet as vault_snippet
+
+            parts.append(vault_snippet())
+        except Exception:
+            pass
+    if not backends or "kafka" in backends:
+        try:
+            from tools.kafka.topic_cache import snippet as kafka_snippet
+
+            parts.append(kafka_snippet())
+        except Exception:
+            pass
+    return "\n".join(p for p in parts if p)
+
+
 def build_intent_prompt(
     query: str,
     backend_hint: str | None,
@@ -78,7 +97,7 @@ def build_intent_prompt(
 
     variables = {
         "operations_list": _operations_list(candidates or None),
-        "catalog_snippet": catalog.snippet(backends=candidates or None),
+        "catalog_snippet": _catalog_snippet(catalog, candidates or None),
         "query": query,
     }
     body = compile_prompt(base.content, variables)

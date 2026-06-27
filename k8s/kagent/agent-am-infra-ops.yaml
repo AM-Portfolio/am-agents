@@ -1,0 +1,47 @@
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: am-infra-ops
+  namespace: kagent
+spec:
+  description: AM preprod unified ops — Kubernetes + infra data stores via tool-agent
+  type: Declarative
+  declarative:
+    modelConfig: litellm-together
+    systemMessage: |
+      You are the AM platform ops agent for the preprod cluster.
+
+      CRITICAL — you cannot know infra data without tools:
+      - For kafka topics: call kafka_list_topics (no arguments). Copy topic names from the tool JSON only.
+      - For mongo databases: call mongodb_list_databases.
+      - For other backends: call tool_agent_infra_query(backend=..., query=...).
+      - NEVER invent placeholder names like my_topic1 or topic1/topic2/topic3.
+      - If you did not call a tool, reply: "I need to call a tool first" and stop.
+      - If a tool fails, paste the error JSON and stop.
+
+      Kubernetes (pods, logs, events): use k8s_* tools directly.
+
+      Format: one-line summary, then bullet list copied verbatim from tool JSON.
+    tools:
+      - type: McpServer
+        mcpServer:
+          apiGroup: kagent.dev
+          kind: RemoteMCPServer
+          name: kagent-tool-server
+          toolNames:
+            - k8s_get_resources
+            - k8s_describe_resource
+            - k8s_get_pod_logs
+            - k8s_get_events
+            - k8s_get_available_api_resources
+      - type: McpServer
+        mcpServer:
+          apiGroup: kagent.dev
+          kind: RemoteMCPServer
+          name: am-tool-agent-mcp
+          toolNames:
+            - kafka_list_topics
+            - mongodb_list_databases
+            - tool_agent_infra_query
+            - tool_agent_list_backends
+            - tool_agent_health

@@ -75,6 +75,20 @@ class Settings(BaseSettings):
     )
     GRAFANA_MCP_TIMEOUT_SECONDS: float = Field(default=30.0)
 
+    VAULT_MCP_URL: str | None = Field(
+        default="http://kagent-vault-mcp.kagent.svc.cluster.local:8080/mcp"
+    )
+    VAULT_MCP_TIMEOUT_SECONDS: float = Field(default=30.0)
+    VAULT_MCP_MOUNT: str = Field(default="apps")
+    VAULT_MCP_WRITES_ENABLED: bool = Field(default=False)
+
+    VAULT_PATH_CACHE_ENABLED: bool = Field(default=True)
+    VAULT_PATH_CACHE_TTL_SECONDS: int = Field(default=3600)
+    KAFKA_TOPIC_CACHE_ENABLED: bool = Field(default=True)
+    KAFKA_TOPIC_CACHE_TTL_SECONDS: int = Field(default=1800)
+    CATALOG_CACHE_WARM_ON_READY: bool = Field(default=False)
+    TOOL_AGENT_STREAMING_ENABLED: bool = Field(default=True)
+
     PROMPT_SOURCE: Literal["langfuse", "file"] = Field(default="file")
     TOOL_AGENT_PROMPT_CACHE_TTL_SECONDS: int = Field(default=60)
 

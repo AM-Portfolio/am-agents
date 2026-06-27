@@ -1,0 +1,34 @@
+name: vault
+display_name: HashiCorp Vault
+enabled: true
+version: "0.1.0"
+
+infer_keywords:
+  - vault
+  - secret
+  - secrets
+  - kv
+  - hashicorp
+  - credential
+  - credentials
+
+vault:
+  path_template: ""
+env_prefix: VAULT_MCP_
+
+supports_mcp: false
+mcp_server: ""
+has_entities: true
+health_check: skip
+
+prompts:
+  intent:
+    source: file
+    name: tool-agent/intent/vault
+    label: "{{APP_ENV}}"
+    fallback: prompts/intent.yaml
+  examples:
+    source: file
+    name: tool-agent/intent/vault/examples
+    fallback: prompts/examples.yaml
+    optional: false

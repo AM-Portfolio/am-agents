@@ -42,4 +42,8 @@ env:
   KAFKA_UI_CLUSTER: am-preprod
   GRAFANA_MCP_URL: "http://kagent-grafana-mcp.kagent.svc.cluster.local:8000/mcp"
   GRAFANA_MCP_TIMEOUT_SECONDS: "30"
+  VAULT_MCP_URL: "http://kagent-vault-mcp.kagent.svc.cluster.local:8080/mcp"
+  VAULT_MCP_TIMEOUT_SECONDS: "30"
+  VAULT_MCP_MOUNT: "apps"
+  VAULT_MCP_WRITES_ENABLED: "false"
   KEYCLOAK_TOKEN_URL: "http://auth.munish.org/auth/realms/am-preprod-realm/protocol/openid-connect/token"

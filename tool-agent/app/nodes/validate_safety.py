@@ -13,7 +13,12 @@ async def validate_safety_node(state: ToolAgentState) -> ToolAgentState:
     request = state["request"]
     request_id = state["request_id"]
     try:
-        validate_intent(intent, request_read_only=request.read_only)
+        validate_intent(
+            intent,
+            request_read_only=request.read_only,
+            write_confirmation=state.get("write_confirmation"),
+            is_execute_path=state.get("parse_source") == "structured",
+        )
     except SafetyError as exc:
         await tracer.span(
             request_id,

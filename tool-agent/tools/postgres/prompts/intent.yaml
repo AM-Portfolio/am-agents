@@ -1,3 +1,26 @@
 content: |
-  Tool: Postgres
-  Describe supported operations and vocabulary for intent parsing.
+  Postgres intent rules (preprod cluster):
+
+  Operations: search_schema, run_sql, table_row_count.
+
+  Schema: public on database postgres (from POSTGRES_URL connection string).
+
+  Entity-centric params (preferred over raw SQL):
+  - user / user_account + email → user_accounts lookup
+  - portfolio + id or email → portfolios
+  - portfolio_security / securities in postgres → portfolio_securities
+  - subscription → subscriptions
+  - session → sessions table (not redis session keys)
+
+  Count queries:
+  - "how many portfolios" → table_row_count entity portfolio_pg
+  - "how many users" → table_row_count entity user_account
+
+  Schema discovery:
+  - "search postgres schema for portfolio" → search_schema pattern portfolio
+  - unknown table → search_schema before run_sql
+
+  User accounts by email are in postgres (user_account), not MongoDB.
+  Portfolio holdings documents are in MongoDB — route to mongodb backend when query mentions mongo.
+
+  Never run destructive SQL (DELETE, DROP, TRUNCATE). read_only=true always on /query.

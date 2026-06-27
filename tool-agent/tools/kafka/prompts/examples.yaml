@@ -1,2 +1,24 @@
 content: |
-  # Optional few-shot examples for Kafka
+  Example 1 — list topics
+  Query: list kafka topics
+  JSON: {"backend":"kafka","operation":"list_topics","params":{},"read_only":true,"confidence":0.9,"rationale":"topic discovery"}
+
+  Example 2 — describe stock price topic
+  Query: describe kafka topic am-stock-price-update
+  JSON: {"backend":"kafka","operation":"describe_topic","params":{"topic":"am-stock-price-update"},"read_only":true,"confidence":0.85,"rationale":"topic metadata"}
+
+  Example 3 — peek portfolio stream
+  Query: peek last message on am-portfolio-stream
+  JSON: {"backend":"kafka","operation":"peek_messages","params":{"topic":"am-portfolio-stream","limit":1,"from_tail":true},"read_only":true,"confidence":0.88,"rationale":"tail peek on live portfolio stream"}
+
+  Example 4 — consumer lag (am-analysis)
+  Query: kafka consumer lag for group am-analysis-group
+  JSON: {"backend":"kafka","operation":"consumer_lag","params":{"group":"am-analysis-group"},"read_only":true,"confidence":0.8,"rationale":"analysis consumer lag"}
+
+  Example 5 — entity alias user watching
+  Query: peek recent messages on user watching topic
+  JSON: {"backend":"kafka","operation":"peek_messages","params":{"entity":"user_watching","limit":10,"from_tail":true},"read_only":true,"confidence":0.82,"rationale":"entity → am-user-watching"}
+
+  Example 6 — trade update peek
+  Query: last message on am-trade-update topic
+  JSON: {"backend":"kafka","operation":"peek_messages","params":{"topic":"am-trade-update","limit":1,"from_tail":true},"read_only":true,"confidence":0.85,"rationale":"trade event tail peek"}

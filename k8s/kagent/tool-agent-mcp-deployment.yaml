@@ -1,0 +1,87 @@
+# HTTP MCP bridge for kagent RemoteMCPServer -> tool-agent REST/SSE
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: am-tool-agent-mcp
+  namespace: kagent
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: am-tool-agent-mcp
+  namespace: kagent
+  labels:
+    app: am-tool-agent-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: am-tool-agent-mcp
+  template:
+    metadata:
+      labels:
+        app: am-tool-agent-mcp
+    spec:
+      serviceAccountName: am-tool-agent-mcp
+      containers:
+        - name: mcp
+          image: python:3.12-slim
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args:
+            - pip install -q mcp httpx && exec python /app/scripts/mcp_http_server.py
+          volumeMounts:
+            - name: bridge-scripts
+              mountPath: /app/scripts
+              readOnly: true
+          env:
+            - name: TOOL_AGENT_BASE_URL
+              value: http://am-tool-agent.am-apps-preprod.svc.cluster.local:8141
+            - name: TOOL_AGENT_CALLER
+              value: kagent-ui
+            - name: TOOL_AGENT_MCP_USE_STREAM
+              value: "true"
+            - name: TOOL_AGENT_MCP_HOST
+              value: "0.0.0.0"
+            - name: TOOL_AGENT_MCP_PORT
+              value: "8085"
+          ports:
+            - name: http
+              containerPort: 8085
+          readinessProbe:
+            tcpSocket:
+              port: 8085
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8085
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: bridge-scripts
+          configMap:
+            name: am-tool-agent-mcp-bridge
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: am-tool-agent-mcp
+  namespace: kagent
+  labels:
+    app: am-tool-agent-mcp
+spec:
+  selector:
+    app: am-tool-agent-mcp
+  ports:
+    - name: http
+      port: 8085
+      targetPort: 8085

@@ -90,3 +90,100 @@ curl -sS -X POST https://am.asrax.in/tools/api/v1/tools/plan \
 
 - Traefik `strip-prefix-apps` must include `/tools`
 - If Python gets Cloudflare 1010, use PowerShell `Invoke-RestMethod` or the stdio bridge (often works)
+
+## Multi-agent HTTP contract
+
+Programmatic agents (orchestrator, fin-agent, k8s-ops, etc.) should call tool-agent **directly over HTTP**, not via the stdio bridge.
+
+### Required headers and body fields
+
+| Field | Required for agents | Purpose |
+|-------|---------------------|---------|
+| `backend` | Yes when `X-Agent-Caller` is set | Routes parse_rules to the correct plugin (`TOOL_AGENT_REQUIRE_BACKEND_FOR_AGENTS=true` in preprod) |
+| `X-Agent-Caller` | Recommended | Audit trail + Langfuse `caller:{name}` tags; enables confidence policy |
+| `read_only` | Default `true` on `/query` | Blocks writes unless `/execute` with confirmation |
+
+### Recommended flow
+
+1. **`POST /api/v1/tools/plan`** — parse intent + resolve params without executing. Review `intent`, `confidence_ok`, and `resolved_params`.
+2. **`POST /api/v1/tools/execute`** — run structured intent from plan (best for vault writes and exact params).
+3. **`POST /api/v1/tools/query`** — one-shot NL for read-only when rules cover the query.
+
+### Confidence policy
+
+When `X-Agent-Caller` is set, `/query` rejects intents below `TOOL_AGENT_INTENT_MIN_CONFIDENCE` (0.55 in preprod helm, 0.75 default in code). Low-confidence rule matches fall through to LLM when `LLM_INTENT_ENABLED=true`.
+
+### In-cluster base URL
+
+```
+http://am-tool-agent.am-apps-preprod.svc.cluster.local:8141
+```
+
+### Example (agent caller)
+
+```bash
+curl -sS -X POST https://am.asrax.in/tools/api/v1/tools/plan \
+  -H "Content-Type: application/json" \
+  -H "X-Agent-Caller: fin-agent" \
+  -d '{"query":"read secret preprod postgress","backend":"vault","read_only":true}'
+```
+
+### Query corpus (regression examples)
+
+Canonical NL examples live in [`scripts/query_corpus.yaml`](../scripts/query_corpus.yaml):
+
+```bash
+python scripts/run_query_corpus.py --local
+python scripts/run_query_corpus.py --preprod --mode plan --agent-caller corpus-test
+```
+
+### Backend cheat sheet
+
+| Use case | Backend |
+|----------|---------|
+| Document portfolios, trades, market data | `mongodb` |
+| Relational users, subscriptions, SQL counts | `postgres` |
+| Ephemeral session/cache keys | `redis` |
+| Event streaming, topic peek/lag | `kafka` |
+| Vector collections, bug memory | `qdrant` |
+| Logs, metrics, dashboards | `grafana` |
+| Infra/service secrets | `vault` |
+
+## kagent UI (SRE ops)
+
+Unified agent **`am-infra-ops`** combines K8s tools + tool-agent MCP.
+
+Uses the same **`litellm-together`** model as `am-k8s-ops` (`together_ai/meta-llama/Meta-Llama-3-8B-Instruct-Lite`).
+
+```bash
+kubectl apply -f am-agents/k8s/kagent/tool-agent-mcp-deployment.yaml
+kubectl apply -f am-agents/k8s/kagent/remote-mcpserver-tool-agent.yaml
+kubectl apply -f am-agents/k8s/kagent/agent-am-infra-ops.yaml
+```
+
+Or: `.\deploy-tool-agent-kagent.ps1`
+
+Open `https://kagent.munish.org`, select **am-infra-ops**, use **Ctrl+Enter** to send.
+
+**Read-only infra prompt:** `list kafka topics` with `backend=kafka` (avoid embedding `read-only` in the query text — it was misparsed as a topic name before vNext).  
+Prefer the single MCP tool `tool_agent_plan_and_execute` (returns real topic names).
+
+See [`docs/MCP_CONTRACT.md`](MCP_CONTRACT.md) for portable MCP tool names.
+
+## IDE MCP (any editor)
+
+Same stdio bridge works in **Cursor, VS Code, Windsurf, Claude Desktop** — set `TOOL_AGENT_CALLER` per IDE (`vscode-mcp`, `windsurf-mcp`, etc.).
+
+## SSE streaming
+
+Stage-by-stage events for `/query`, `/plan`, `/execute`:
+
+```bash
+curl -N -X POST http://localhost:8141/api/v1/tools/plan/stream \
+  -H "Content-Type: application/json" \
+  -d '{"query":"list kafka topics","backend":"kafka","read_only":true}'
+```
+
+Event types: `stage`, `intent`, `resolved`, `result`, `token`, `done`, `error`.
+
+Disable via `TOOL_AGENT_STREAMING_ENABLED=false`. MCP bridge uses stream endpoints when `TOOL_AGENT_MCP_USE_STREAM=true`.

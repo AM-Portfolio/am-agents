@@ -30,6 +30,7 @@ class KafkaTool(BaseIntegrationTool):
         return self._adapter.available
 
     async def execute(self, intent: IntentDocument, *, read_only: bool, max_rows: int) -> Any:
+        safety.validate_tool_params(intent.operation, intent.params)
         return await self._adapter.execute(
             intent.operation,
             intent.params,

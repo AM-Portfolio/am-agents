@@ -4,6 +4,7 @@ from app.models.intent import IntentDocument
 from app.observability.tracer import tracer
 from app.state import ToolAgentState
 from tools._loader import get_tool
+from tools._shared.intent_trace import clear_resolve_trace, get_resolve_trace, merge_trace_metadata
 from tools._shared.resolve import ParamResolutionError, resolve_intent_params
 
 
@@ -23,6 +24,7 @@ async def resolve_params_node(state: ToolAgentState) -> ToolAgentState:
 
     tool = get_tool(intent.backend)
 
+    clear_resolve_trace()
     try:
         resolved, entity = resolve_intent_params(intent, query_text=query)
         if tool:
@@ -33,11 +35,16 @@ async def resolve_params_node(state: ToolAgentState) -> ToolAgentState:
     except Exception as exc:
         return {**state, "error": str(exc), "error_status": 400}
 
+    trace_meta = merge_trace_metadata(
+        {"step": "resolve_params"},
+        **get_resolve_trace(),
+    )
     await tracer.span(
         request_id,
         f"resolve params · {intent.backend}",
         input={"intent": intent.model_dump()},
         output={"params": resolved.params, "entity": entity},
+        metadata=trace_meta,
     )
     return {
         **state,
