@@ -56,6 +56,9 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+from app.plane_a import setup_plane_a
+setup_plane_a(app, application="am-ui-test-agent")
+
 # CORS Middleware
 app.add_middleware(
     CORSMiddleware,

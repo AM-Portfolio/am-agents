@@ -5,6 +5,8 @@ replicaCount: 1
 vault:
   enabled: true
   secretPaths:
+    otel:
+      path: "apps/data/preprod/infra/observability"
     mongodb:
       path: "apps/data/preprod/infra/mongodb"
     identity-oidc:

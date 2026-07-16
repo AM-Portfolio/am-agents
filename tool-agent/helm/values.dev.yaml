@@ -1,6 +1,26 @@
 environment: dev
 replicaCount: 1
 
+vault:
+  enabled: true
+  secretPaths:
+    otel:
+      path: "apps/data/dev/infra/observability"
+    postgres:
+      path: "apps/data/dev/infra/postgres"
+    mongodb:
+      path: "apps/data/dev/infra/mongodb"
+    redis:
+      path: "apps/data/dev/infra/redis"
+    kafka:
+      path: "apps/data/dev/infra/kafka"
+    identity-oidc:
+      path: "apps/data/dev/services/am-identity"
+    observability:
+      path: "apps/data/dev/services/am-mcp-gateway"
+    llm-api-keys:
+      path: "apps/data/dev/services/am-mcp-gateway"
+
 ingress:
   hosts:
     - host: am-dev.asrax.in

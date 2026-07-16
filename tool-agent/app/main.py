@@ -48,6 +48,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+from app.plane_a import setup_plane_a
+setup_plane_a(app, application="am-tool-agent")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

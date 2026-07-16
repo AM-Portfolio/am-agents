@@ -28,6 +28,7 @@ security:
 config: {}
 
 env:
+  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: "http://otel-collector.monitoring.svc.cluster.local:4318/v1/traces"
   APP_NAME: am-db-agent
   APP_PORT: "8140"
   LOG_FORMAT: json
@@ -83,3 +84,9 @@ ingress:
   annotations:
     kubernetes.io/ingress.class: "traefik"
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+
+# Plane A — Prometheus scrape
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8140"
+  prometheus.io/path: "/metrics"
