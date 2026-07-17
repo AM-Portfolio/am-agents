@@ -336,21 +336,40 @@ class FakeLlm:
 
 
 class FakeObservability:
-    """Lab ObservabilityPort — steer with VERIFY_FORCE_RESULT=passed|failed."""
+    """
+    Test ObservabilityPort only.
+
+    VERIFY_FORCE_RESULT=passed|failed steers outcome when env is lab-allowed.
+    When unset: fail closed (pass=False) so lab never auto-closes without real Prom.
+    """
 
     def query(self, *, query_ref: str, variables: dict[str, Any] | None = None) -> dict[str, Any]:
         import os
 
-        _ = variables
-        force = os.getenv("VERIFY_FORCE_RESULT", "passed").strip().lower()
-        failed = force in {"failed", "fail", "false", "0"}
-        if "error_rate" in query_ref or query_ref.endswith("metrics"):
-            if failed:
-                return {"value": 0.42, "threshold": 0.01, "pass": False, "query_ref": query_ref}
-            return {"value": 0.0, "threshold": 0.01, "pass": True, "query_ref": query_ref}
-        if failed:
-            return {"count": 5, "pass": False, "query_ref": query_ref}
-        return {"count": 0, "pass": True, "query_ref": query_ref}
+        from am_platform_ports.agent_identity import verify_force_allowed
+
+        variables = variables or {}
+        env = str(variables.get("env") or "lab").strip().lower() or "lab"
+        force = os.getenv("VERIFY_FORCE_RESULT", "").strip().lower()
+        if force and verify_force_allowed(env):
+            failed = force in {"failed", "fail", "false", "0"}
+            passed = not failed
+        else:
+            # No force (or force outside lab) → fail closed
+            return {
+                "pass": False,
+                "query_ref": query_ref,
+                "env": env,
+                "error": "FakeObservability: set OBSERVE_PROVIDER=prometheus for live verify "
+                "or VERIFY_FORCE_RESULT=passed|failed for unit tests only",
+            }
+        if "error_rate" in query_ref or query_ref.endswith("metrics") or "endpoints" in query_ref:
+            if not passed:
+                return {"value": 0.0, "threshold": 0.01, "pass": False, "query_ref": query_ref, "env": env}
+            return {"value": 1.0, "threshold": 0.01, "pass": True, "query_ref": query_ref, "env": env}
+        if not passed:
+            return {"count": 5, "pass": False, "query_ref": query_ref, "env": env}
+        return {"count": 0, "pass": True, "query_ref": query_ref, "env": env}
 
 
 class FakeRunStore:

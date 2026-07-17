@@ -74,6 +74,12 @@ Phase 0b can proceed in parallel (ports need no Temporal). Phase 1 workflows nee
 Enable in relay: `TEMPORAL_AGENT_ENABLED=1` + `TEMPORAL_HOST=localhost:7233` (see `.env.example`).
 OP: `OPENPROJECT_URL` + `OPENPROJECT_API_TOKEN` (plaintext) + `OPENPROJECT_PROJECT_ID=3` (ASRAX FinTech, type Task=1); default assignee user `5` (munish — project member). Live: `op:wp:372`.
 
+**Multi-env + IT-Support-agent (follow-on):**
+- [x] `AGENT_DISPLAY_NAME` stamps on Cliq/OP; env on subject/cards (`am_platform_ports.agent_identity`)
+- [x] `AGENT_AUTO_INFRA_ENVS` (prod excluded by default); `close_incident_ticket` on verify.passed / ignore
+- [ ] Ops: create OP user `IT-Support-agent` + dedicated Cliq zapikey; set token/webhook in vault
+- [ ] Cluster: enable Temporal on live `grafana-cliq-relay` for all Grafana envs
+
 ---
 
 ## Phase 2 — Docs + infra + verify

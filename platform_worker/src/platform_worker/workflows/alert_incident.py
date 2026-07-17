@@ -73,6 +73,8 @@ class AlertIncidentWorkflow:
         decision: dict[str, Any] | None = None,
         channel_ref: str = "cliq:lab",
         prior_attempts: list[Any] | None = None,
+        env: str = "",
+        alert: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         spawned = await workflow.execute_activity(
             vacts.spawn_verify_run,
@@ -93,6 +95,8 @@ class AlertIncidentWorkflow:
                 "verify_run_ref": self._verify_run_ref,
                 "incident_ref": tracking_id,
                 "worker_id": f"wf-{workflow.info().workflow_id}",
+                "env": env,
+                "alert": alert or {},
             },
             start_to_close_timeout=verify_timeout,
             retry_policy=retry,
@@ -117,6 +121,7 @@ class AlertIncidentWorkflow:
                     "run_ref": self._run_ref,
                     "ticket_ref": self._ticket_ref,
                     "channel_ref": channel_ref,
+                    "env": env,
                     "decision": decision or {"decision": "auto_infra", "rationale": closer_prefix},
                     "attempts": attempts,
                     "failure_reason": f"verify gate failed: {verify_result['status']}",
@@ -129,6 +134,24 @@ class AlertIncidentWorkflow:
             await workflow.wait_condition(lambda: self._approved or self._resolved or self._closed)
             final_status = "passed"
             closer = f"{closer_prefix}.unsolved.human"
+        else:
+            await workflow.execute_activity(
+                aan.close_incident_ticket,
+                {
+                    "run_ref": self._run_ref,
+                    "ticket_ref": self._ticket_ref,
+                    "channel_ref": channel_ref,
+                    "env": env,
+                    "closer": closer,
+                    "decision": (decision or {}).get("decision") or closer_prefix,
+                    "note": (
+                        "Verify passed. Ticket closed by IT-Support-agent. "
+                        "Grafana alert may still fire until resolved."
+                    ),
+                },
+                start_to_close_timeout=short,
+                retry_policy=retry,
+            )
 
         await workflow.execute_activity(
             acts.mark_run_status,
@@ -141,6 +164,7 @@ class AlertIncidentWorkflow:
                     "verify_status": self._verify_status,
                     "decision": self._decision,
                     "closer": closer,
+                    "env": env,
                 },
             },
             start_to_close_timeout=short,
@@ -155,6 +179,7 @@ class AlertIncidentWorkflow:
             "decision": self._decision,
             "status": final_status,
             "closer": closer,
+            "env": env,
         }
 
     @workflow.run
@@ -201,6 +226,7 @@ class AlertIncidentWorkflow:
             retry_policy=retry,
         )
         self._ticket_ref = ticket["ticket_ref"]
+        env = str(ticket.get("env") or (alert.get("labels") or {}).get("env") or "")
 
         await workflow.execute_activity(
             acts.notify_ticket_created,
@@ -209,8 +235,9 @@ class AlertIncidentWorkflow:
                 "ticket_ref": ticket["ticket_ref"],
                 "channel_ref": ticket["channel_ref"],
                 "incident_ref": tracking_id,
+                "env": env,
                 "title": f"[{triage['priority']}] {triage.get('summary', 'Alert')}",
-                "body": f"Ticket {ticket['ticket_ref']} assigned to {ticket['assignee_ref']}",
+                "body": f"Ticket {ticket['ticket_ref']} assigned to {ticket['assignee_ref']} env={env}",
             },
             start_to_close_timeout=short,
             retry_policy=retry,
@@ -224,6 +251,7 @@ class AlertIncidentWorkflow:
                 retry_policy=retry,
             )
             self._decision = decision.get("decision")
+            env = str(decision.get("env") or env)
 
             await workflow.execute_activity(
                 aan.apply_ticket_decision,
@@ -232,12 +260,27 @@ class AlertIncidentWorkflow:
                     "ticket_ref": self._ticket_ref,
                     "channel_ref": ticket["channel_ref"],
                     "decision": decision,
+                    "env": env,
                 },
                 start_to_close_timeout=short,
                 retry_policy=retry,
             )
 
             if decision.get("decision") == "ignore":
+                await workflow.execute_activity(
+                    aan.close_incident_ticket,
+                    {
+                        "run_ref": self._run_ref,
+                        "ticket_ref": self._ticket_ref,
+                        "channel_ref": ticket["channel_ref"],
+                        "env": env,
+                        "closer": "ignore",
+                        "decision": "ignore",
+                        "note": "Ignored as noise. Ticket closed by IT-Support-agent.",
+                    },
+                    start_to_close_timeout=short,
+                    retry_policy=retry,
+                )
                 self._closed = True
                 return {
                     "run_ref": self._run_ref,
@@ -245,6 +288,7 @@ class AlertIncidentWorkflow:
                     "decision": "ignore",
                     "status": "cancelled",
                     "closer": "ignore",
+                    "env": env,
                 }
 
             if decision.get("decision") == "needs_human":
@@ -258,6 +302,7 @@ class AlertIncidentWorkflow:
                             "ticket_ref": self._ticket_ref,
                             "decision": "needs_human",
                             "closer": "human.approve_or_resolve",
+                            "env": env,
                         },
                     },
                     start_to_close_timeout=short,
@@ -270,6 +315,7 @@ class AlertIncidentWorkflow:
                     "decision": "needs_human",
                     "status": "passed",
                     "closer": "human.approve_or_resolve",
+                    "env": env,
                 }
 
             # auto_infra → handoff kagent + allowlisted tools → verify (or escalate if unsolved)
@@ -292,6 +338,7 @@ class AlertIncidentWorkflow:
                         "run_ref": self._run_ref,
                         "ticket_ref": self._ticket_ref,
                         "channel_ref": ticket["channel_ref"],
+                        "env": env,
                         "decision": decision,
                         "attempts": infra_out.get("attempts") or [],
                         "failure_reason": infra_out.get("failure_reason") or "auto_infra tools failed",
@@ -313,6 +360,7 @@ class AlertIncidentWorkflow:
                             "escalated": True,
                             "closer": "auto_infra.unsolved.human",
                             "failure_reason": infra_out.get("failure_reason"),
+                            "env": env,
                         },
                     },
                     start_to_close_timeout=short,
@@ -327,6 +375,7 @@ class AlertIncidentWorkflow:
                     "escalated": True,
                     "closer": "auto_infra.unsolved.human",
                     "failure_reason": infra_out.get("failure_reason"),
+                    "env": env,
                 }
 
             await workflow.execute_activity(
@@ -335,6 +384,7 @@ class AlertIncidentWorkflow:
                     "ticket_ref": self._ticket_ref,
                     "decision": decision,
                     "actions_ran": infra_out.get("actions_ran") or [],
+                    "env": env,
                 },
                 start_to_close_timeout=short,
                 retry_policy=retry,
@@ -348,6 +398,8 @@ class AlertIncidentWorkflow:
                 decision=decision,
                 channel_ref=ticket["channel_ref"],
                 prior_attempts=infra_out.get("attempts") or [],
+                env=env,
+                alert=alert,
             )
 
         # Legacy path: wait resolve → infra mark_fixed → verify
@@ -370,4 +422,7 @@ class AlertIncidentWorkflow:
             short=short,
             verify_timeout=verify_timeout,
             closer_prefix="legacy",
+            env=env,
+            alert=alert,
+            channel_ref=ticket["channel_ref"],
         )

@@ -116,7 +116,11 @@ class OpenProjectDirectory:
         return None
 
     def resolve(self, *, labels: dict[str, str], priority: str) -> DirectoryHit:
+        from am_platform_ports.agent_identity import cliq_channel_for_env, normalize_alert_env
+
         _ = priority
+        labels = {str(k): str(v) for k, v in (labels or {}).items()}
+        env = normalize_alert_env(labels=labels)
         team = labels.get("team") or labels.get("service") or "lab"
         members = self._load_members()
         if not members:
@@ -136,7 +140,7 @@ class OpenProjectDirectory:
 
         # 2) team/service via map → login/id that must exist on project
         if chosen is None:
-            for key in ("team", "service"):
+            for key in ("team", "service", "env"):
                 val = (labels.get(key) or "").strip().lower()
                 if val and val in self._map:
                     chosen = self._find_member(self._map[val])
@@ -156,5 +160,5 @@ class OpenProjectDirectory:
         return DirectoryHit(
             assignee_ref=f"op:user:{chosen['id']}",
             team=team,
-            channel_ref=self._channel,
+            channel_ref=cliq_channel_for_env(env),
         )

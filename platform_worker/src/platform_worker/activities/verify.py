@@ -85,11 +85,32 @@ async def claim_and_execute_verify(payload: dict[str, Any]) -> dict[str, Any]:
                 )
             )
             try:
+                alert = payload.get("alert") or {}
+                labels = dict(alert.get("labels") or {})
+                env = (
+                    payload.get("env")
+                    or labels.get("env")
+                    or alert.get("env")
+                    or ""
+                )
                 result = ports.observe.query(
                     query_ref=query_ref,
-                    variables={"incident_ref": payload.get("incident_ref")},
+                    variables={
+                        "incident_ref": payload.get("incident_ref"),
+                        "env": env,
+                        "labels": labels,
+                        "namespace": labels.get("namespace") or "",
+                        "service": labels.get("service") or labels.get("application") or "",
+                        "deployment": labels.get("deployment") or labels.get("service") or "",
+                        "pod": labels.get("pod") or "",
+                        "alertname": labels.get("alertname") or "",
+                        "value_string": alert.get("value_string") or "",
+                    },
                 )
-                ok = bool(result.get("pass", False))
+                # Fail closed: missing/false pass must not close the incident
+                ok = result.get("pass") is True
+                if result.get("error"):
+                    ok = False
                 result_ref = None
                 try:
                     doc = ports.docs.put(

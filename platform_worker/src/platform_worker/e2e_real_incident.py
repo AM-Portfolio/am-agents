@@ -65,20 +65,27 @@ def _payload(tracking_seed: str) -> dict:
 
 async def main() -> int:
     # Refuse silent mock steering
-    for banned in ("ALERT_FORCE_DECISION", "INFRA_FORCE_FAIL"):
+    for banned in ("ALERT_FORCE_DECISION", "INFRA_FORCE_FAIL", "VERIFY_FORCE_RESULT"):
         if os.getenv(banned, "").strip():
             print(f"REFUSE: unset {banned} for real E2E (currently set)")
             return 2
+
+    observe = os.getenv("OBSERVE_PROVIDER", "fake").strip().lower()
+    print(f"OBSERVE_PROVIDER={observe}")
+    if observe not in {"prometheus", "prom", "grafana", "tool_agent", "tool-agent"}:
+        print("REFUSE: set OBSERVE_PROVIDER=prometheus (or tool_agent) for real verify")
+        return 2
+    if observe in {"prometheus", "prom", "grafana"} and not (
+        os.getenv("TOOL_AGENT_URL") or os.getenv("TOOL_AGENT_BASE_URL") or ""
+    ).strip():
+        print("NOTE: TOOL_AGENT_URL unset — redis verify uses Prometheus only")
+    elif (os.getenv("TOOL_AGENT_URL") or "").strip():
+        print(f"TOOL_AGENT_URL={os.getenv('TOOL_AGENT_URL')} (redis verify via tool-agent)")
 
     llm = os.getenv("LLM_PROVIDER", "fake").strip().lower()
     print(f"LLM_PROVIDER={llm}")
     if llm == "fake":
         print("WARNING: LLM_PROVIDER=fake — decisions are canned, not model-generated")
-    if os.getenv("VERIFY_FORCE_RESULT", "").strip():
-        print(
-            f"NOTE: VERIFY_FORCE_RESULT={os.getenv('VERIFY_FORCE_RESULT')} "
-            "(observe still steered; not live Grafana metrics)"
-        )
 
     seed = uuid.uuid4().hex[:8]
     tracking_id = f"AM-REAL-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{seed.upper()}"

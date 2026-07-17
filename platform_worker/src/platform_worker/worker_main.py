@@ -74,6 +74,7 @@ async def run_worker() -> None:
             aan.handoff_infra_agent,
             aan.escalate_unsolved,
             aan.write_resolution_note,
+            aan.close_incident_ticket,
             iacts.plan_and_execute_fix,
             vacts.spawn_verify_run,
             vacts.claim_and_execute_verify,

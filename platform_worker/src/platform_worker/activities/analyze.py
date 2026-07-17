@@ -43,11 +43,15 @@ def analysis_enabled() -> bool:
 @activity.defn
 async def analyze_incident(payload: dict[str, Any]) -> dict[str, Any]:
     """LLM analyze → policy enforce → IncidentDecision dict."""
+    from am_platform_ports.agent_identity import ensure_env_label, normalize_alert_env
+
     ports = get_ports()
     run_ref = payload["run_ref"]
     alert = ports.redactor.scrub(payload=payload.get("alert") or {})
     if not isinstance(alert, dict):
         alert = {}
+    alert = ensure_env_label(alert)
+    env = normalize_alert_env(alert)
 
     ports.runs.upsert_step(
         UpsertStepRequest(
@@ -84,7 +88,7 @@ async def analyze_incident(payload: dict[str, Any]) -> dict[str, Any]:
         }),
     }
     raw = ports.llm.complete(prompt_key="incident.analyze", variables=variables)
-    decision = enforce_decision(_parse_decision_json(raw))
+    decision = enforce_decision(_parse_decision_json(raw), env=env)
 
     ports.runs.upsert_step(
         UpsertStepRequest(
@@ -95,45 +99,64 @@ async def analyze_incident(payload: dict[str, Any]) -> dict[str, Any]:
             result_ref=decision.decision,
         )
     )
-    return decision.model_dump()
+    out = decision.model_dump()
+    out["env"] = env
+    return out
 
 
 @activity.defn
 async def apply_ticket_decision(payload: dict[str, Any]) -> dict[str, str]:
     """Comment decision onto ticket + optional Cliq escalate for needs_human."""
+    from am_platform_ports.agent_identity import agent_prefix, normalize_alert_env
+    from am_platform_ports.schemas.core import NotifyCard
+
     ports = get_ports()
     run_ref = payload["run_ref"]
     ticket_ref = payload["ticket_ref"]
     decision = IncidentDecision.model_validate(payload["decision"])
     channel_ref = payload.get("channel_ref") or "cliq:lab"
+    env = str(payload.get("env") or normalize_alert_env(labels={"env": payload.get("env") or ""}))
+    if env == "unknown" and payload.get("decision", {}).get("env"):
+        env = str(payload["decision"]["env"])
 
     body = decision.ticket_update or decision.rationale or decision.decision
-    ports.tickets.comment(ticket_ref=ticket_ref, body=f"[agent:{decision.decision}] {body}")
+    ports.tickets.comment(
+        ticket_ref=ticket_ref,
+        body=f"{agent_prefix(env=env, decision=decision.decision)} {body}",
+    )
 
     if decision.decision == "needs_human":
-        from am_platform_ports.schemas.core import NotifyCard
-
         ports.notifier.send_card(
             channel_ref=channel_ref,
             card=NotifyCard(
                 event="needs_human",
                 title="Needs human (code/service)",
                 body=decision.rationale or body,
-                refs={"ticket_ref": ticket_ref, "run_ref": run_ref},
+                refs={
+                    "ticket_ref": ticket_ref,
+                    "run_ref": run_ref,
+                    "env": env,
+                    "decision": decision.decision,
+                },
             ),
         )
         ports.runs.update_run_status(
             run_ref=run_ref,
             status=RunStatus.NEEDS_HUMAN,
-            summary={"decision": decision.decision, "ticket_ref": ticket_ref},
+            summary={"decision": decision.decision, "ticket_ref": ticket_ref, "env": env},
         )
     elif decision.decision == "ignore":
         ports.runs.update_run_status(
             run_ref=run_ref,
             status=RunStatus.CANCELLED,
-            summary={"decision": "ignore", "rationale": decision.rationale, "ticket_ref": ticket_ref},
+            summary={
+                "decision": "ignore",
+                "rationale": decision.rationale,
+                "ticket_ref": ticket_ref,
+                "env": env,
+            },
         )
-    return {"ok": "1"}
+    return {"ok": "1", "env": env}
 
 
 @activity.defn
@@ -261,12 +284,14 @@ async def handoff_infra_agent(payload: dict[str, Any]) -> dict[str, Any]:
 @activity.defn
 async def escalate_unsolved(payload: dict[str, Any]) -> dict[str, str]:
     """Document attempts + why unsolved; ticket + Cliq + RunStore → needs_human."""
+    from am_platform_ports.agent_identity import agent_prefix
     from am_platform_ports.schemas.core import NotifyCard
 
     ports = get_ports()
     run_ref = payload["run_ref"]
     ticket_ref = payload["ticket_ref"]
     channel_ref = payload.get("channel_ref") or "cliq:lab"
+    env = str(payload.get("env") or "")
     decision = IncidentDecision.model_validate(payload.get("decision") or {"decision": "auto_infra"})
     attempts = payload.get("attempts") or []
     failure_reason = str(payload.get("failure_reason") or "unknown")
@@ -300,7 +325,7 @@ async def escalate_unsolved(payload: dict[str, Any]) -> dict[str, str]:
         note = str(note.get("note") or note)
 
     body = (
-        f"[agent:unsolved→human]\n"
+        f"{agent_prefix(env=env or None, decision='unsolved→human')}\n"
         f"Accepted as: {decision.decision}\n"
         f"Why accepted: {decision.rationale}\n"
         f"What was tried: {json.dumps(attempts, default=str)}\n"
@@ -315,7 +340,12 @@ async def escalate_unsolved(payload: dict[str, Any]) -> dict[str, str]:
             event="needs_human",
             title="Agent could not solve — needs developer",
             body=f"{failure_reason}\n{note}"[:1500],
-            refs={"ticket_ref": ticket_ref, "run_ref": run_ref},
+            refs={
+                "ticket_ref": ticket_ref,
+                "run_ref": run_ref,
+                "env": env,
+                "decision": "unsolved",
+            },
         ),
     )
     ports.runs.update_run_status(
@@ -328,6 +358,7 @@ async def escalate_unsolved(payload: dict[str, Any]) -> dict[str, str]:
             "attempts": attempts,
             "verify_status": verify_status or None,
             "ticket_ref": ticket_ref,
+            "env": env or None,
         },
     )
     ports.runs.upsert_step(
@@ -344,8 +375,11 @@ async def escalate_unsolved(payload: dict[str, Any]) -> dict[str, str]:
 
 @activity.defn
 async def write_resolution_note(payload: dict[str, Any]) -> dict[str, str]:
+    from am_platform_ports.agent_identity import agent_prefix
+
     ports = get_ports()
     ticket_ref = payload["ticket_ref"]
+    env = str(payload.get("env") or "")
     decision = IncidentDecision.model_validate(payload["decision"])
     note = decision.resolution_note or decision.rationale or "Resolved via auto_infra"
     prompt = ports.prompts.get(prompt_key="incident.resolution_note")
@@ -363,5 +397,61 @@ async def write_resolution_note(payload: dict[str, Any]) -> dict[str, str]:
         "rationale": decision.rationale,
     }
     text = ports.llm.complete(prompt_key="incident.resolution_note", variables=variables)
-    ports.tickets.comment(ticket_ref=ticket_ref, body=f"[resolution] {text}")
+    ports.tickets.comment(
+        ticket_ref=ticket_ref,
+        body=f"{agent_prefix(env=env or None, decision='resolution')} {text}",
+    )
     return {"note": text}
+
+
+@activity.defn
+async def close_incident_ticket(payload: dict[str, Any]) -> dict[str, str]:
+    """Close OpenProject WP + Cliq closed card (ticket/run close — not Grafana silence)."""
+    from am_platform_ports.agent_identity import agent_prefix
+    from am_platform_ports.schemas.core import NotifyCard
+
+    ports = get_ports()
+    ticket_ref = payload["ticket_ref"]
+    run_ref = payload.get("run_ref") or ""
+    channel_ref = payload.get("channel_ref") or "cliq:lab"
+    env = str(payload.get("env") or "")
+    closer = str(payload.get("closer") or "closed")
+    decision = str(payload.get("decision") or closer)
+    note = str(
+        payload.get("note")
+        or "Incident run closed. Grafana alert may still fire until resolved/silenced."
+    )
+
+    ports.tickets.comment(
+        ticket_ref=ticket_ref,
+        body=(
+            f"{agent_prefix(env=env or None, decision=decision)} closing ticket "
+            f"(closer={closer}). {note}"
+        ),
+    )
+    try:
+        ports.tickets.update_status(ticket_ref=ticket_ref, status="closed")
+        status = "closed"
+    except Exception as exc:  # noqa: BLE001
+        status = f"close_failed:{exc}"[:200]
+        ports.tickets.comment(
+            ticket_ref=ticket_ref,
+            body=f"{agent_prefix(env=env or None)} could not set OP status closed: {status}",
+        )
+
+    ports.notifier.send_card(
+        channel_ref=channel_ref,
+        card=NotifyCard(
+            event="incident.closed",
+            title="Incident closed",
+            body=f"closer={closer}\n{note}"[:1500],
+            refs={
+                "ticket_ref": ticket_ref,
+                "run_ref": run_ref,
+                "env": env,
+                "decision": decision,
+                "closer": closer,
+            },
+        ),
+    )
+    return {"ticket_status": status, "closer": closer}

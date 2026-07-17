@@ -160,7 +160,28 @@ def build_triage():
 
 
 def build_observability():
-    return FakeObservability()
+    provider = os.getenv("OBSERVE_PROVIDER", "fake").strip().lower()
+    if provider in {"", "fake"}:
+        return FakeObservability()
+    if provider in {"tool_agent", "tool-agent"}:
+        from am_platform_adapters.providers.tool_agent import ToolAgentObservability
+
+        return ToolAgentObservability()
+    if provider in {"prometheus", "prom", "grafana"}:
+        from am_platform_adapters.providers.prometheus import PrometheusObservability
+
+        prom = PrometheusObservability()
+        # Prefer tool-agent for redis (and other domains it owns) when URL is set
+        tool_url = (os.getenv("TOOL_AGENT_URL") or os.getenv("TOOL_AGENT_BASE_URL") or "").strip()
+        if tool_url:
+            from am_platform_adapters.providers.tool_agent import (
+                PreferToolAgentObservability,
+                ToolAgentObservability,
+            )
+
+            return PreferToolAgentObservability(ToolAgentObservability(tool_url), prom)
+        return prom
+    raise NotImplementedError(f"OBSERVE_PROVIDER={provider} not wired yet")
 
 
 def build_infra_ops():

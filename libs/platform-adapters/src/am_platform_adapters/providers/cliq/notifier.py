@@ -19,6 +19,11 @@ def _webhook_for_channel(channel_ref: str) -> str:
             os.environ.get("ZOHO_CLIQ_LAB_WEBHOOK_URL", "").strip()
             or os.environ.get("ZOHO_CLIQ_WEBHOOK_URL", "").strip()
         )
+    if ref in {"cliq:prod", "prod", "amalretsdev"}:
+        return (
+            os.environ.get("ZOHO_CLIQ_PROD_WEBHOOK_URL", "").strip()
+            or os.environ.get("ZOHO_CLIQ_WEBHOOK_URL", "").strip()
+        )
     if ref in {"cliq:summary", "summary", "devsupport"}:
         return os.environ.get("ZOHO_CLIQ_SUMMARY_WEBHOOK_URL", "").strip()
     # Opaque channel_ref may itself be a webhook URL (rare; prefer env)
@@ -27,9 +32,23 @@ def _webhook_for_channel(channel_ref: str) -> str:
     return os.environ.get("ZOHO_CLIQ_WEBHOOK_URL", "").strip()
 
 
+def _stamp_title(card: NotifyCard) -> str:
+    from am_platform_ports.agent_identity import agent_display_name, agent_prefix
+
+    refs = card.refs or {}
+    env = str(refs.get("env") or "").strip() or None
+    decision = str(refs.get("decision") or card.event or "").strip() or None
+    name = agent_display_name()
+    title = (card.title or "").strip()
+    if title.startswith("[") and name in title[:80]:
+        return title
+    return f"{agent_prefix(env=env, decision=decision)} {title}".strip()
+
+
 def _card_to_cliq_payload(card: NotifyCard) -> dict[str, Any]:
     """Compact follow-up card — title + body + refs table."""
     refs = card.refs or {}
+    title = _stamp_title(card)
     rows = [{"Field": k, "Value": str(v)} for k, v in refs.items() if v]
     slides: list[dict[str, Any]] = []
     if card.body:
@@ -43,16 +62,16 @@ def _card_to_cliq_payload(card: NotifyCard) -> dict[str, Any]:
             }
         )
     payload: dict[str, Any] = {
-        "text": card.title,
+        "text": title,
         "card": {
-            "title": card.title[:100],
+            "title": title[:100],
             "theme": "modern-inline",
         },
     }
     if slides:
         payload["slides"] = slides
     # Fallback plain text if Cliq rejects rich cards
-    payload["_plain"] = f"{card.title}\n{card.body}\n" + "\n".join(
+    payload["_plain"] = f"{title}\n{card.body}\n" + "\n".join(
         f"{k}={v}" for k, v in refs.items()
     )
     return payload

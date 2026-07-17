@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 
+from am_platform_ports.agent_identity import auto_infra_envs
 from am_platform_ports.schemas.incident import IncidentDecision, ProposedAction
 
 # Safe k8s / lab tools only — no delete/destroy
@@ -55,10 +56,11 @@ def filter_actions(actions: list[ProposedAction]) -> tuple[list[ProposedAction],
     return allowed, rejected
 
 
-def enforce_decision(raw: IncidentDecision) -> IncidentDecision:
+def enforce_decision(raw: IncidentDecision, *, env: str | None = None) -> IncidentDecision:
     """
     Apply hard policy:
     - low confidence → needs_human
+    - auto_infra blocked outside AGENT_AUTO_INFRA_ENVS (prod excluded by default)
     - auto_infra with delete / empty / bad tools → needs_human
     - strip illegal actions
     """
@@ -69,6 +71,14 @@ def enforce_decision(raw: IncidentDecision) -> IncidentDecision:
     if raw.confidence < _min_confidence() and decision != "ignore":
         decision = "needs_human"
         rationale = f"{rationale} [policy: low confidence {raw.confidence}]".strip()
+
+    if decision == "auto_infra" and env and env not in auto_infra_envs():
+        decision = "needs_human"
+        rationale = (
+            f"{rationale} [policy: auto_infra not enabled for env={env}; "
+            f"allowed={sorted(auto_infra_envs())}]"
+        ).strip()
+        actions = []
 
     if decision == "auto_infra":
         if rejected and not actions:

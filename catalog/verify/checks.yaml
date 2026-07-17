@@ -1,10 +1,11 @@
-# Verify check_ref templates (Phase 2) — catalog data only
+# Gate A verify checks — executed via ObservabilityPort (Prometheus when OBSERVE_PROVIDER=prometheus)
+# Incident is only closed when these pass against live metrics (never VERIFY_FORCE on the live path).
 checks:
-  - check_ref: verify.metrics.error_rate
+  - check_ref: verify.k8s.endpoints.ready
     kind: metrics
-    query_ref: grafana.prom.error_rate
-    pass_when: "value < threshold"
-  - check_ref: verify.logs.no_fatal
-    kind: logs
+    query_ref: k8s.endpoints.ready
+    pass_when: "value > 0"
+  - check_ref: verify.service.alive
+    kind: metrics
     query_ref: grafana.loki.no_fatal
-    pass_when: "count == 0"
+    pass_when: "value == 1"

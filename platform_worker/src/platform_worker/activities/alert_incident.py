@@ -34,8 +34,11 @@ async def create_incident_run(payload: dict[str, Any]) -> dict[str, str]:
 
 @activity.defn
 async def triage_alert(payload: dict[str, Any]) -> dict[str, Any]:
+    from am_platform_ports.agent_identity import ensure_env_label
+
     ports = get_ports()
     run_ref = payload["run_ref"]
+    alert = ensure_env_label(payload.get("alert") or {})
     ports.runs.upsert_step(
         UpsertStepRequest(
             step_ref=f"{run_ref}:triage",
@@ -47,7 +50,15 @@ async def triage_alert(payload: dict[str, Any]) -> dict[str, Any]:
     )
     # Prompt key only — content from catalog/registry, not inline bodies
     _ = ports.prompts.get(prompt_key="triage.default")
-    result = ports.triage.classify(alert_payload=payload.get("alert") or {})
+    result = ports.triage.classify(alert_payload=alert)
+    out = result.model_dump()
+    # Ensure labels.env survives triage even if classifier drops it
+    labels = dict(out.get("labels") or alert.get("labels") or {})
+    labels["env"] = alert["labels"]["env"]
+    out["labels"] = labels
+    out["env"] = labels["env"]
+    if not out.get("summary"):
+        out["summary"] = alert.get("summary") or "Alert"
     ports.runs.upsert_step(
         UpsertStepRequest(
             step_ref=f"{run_ref}:triage",
@@ -56,14 +67,26 @@ async def triage_alert(payload: dict[str, Any]) -> dict[str, Any]:
             status=StepStatus.PASSED,
         )
     )
-    return result.model_dump()
+    return out
 
 
 @activity.defn
 async def create_and_assign_ticket(payload: dict[str, Any]) -> dict[str, str]:
+    from am_platform_ports.agent_identity import (
+        agent_prefix,
+        ensure_env_label,
+        title_with_env,
+    )
+
     ports = get_ports()
     run_ref = payload["run_ref"]
-    triage = payload["triage"]
+    triage = dict(payload.get("triage") or {})
+    alert = ensure_env_label(payload.get("alert") or {})
+    labels = dict(triage.get("labels") or alert.get("labels") or {})
+    env = str(labels.get("env") or alert.get("env") or "unknown")
+    labels["env"] = env
+    triage["labels"] = labels
+
     ports.runs.upsert_step(
         UpsertStepRequest(
             step_ref=f"{run_ref}:ticket",
@@ -73,18 +96,23 @@ async def create_and_assign_ticket(payload: dict[str, Any]) -> dict[str, str]:
             bump_attempts=True,
         )
     )
-    hit = ports.directory.resolve(labels=triage.get("labels") or {}, priority=triage["priority"])
+    hit = ports.directory.resolve(labels=labels, priority=triage.get("priority") or "P3")
+    title = title_with_env(env, triage.get("summary") or alert.get("summary") or "Alert")
     ticket = ports.tickets.create(
-        title=triage.get("summary") or "Alert",
-        description=str(payload.get("alert") or {}),
-        priority=triage["priority"],
-        labels=triage.get("labels") or {},
+        title=title,
+        description=str(alert),
+        priority=triage.get("priority") or "P3",
+        labels=labels,
     )
     ports.tickets.assign(ticket_ref=ticket.ticket_ref, assignee_ref=hit.assignee_ref)
+    ports.tickets.comment(
+        ticket_ref=ticket.ticket_ref,
+        body=f"{agent_prefix(env=env)} intake — assignee {hit.assignee_ref}",
+    )
     ports.runs.update_run_status(
         run_ref=run_ref,
         status=RunStatus.RUNNING,
-        summary={"ticket_ref": ticket.ticket_ref},
+        summary={"ticket_ref": ticket.ticket_ref, "env": env},
     )
     ports.runs.upsert_step(
         UpsertStepRequest(
@@ -99,6 +127,7 @@ async def create_and_assign_ticket(payload: dict[str, Any]) -> dict[str, str]:
         "ticket_ref": ticket.ticket_ref,
         "assignee_ref": hit.assignee_ref,
         "channel_ref": hit.channel_ref or "cliq:lab",
+        "env": env,
     }
 
 
@@ -108,6 +137,7 @@ async def notify_ticket_created(payload: dict[str, Any]) -> dict[str, str]:
 
     ports = get_ports()
     run_ref = payload["run_ref"]
+    env = str(payload.get("env") or "")
     ports.runs.upsert_step(
         UpsertStepRequest(
             step_ref=f"{run_ref}:notify",
@@ -125,6 +155,8 @@ async def notify_ticket_created(payload: dict[str, Any]) -> dict[str, str]:
             "ticket_ref": payload["ticket_ref"],
             "run_ref": run_ref,
             "incident_ref": payload.get("incident_ref") or "",
+            "env": env,
+            "decision": "intake",
         },
     )
     notify_ref = ports.notifier.send_card(channel_ref=payload["channel_ref"], card=card)

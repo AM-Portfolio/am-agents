@@ -36,6 +36,8 @@ Everything for this platform is under **`docs/agent-platform/`** (this folder).
 | Prompts | `PromptRegistry` — content in catalog, **not in code**; Langfuse/`http` adapters |
 | Observe | Grafana **HTTP** adapter only for ObservabilityPort v1 |
 | Edge | Alert Ops (am-obs-platform): `StartWorkflow` / `SignalWorkflow` only |
+| Agent identity | **IT-Support-agent** authors OP/Cliq (`AGENT_DISPLAY_NAME`); human remains assignee |
+| Multi-env | Alerts from **lab/dev/preprod/prod** share one intake; policy/channel vary by `labels.env` |
 | Structure | Hexagonal; one composition root; no duplicate port/formatter forks |
 | Docs home | **`am-agents/docs/agent-platform/`** only |
 | Extractable SDK | **ADR-003** — `libs/platform-ports` (+ agent-common, platform-adapters) |
@@ -141,6 +143,23 @@ Full tree: **[FOLDER_STRUCTURE.md](FOLDER_STRUCTURE.md)** · Extractable SDK: **
 | observe_agent | Metrics/logs → AnalysisReport (SPT / shared ObservabilityPort) |
 
 **RunStore** is a platform port (not an agent): workflows write intake + step status; claim loop pulls `pending`.
+
+## Alert intake (multi-env)
+
+```text
+Grafana (any env: lab|dev|preprod|prod)
+  → POST /alert (Alert Ops)
+  → Temporal StartWorkflow AlertIncidentWorkflow   ← task arrives here
+  → platform_worker (IT-Support-agent)
+       → OP ticket (author=API token user; assignee=human)
+       → Cliq follow-up cards (notify only — not the inbox)
+       → LLM route → needs_human | auto_infra | ignore
+       → auto_infra: tools → verify → OP Closed + Cliq closed
+```
+
+- **Cliq is not task intake.** Local `e2e_real_incident` may Start Temporal directly (lab only).
+- Env from `labels.env` (else namespace heuristics). `AGENT_AUTO_INFRA_ENVS` gates auto (prod off by default).
+- Ticket close ≠ Grafana resolve; silence is a later ObservabilityPort concern.
 
 ## Confirmation gate
 
