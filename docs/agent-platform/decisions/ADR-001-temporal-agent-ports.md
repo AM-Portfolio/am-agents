@@ -19,6 +19,7 @@ Agents need durable orchestration (tickets, notify, docs, SPT, observe) without 
 6. **TicketStore** — OpenProject first; Jira = second adapter, not a fork.
 7. **Anti-duplication** — no per-agent Protocol copies; shared agent-common; contract tests against fake + real adapters.
 8. **Phase gate** — design under `am-agents/docs` confirmed before Protocol implementation.
+9. **Extractable SDK (ADR-003)** — ports live in `libs/platform-ports`, not obs `platform_ctl`; other agents depend on `am_platform_ports` only.
 
 ## Ports (Phase 0–1 MVP)
 
