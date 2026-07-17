@@ -61,7 +61,37 @@ def build_directory():
 
 
 def build_prompt_registry():
+    provider = os.getenv("PROMPT_PROVIDER", "file").strip().lower()
+    if provider == "fake":
+        return FakePromptRegistry()
+    if provider == "file":
+        from am_platform_adapters.prompt_registry import FilePromptRegistry
+
+        try:
+            reg = FilePromptRegistry()
+            # warm + fallback if empty
+            reg.get(prompt_key="triage.default")
+            return reg
+        except Exception:
+            return FakePromptRegistry()
     return FakePromptRegistry()
+
+
+def build_llm():
+    provider = os.getenv("LLM_PROVIDER", "fake").strip().lower()
+    if provider == "fake":
+        return FakeLlm()
+    if provider in {"openai_compat", "openai"}:
+        from am_platform_adapters.providers.llm_gateway import OpenAICompatLlm
+
+        return OpenAICompatLlm()
+    raise NotImplementedError(f"LLM_PROVIDER={provider} not wired yet")
+
+
+def build_handoff(runs=None):
+    from am_platform_ports.fakes import FakeHandoff
+
+    return FakeHandoff(runs=runs or build_run_store())
 
 
 def build_run_store():
@@ -121,10 +151,6 @@ def build_redactor():
     return FakeRedactor()
 
 
-def build_llm():
-    return FakeLlm()
-
-
 def build_triage():
     return FakeTriage()
 
@@ -158,12 +184,6 @@ def build_load_policy():
     from am_platform_adapters.providers.spt import LabLoadPolicy
 
     return LabLoadPolicy()
-
-
-def build_handoff(runs=None):
-    from am_platform_ports.fakes import FakeHandoff
-
-    return FakeHandoff(runs=runs or build_run_store())
 
 
 def build_data_prep():

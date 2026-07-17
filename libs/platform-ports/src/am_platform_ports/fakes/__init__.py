@@ -154,9 +154,22 @@ class FakePolicy:
 
 class FakePromptRegistry:
     def __init__(self, prompts: dict[str, dict] | None = None) -> None:
-        self._prompts = prompts or {"triage.default": {"system": "classify", "user": "{{summary}}"}}
+        self._prompts = prompts or {
+            "triage.default": {"system": "classify", "user": "{{summary}}"},
+            "incident.analyze": {
+                "system": "return json decision",
+                "user": "Summary: {{summary}} Labels: {{labels}}",
+            },
+            "incident.ticket_update": {"system": "ticket comment", "user": "{{ticket_update}}"},
+            "incident.resolution_note": {"system": "resolution", "user": "{{resolution_note}}"},
+            "incident.escalate_unsolved": {
+                "system": "handoff to human",
+                "user": "Attempts: {{attempts}} Failure: {{failure_reason}}",
+            },
+        }
 
     def get(self, *, prompt_key: str, version: str | None = None) -> dict[str, Any]:
+        _ = version
         return dict(self._prompts[prompt_key])
 
 
@@ -171,33 +184,57 @@ class FakeSecretBroker:
 
 
 class FakeToolSandbox:
-    """Deny-by-default allowlist for lab InfraOps."""
+    """Deny-by-default allowlist for lab InfraOps + safe k8s."""
 
-    ALLOWLIST = frozenset({"lab.noop", "lab.mark_fixed"})
+    ALLOWLIST = frozenset(
+        {
+            "lab.noop",
+            "lab.mark_fixed",
+            "lab.pod_status",
+            "lab.pod_restart",
+            "k8s.pod_status",
+            "k8s.pod_describe",
+            "k8s.rollout_restart",
+        }
+    )
 
     def run(self, *, tool_name: str, args: dict[str, Any], secret_refs: list[str] | None = None) -> dict[str, Any]:
+        import os
+
         if tool_name not in self.ALLOWLIST:
             raise PermissionError(f"tool not allowlisted: {tool_name}")
+        if os.getenv("INFRA_FORCE_FAIL", "").strip().lower() in {"1", "true", "yes", tool_name}:
+            raise RuntimeError(f"forced infra failure for {tool_name}")
         return {"tool": tool_name, "ok": True, "args_keys": sorted(args.keys()), "secret_refs": secret_refs or []}
 
 
 class FakeInfraOps:
-    """Lab InfraOps — plans lab.mark_fixed; executes only via ToolSandbox allowlist."""
+    """Lab InfraOps — plans from decision actions or lab.mark_fixed; sandbox allowlist."""
 
     def __init__(self, sandbox: FakeToolSandbox | None = None, redactor: FakeRedactor | None = None) -> None:
         self._sandbox = sandbox or FakeToolSandbox()
         self._redactor = redactor or FakeRedactor()
 
     def plan(self, *, incident_ref: str, context: dict[str, Any]) -> InfraOpsPlan:
-        return InfraOpsPlan(
-            plan_ref=_ref("plan"),
-            actions=[
+        proposed = context.get("proposed_actions") or []
+        actions: list[InfraOpsAction] = []
+        for item in proposed:
+            if isinstance(item, dict):
+                name = str(item.get("tool_name") or "")
+                args = dict(item.get("args") or {})
+            else:
+                name = str(getattr(item, "tool_name", "") or "")
+                args = dict(getattr(item, "args", None) or {})
+            if name:
+                actions.append(InfraOpsAction(tool_name=name, args=args))
+        if not actions:
+            actions = [
                 InfraOpsAction(
                     tool_name="lab.mark_fixed",
                     args={"incident_ref": incident_ref, "ticket_ref": context.get("ticket_ref")},
                 )
-            ],
-        )
+            ]
+        return InfraOpsPlan(plan_ref=_ref("plan"), actions=actions)
 
     def execute(self, *, plan: InfraOpsPlan, secret_refs: list[str] | None = None) -> WorkDoneResult:
         ran: list[str] = []
@@ -227,8 +264,75 @@ class FakeRedactor:
 
 
 class FakeLlm:
+    """Deterministic LLM for CI — driven by ALERT_FORCE_DECISION env."""
+
     def complete(self, *, prompt_key: str, variables: dict[str, Any], data_class: str = "internal") -> str:
-        return f"[{prompt_key}] ok"
+        import json
+        import os
+
+        _ = data_class
+        if prompt_key == "incident.escalate_unsolved":
+            return (
+                "Agent could not finish. "
+                f"Attempts: {variables.get('attempts')}. "
+                f"Failure: {variables.get('failure_reason')}. "
+                f"Verify: {variables.get('verify_status')}. "
+                "Please investigate and apply a code/infra fix."
+            )
+        if prompt_key in {"incident.ticket_update", "incident.resolution_note"}:
+            return str(variables.get("ticket_update") or variables.get("resolution_note") or variables.get("rationale") or "ok")
+
+        force = os.getenv("ALERT_FORCE_DECISION", "needs_human").strip().lower()
+        if force == "ignore":
+            return json.dumps(
+                {
+                    "decision": "ignore",
+                    "confidence": 0.95,
+                    "rationale": "noise / not actionable",
+                    "handoff_agent": None,
+                    "proposed_actions": [],
+                    "ticket_update": "Ignoring: not relevant to ops.",
+                    "resolution_note": "Closed as ignore",
+                }
+            )
+        if force == "auto_infra":
+            return json.dumps(
+                {
+                    "decision": "auto_infra",
+                    "confidence": 0.9,
+                    "rationale": "pod may be down; safe restart",
+                    "handoff_agent": "kagent_infra",
+                    "proposed_actions": [
+                        {"tool_name": "lab.pod_status", "args": {"target": "lab"}},
+                        {"tool_name": "lab.pod_restart", "args": {"target": "lab"}},
+                    ],
+                    "ticket_update": "Auto infra: checking/restarting pod via kagent handoff.",
+                    "resolution_note": "Pod checked/restarted; verify next.",
+                }
+            )
+        if force == "delete_attempt":
+            return json.dumps(
+                {
+                    "decision": "auto_infra",
+                    "confidence": 0.99,
+                    "rationale": "bad delete proposal",
+                    "handoff_agent": "kagent_infra",
+                    "proposed_actions": [{"tool_name": "k8s.delete_pod", "args": {}}],
+                    "ticket_update": "should be blocked",
+                    "resolution_note": "",
+                }
+            )
+        return json.dumps(
+            {
+                "decision": "needs_human",
+                "confidence": 0.85,
+                "rationale": "likely application/code change required",
+                "handoff_agent": None,
+                "proposed_actions": [],
+                "ticket_update": "Escalating: code/service change needed.",
+                "resolution_note": "",
+            }
+        )
 
 
 class FakeObservability:

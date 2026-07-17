@@ -11,6 +11,7 @@ from temporalio.client import Client
 from temporalio.worker import Worker
 
 from platform_worker.activities import alert_incident as acts
+from platform_worker.activities import analyze as aan
 from platform_worker.activities import infra as iacts
 from platform_worker.activities import spt as sacts
 from platform_worker.activities import verify as vacts
@@ -68,6 +69,11 @@ async def run_worker() -> None:
             acts.create_and_assign_ticket,
             acts.notify_ticket_created,
             acts.mark_run_status,
+            aan.analyze_incident,
+            aan.apply_ticket_decision,
+            aan.handoff_infra_agent,
+            aan.escalate_unsolved,
+            aan.write_resolution_note,
             iacts.plan_and_execute_fix,
             vacts.spawn_verify_run,
             vacts.claim_and_execute_verify,

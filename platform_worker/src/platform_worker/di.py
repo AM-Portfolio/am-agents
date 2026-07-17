@@ -7,7 +7,9 @@ from dataclasses import dataclass
 from am_platform_adapters import factory as af
 from am_platform_ports.ports.directory import DirectoryPort
 from am_platform_ports.ports.docs import DocStore
+from am_platform_ports.ports.handoff import HandoffPort
 from am_platform_ports.ports.infra import InfraOps
+from am_platform_ports.ports.llm import LlmPort
 from am_platform_ports.ports.notifier import Notifier
 from am_platform_ports.ports.prompt import PromptRegistry
 from am_platform_ports.ports.redact import Redactor
@@ -36,6 +38,8 @@ class Ports:
     observe: ObservabilityPort
     infra: InfraOps
     redactor: Redactor
+    llm: LlmPort
+    handoff: HandoffPort
     spt_catalog: TargetCatalog
     spt_resolver: TargetResolver
     spt_policy: LoadPolicy
@@ -49,17 +53,20 @@ _PORTS: Ports | None = None
 def get_ports() -> Ports:
     global _PORTS
     if _PORTS is None:
+        runs = af.build_run_store()
         _PORTS = Ports(
             triage=af.build_triage(),
             directory=af.build_directory(),
             tickets=af.build_ticket_store(),
             notifier=af.build_notifier(),
             prompts=af.build_prompt_registry(),
-            runs=af.build_run_store(),
+            runs=runs,
             docs=af.build_doc_store(),
             observe=af.build_observability(),
             infra=af.build_infra_ops(),
             redactor=af.build_redactor(),
+            llm=af.build_llm(),
+            handoff=af.build_handoff(runs),
             spt_catalog=af.build_target_catalog(),
             spt_resolver=af.build_target_resolver(),
             spt_policy=af.build_load_policy(),

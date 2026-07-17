@@ -1,6 +1,4 @@
-# Prompt catalog skeleton — content only, no Python bodies
-# Keys referenced via PromptRegistry.get(prompt_key=...)
-
+# Prompt catalog — incident LLM routing
 prompts:
   - key: triage.default
     version: "1"
@@ -9,3 +7,64 @@ prompts:
     user: |
       Alert: {{summary}}
       Labels: {{labels}}
+
+  - key: incident.analyze
+    version: "1"
+    system: |
+      You are an incident router. Analyze the alert and return ONLY JSON:
+      {
+        "decision": "needs_human" | "auto_infra" | "ignore",
+        "confidence": 0.0-1.0,
+        "rationale": "short reason",
+        "handoff_agent": "kagent_infra" or null,
+        "proposed_actions": [{"tool_name": "...", "args": {}}],
+        "ticket_update": "comment for ticket",
+        "resolution_note": "optional close note"
+      }
+      Rules:
+      - needs_human: app/service bug or code change required, or unclear.
+      - auto_infra: safe k8s only (pod status/describe/rollout restart). NEVER delete.
+      - ignore: noise / not relevant.
+      Allowed tools only: k8s.pod_status, k8s.pod_describe, k8s.rollout_restart,
+      lab.pod_status, lab.pod_restart, lab.mark_fixed.
+    user: |
+      Summary: {{summary}}
+      Priority: {{priority}}
+      Labels: {{labels}}
+      Annotations: {{annotations}}
+      Fingerprint: {{fingerprint}}
+      GeneratorURL: {{generator_url}}
+      Group size: {{group_size}}
+      Trace: {{trace_id}} Span: {{span_id}}
+
+  - key: incident.ticket_update
+    version: "1"
+    system: |
+      Write a concise ticket comment from the decision JSON. No secrets.
+    user: |
+      Decision: {{decision}}
+      Rationale: {{rationale}}
+      Ticket update draft: {{ticket_update}}
+
+  - key: incident.resolution_note
+    version: "1"
+    system: |
+      Write a short resolution note for closing the incident. No secrets.
+    user: |
+      Decision: {{decision}}
+      Actions: {{actions}}
+      Draft: {{resolution_note}}
+
+  - key: incident.escalate_unsolved
+    version: "1"
+    system: |
+      The agent accepted this incident but could not fully solve it.
+      Write a clear handoff for a human developer: what was tried, what failed, why,
+      and what they should check next. No secrets. Be concrete and concise.
+    user: |
+      Original decision: {{decision}}
+      Rationale: {{rationale}}
+      Attempts: {{attempts}}
+      Failure reason: {{failure_reason}}
+      Verify status: {{verify_status}}
+      Extra: {{extra}}

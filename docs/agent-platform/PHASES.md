@@ -156,5 +156,6 @@ Status: APPROVED — development started
 Approved by: user
 Approved at: 2026-07-18
 Approved design revision: 1.4
-Phase 5 complete (gateway + HandoffPort + SPT runaway/prod guards). Soak checklist remains open for ship score 10
+Phase 5 complete (gateway + HandoffPort + SPT runaway/prod guards). Soak checklist remains open for ship score 10.
+Alert LLM routing added: needs_human | auto_infra (kagent handoff, no delete) | ignore — tested with FakeLlm.
 Temporal lab: ready on kind-am-preprod (`default` ns registered)

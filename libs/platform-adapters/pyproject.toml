@@ -5,6 +5,7 @@ description = "Vendor adapters + build_* composition root for agent platform"
 requires-python = ">=3.11"
 dependencies = [
   "am-platform-ports>=0.1.0",
+  "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
