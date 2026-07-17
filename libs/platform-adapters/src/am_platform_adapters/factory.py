@@ -81,10 +81,14 @@ def build_llm():
     provider = os.getenv("LLM_PROVIDER", "fake").strip().lower()
     if provider == "fake":
         return FakeLlm()
-    if provider in {"openai_compat", "openai"}:
+    if provider in {"openai_compat", "openai", "litellm"}:
         from am_platform_adapters.providers.llm_gateway import OpenAICompatLlm
 
         return OpenAICompatLlm()
+    if provider == "gemini":
+        from am_platform_adapters.providers.llm_gateway import GeminiLlm
+
+        return GeminiLlm()
     raise NotImplementedError(f"LLM_PROVIDER={provider} not wired yet")
 
 
