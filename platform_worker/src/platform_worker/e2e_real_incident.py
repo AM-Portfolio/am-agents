@@ -16,6 +16,7 @@ import os
 import sys
 import uuid
 from datetime import datetime, timezone
+from typing import Any
 
 from temporalio.client import Client
 
@@ -63,6 +64,36 @@ def _payload(tracking_seed: str) -> dict:
     }
 
 
+def _print_verify_evidence(status: dict[str, Any]) -> None:
+    """Print concise per-check pass/fail reasons from Temporal query."""
+    reason = status.get("verify_reason")
+    if reason:
+        print(f"verify_reason={reason}")
+    evidence = status.get("verify_evidence") or []
+    if not evidence:
+        return
+    print(f"verify_evidence_count={len(evidence)}")
+    for i, ev in enumerate(evidence, 1):
+        if not isinstance(ev, dict):
+            print(f"  [{i}] {ev}")
+            continue
+        passed = ev.get("passed")
+        mark = "PASS" if passed else "FAIL"
+        print(
+            f"  [{i}] {mark} check_ref={ev.get('check_ref')} "
+            f"query_ref={ev.get('query_ref')} source={ev.get('source')} "
+            f"value={ev.get('value')} pass_when={ev.get('pass_when')}"
+        )
+        if ev.get("reason"):
+            print(f"       reason={ev.get('reason')}")
+        if ev.get("error"):
+            print(f"       error={ev.get('error')}")
+        if ev.get("request_id"):
+            print(f"       request_id={ev.get('request_id')}")
+        if ev.get("result_ref"):
+            print(f"       result_ref={ev.get('result_ref')}")
+
+
 async def main() -> int:
     # Refuse silent mock steering
     for banned in ("ALERT_FORCE_DECISION", "INFRA_FORCE_FAIL", "VERIFY_FORCE_RESULT"):
@@ -78,9 +109,12 @@ async def main() -> int:
     if observe in {"prometheus", "prom", "grafana"} and not (
         os.getenv("TOOL_AGENT_URL") or os.getenv("TOOL_AGENT_BASE_URL") or ""
     ).strip():
-        print("NOTE: TOOL_AGENT_URL unset — redis verify uses Prometheus only")
+        print("NOTE: TOOL_AGENT_URL unset — redis.service.alive uses Prometheus redis_up")
     elif (os.getenv("TOOL_AGENT_URL") or "").strip():
-        print(f"TOOL_AGENT_URL={os.getenv('TOOL_AGENT_URL')} (redis verify via tool-agent)")
+        print(
+            f"TOOL_AGENT_URL={os.getenv('TOOL_AGENT_URL')} "
+            "(redis.service.alive via tool-agent; endpoints.ready via Prometheus)"
+        )
 
     llm = os.getenv("LLM_PROVIDER", "fake").strip().lower()
     print(f"LLM_PROVIDER={llm}")
@@ -134,6 +168,7 @@ async def main() -> int:
 
     final_q = await handle.query("status")
     print(f"final_query={final_q}")
+    _print_verify_evidence(final_q if isinstance(final_q, dict) else {})
     return 0
 
 

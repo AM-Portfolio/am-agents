@@ -9,16 +9,16 @@ from typing import Any
 
 _DEFAULT_CHECKS: list[dict[str, Any]] = [
     {
-        "check_ref": "verify.metrics.error_rate",
+        "check_ref": "verify.k8s.endpoints.ready",
         "kind": "metrics",
-        "query_ref": "grafana.prom.error_rate",
-        "pass_when": "value < threshold",
+        "query_ref": "k8s.endpoints.ready",
+        "pass_when": "value > 0",
     },
     {
-        "check_ref": "verify.logs.no_fatal",
-        "kind": "logs",
-        "query_ref": "grafana.loki.no_fatal",
-        "pass_when": "count == 0",
+        "check_ref": "verify.service.alive",
+        "kind": "metrics",
+        "query_ref": "redis.service.alive",
+        "pass_when": "value == 1",
     },
 ]
 

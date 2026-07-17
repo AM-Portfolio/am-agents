@@ -34,6 +34,8 @@ class AlertIncidentWorkflow:
         self._ticket_ref: str | None = None
         self._verify_run_ref: str | None = None
         self._verify_status: str | None = None
+        self._verify_evidence: list[dict[str, Any]] = []
+        self._verify_reason: str | None = None
         self._decision: str | None = None
 
     @workflow.signal(name="alert.resolved")
@@ -55,6 +57,8 @@ class AlertIncidentWorkflow:
             "ticket_ref": self._ticket_ref,
             "verify_run_ref": self._verify_run_ref,
             "verify_status": self._verify_status,
+            "verify_evidence": list(self._verify_evidence),
+            "verify_reason": self._verify_reason,
             "decision": self._decision,
             "resolved": self._resolved,
             "refired": self._refired,
@@ -102,6 +106,15 @@ class AlertIncidentWorkflow:
             retry_policy=retry,
         )
         self._verify_status = verify_result["status"]
+        self._verify_evidence = list(
+            verify_result.get("verify_evidence")
+            or verify_result.get("evidence")
+            or []
+        )
+        self._verify_reason = str(
+            verify_result.get("verify_reason")
+            or f"verify {verify_result['status']}"
+        )
 
         final_status = "passed"
         closer = f"{closer_prefix}.verify.passed"
@@ -113,6 +126,8 @@ class AlertIncidentWorkflow:
                     "status": "failed",
                     "verify_status": verify_result["status"],
                     "verify_run_ref": self._verify_run_ref,
+                    "verify_reason": self._verify_reason,
+                    "verify_evidence": self._verify_evidence,
                 }
             )
             await workflow.execute_activity(
@@ -124,9 +139,13 @@ class AlertIncidentWorkflow:
                     "env": env,
                     "decision": decision or {"decision": "auto_infra", "rationale": closer_prefix},
                     "attempts": attempts,
-                    "failure_reason": f"verify gate failed: {verify_result['status']}",
+                    "failure_reason": self._verify_reason
+                    or f"verify gate failed: {verify_result['status']}",
                     "verify_status": verify_result["status"],
-                    "extra": "Agent accepted auto path but recovery could not be verified.",
+                    "extra": (
+                        "Agent accepted auto path but recovery could not be verified. "
+                        f"Details: {self._verify_reason}"
+                    ),
                 },
                 start_to_close_timeout=short,
                 retry_policy=retry,
@@ -146,7 +165,8 @@ class AlertIncidentWorkflow:
                     "decision": (decision or {}).get("decision") or closer_prefix,
                     "note": (
                         "Verify passed. Ticket closed by IT-Support-agent. "
-                        "Grafana alert may still fire until resolved."
+                        "Grafana alert may still fire until resolved. "
+                        f"Evidence: {self._verify_reason}"
                     ),
                 },
                 start_to_close_timeout=short,
@@ -162,6 +182,8 @@ class AlertIncidentWorkflow:
                     "ticket_ref": self._ticket_ref,
                     "verify_run_ref": self._verify_run_ref,
                     "verify_status": self._verify_status,
+                    "verify_reason": self._verify_reason,
+                    "verify_evidence": self._verify_evidence,
                     "decision": self._decision,
                     "closer": closer,
                     "env": env,
@@ -176,6 +198,8 @@ class AlertIncidentWorkflow:
             "ticket_ref": self._ticket_ref,
             "verify_run_ref": self._verify_run_ref,
             "verify_status": self._verify_status,
+            "verify_evidence": self._verify_evidence,
+            "verify_reason": self._verify_reason,
             "decision": self._decision,
             "status": final_status,
             "closer": closer,

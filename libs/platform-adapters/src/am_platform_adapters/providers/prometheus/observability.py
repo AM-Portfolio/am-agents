@@ -27,7 +27,7 @@ def _render(template: str, variables: dict[str, Any]) -> str:
 # Built-in query_ref templates — catalog may override via VERIFY_QUERY_MAP JSON.
 # This cluster has redis_exporter + cAdvisor (no kube-state-metrics kube_* series).
 _DEFAULT_QUERIES: dict[str, dict[str, Any]] = {
-    # Service readiness: redis_up when exporter present; else cAdvisor container presence.
+    # Endpoint/service readiness proxy: redis_up when exporter present; else cAdvisor presence.
     # Note: PromQL `or` only falls through when the left side has *no series* (value 0 still wins).
     "k8s.endpoints.ready": {
         "promql": (
@@ -38,6 +38,7 @@ _DEFAULT_QUERIES: dict[str, dict[str, Any]] = {
             "or vector(0))"
         ),
         "pass_when": "value > 0",
+        "evidence_note": "prometheus redis_up or cAdvisor container presence (no kube-state-metrics)",
     },
     "k8s.deployment.available": {
         "promql": (
@@ -48,6 +49,7 @@ _DEFAULT_QUERIES: dict[str, dict[str, Any]] = {
             "or vector(0))"
         ),
         "pass_when": "value > 0",
+        "evidence_note": "prometheus redis_up or cAdvisor container presence",
     },
     "k8s.pod.ready": {
         "promql": (
@@ -58,6 +60,15 @@ _DEFAULT_QUERIES: dict[str, dict[str, Any]] = {
             "or vector(0))"
         ),
         "pass_when": "value > 0",
+        "evidence_note": "prometheus redis_up or cAdvisor container presence",
+    },
+    # Service process alive via redis_exporter (preferred Prometheus path when tool-agent unset)
+    "redis.service.alive": {
+        "promql": (
+            'max(redis_up{namespace="{{namespace}}",pod=~"{{service}}-.*"}) or vector(0)'
+        ),
+        "pass_when": "value == 1",
+        "evidence_note": "prometheus redis_up==1",
     },
     # Legacy catalog keys — still real PromQL, not forced
     "grafana.prom.error_rate": {
@@ -67,19 +78,14 @@ _DEFAULT_QUERIES: dict[str, dict[str, Any]] = {
         ),
         "pass_when": "value >= 0",  # connectivity smoke; readiness is primary check
         "threshold": 0,
+        "evidence_note": "prometheus container CPU rate smoke",
     },
     "grafana.loki.no_fatal": {
-        # No Loki/KSM crashloop series — require exporter up or recently seen container.
-        "promql": (
-            "("
-            'max(redis_up{namespace="{{namespace}}",pod=~"{{service}}-.*"}) '
-            "or ("
-            '(time() - max(container_last_seen{namespace="{{namespace}}",'
-            'pod=~"{{service}}-.*",container!="",container!="POD"})) < bool 300'
-            ") "
-            "or vector(0))"
-        ),
+        # No Loki series available — fail closed semantically for "no_fatal logs".
+        # Kept for old catalogs; prefer redis.service.alive / k8s.endpoints.ready instead.
+        "promql": "vector(0)",
         "pass_when": "value == 1",
+        "evidence_note": "Loki/log fatal checks unavailable; fail closed",
     },
 }
 
@@ -126,6 +132,25 @@ def _extract_scalar(data: dict[str, Any]) -> float:
     return 0.0
 
 
+def _build_reason(
+    *,
+    query_ref: str,
+    ok: bool,
+    value: float | None,
+    pass_when: str,
+    error: str | None = None,
+    evidence_note: str | None = None,
+) -> str:
+    note = f" ({evidence_note})" if evidence_note else ""
+    if error:
+        return f"Prometheus {query_ref} failed{note}: {error}"
+    if value is None:
+        return f"Prometheus {query_ref} failed{note}: no value (unreachable or empty)"
+    if ok:
+        return f"Prometheus {query_ref} passed{note}: value={value} satisfies {pass_when}"
+    return f"Prometheus {query_ref} failed{note}: value={value} does not satisfy {pass_when}"
+
+
 class PrometheusObservability:
     """Query Prometheus HTTP API for Gate A checks."""
 
@@ -170,18 +195,25 @@ class PrometheusObservability:
         if not variables.get("pod"):
             variables["pod"] = f"{variables['service']}.*"
 
+        source = "prometheus"
         spec = self._queries.get(query_ref)
         if not spec:
             # Unknown ref → fail closed (do not mark fixed)
+            err = f"unknown query_ref={query_ref}"
             return {
                 "pass": False,
                 "query_ref": query_ref,
-                "error": f"unknown query_ref={query_ref}",
+                "source": source,
+                "error": err,
                 "value": None,
+                "reason": _build_reason(
+                    query_ref=query_ref, ok=False, value=None, pass_when="n/a", error=err
+                ),
             }
 
         promql = _render(str(spec["promql"]), variables)
         pass_when = str(spec.get("pass_when") or "value > 0")
+        evidence_note = str(spec.get("evidence_note") or "") or None
         threshold = spec.get("threshold")
         try:
             threshold_f = float(threshold) if threshold is not None else None
@@ -202,29 +234,62 @@ class PrometheusObservability:
                 body = json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")[:300]
+            err = f"prometheus HTTP {exc.code}: {detail}"
             return {
                 "pass": False,
                 "query_ref": query_ref,
+                "source": source,
                 "promql": promql,
-                "error": f"prometheus HTTP {exc.code}: {detail}",
+                "error": err,
                 "value": None,
+                "pass_when": pass_when,
+                "reason": _build_reason(
+                    query_ref=query_ref,
+                    ok=False,
+                    value=None,
+                    pass_when=pass_when,
+                    error=err,
+                    evidence_note=evidence_note,
+                ),
             }
         except Exception as exc:  # noqa: BLE001
+            err = f"prometheus unreachable: {exc}"[:300]
             return {
                 "pass": False,
                 "query_ref": query_ref,
+                "source": source,
                 "promql": promql,
-                "error": f"prometheus unreachable: {exc}"[:300],
+                "error": err,
                 "value": None,
+                "pass_when": pass_when,
+                "reason": _build_reason(
+                    query_ref=query_ref,
+                    ok=False,
+                    value=None,
+                    pass_when=pass_when,
+                    error=err,
+                    evidence_note=evidence_note,
+                ),
             }
 
         if body.get("status") != "success":
+            err = f"prometheus status={body.get('status')}"
             return {
                 "pass": False,
                 "query_ref": query_ref,
+                "source": source,
                 "promql": promql,
-                "error": f"prometheus status={body.get('status')}",
+                "error": err,
                 "value": None,
+                "pass_when": pass_when,
+                "reason": _build_reason(
+                    query_ref=query_ref,
+                    ok=False,
+                    value=None,
+                    pass_when=pass_when,
+                    error=err,
+                    evidence_note=evidence_note,
+                ),
             }
 
         value = _extract_scalar(body)
@@ -232,10 +297,18 @@ class PrometheusObservability:
         return {
             "pass": ok,
             "query_ref": query_ref,
+            "source": source,
             "promql": promql,
             "value": value,
             "threshold": threshold_f,
             "pass_when": pass_when,
+            "reason": _build_reason(
+                query_ref=query_ref,
+                ok=ok,
+                value=value,
+                pass_when=pass_when,
+                evidence_note=evidence_note,
+            ),
             "variables": {
                 k: variables.get(k)
                 for k in ("namespace", "service", "deployment", "pod", "env")
