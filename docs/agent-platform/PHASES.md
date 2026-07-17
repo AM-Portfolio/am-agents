@@ -3,7 +3,7 @@
 Parent: [DESIGN.md](DESIGN.md) · Layout: [FOLDER_STRUCTURE.md](FOLDER_STRUCTURE.md) · Index: [README.md](README.md)  
 **Docs home:** `am-agents/docs/agent-platform/` only
 
-**Rules locked across phases:** Temporal workflows → ports only · opaque refs · no secrets/env to LLM ([ADR-002](decisions/ADR-002-privacy-sandbox-secrets.md)) · extractable `libs/platform-ports` ([ADR-003](decisions/ADR-003-extractable-sdk.md)) · SPT: catalog + selectors only, never default-all, zero service names in code (ADR-004)
+**Rules locked across phases:** Temporal → ports only · opaque refs · no secrets to LLM ([ADR-002](decisions/ADR-002-privacy-sandbox-secrets.md)) · extractable SDK ([ADR-003](decisions/ADR-003-extractable-sdk.md)) · **RunStore intake + step updates** ([ADR-005](decisions/ADR-005-runstore-verify.md)) · SPT catalog + selectors only (ADR-004) · verify gate A blocks done until pass
 
 ---
 
@@ -11,13 +11,14 @@ Parent: [DESIGN.md](DESIGN.md) · Layout: [FOLDER_STRUCTURE.md](FOLDER_STRUCTURE
 
 - [x] Single folder `docs/agent-platform/` (no duplicate `design/` + `diagrams/` split)
 - [x] `DESIGN.md` + `PHASES.md` + `FOLDER_STRUCTURE.md`
-- [x] `sheets/*.mmd` + `agent-platform.drawio`
+- [x] `sheets/*.mmd` + `agent-platform.drawio` (incl. RunStore + Verify)
 - [x] `docs/README.md` index; enterprise diagrams stay under `docs/diagrams/`
 - [x] [ADR-001](decisions/ADR-001-temporal-agent-ports.md) Temporal → ports
 - [x] [ADR-002](decisions/ADR-002-privacy-sandbox-secrets.md) privacy / SecretBroker / ToolSandbox / Redactor / LlmPort
-- [x] [ADR-003](decisions/ADR-003-extractable-sdk.md) extractable `libs/platform-ports` (reuse by other agents)
+- [x] [ADR-003](decisions/ADR-003-extractable-sdk.md) extractable `libs/platform-ports`
+- [x] [ADR-005](decisions/ADR-005-runstore-verify.md) RunStore + post-fix verify gate A
 - [ ] **ADR-004** SPT catalog + selectors + partial-failure + `prep_ref` + runaway guards
-- [ ] **User confirmation** — approve design (rev 1.3 + ADR-002/003/004) before Phase 0b code
+- [ ] **User confirmation** — approve design (rev 1.4) before Phase 0b code
 
 ---
 
@@ -25,11 +26,12 @@ Parent: [DESIGN.md](DESIGN.md) · Layout: [FOLDER_STRUCTURE.md](FOLDER_STRUCTURE
 
 - [ ] **`libs/platform-ports`** (`am_platform_ports`) — Protocols + schemas + fakes + contract tests
 - [ ] Core ports: Triage, TicketStore, Notifier, Directory, Policy, PromptRegistry, SecretBroker, ToolSandbox, Redactor, LlmPort
-- [ ] SPT schemas/ports (stubs OK until P3 adapters): `TargetCatalog`, `TargetResolver`, `LoadPolicy`, `LoadTestRunner`, `DataPrep`, `ObservabilityPort`
-- [ ] SPT request/result schemas: `SptDemandRequest` (`ids`/`tags` only; empty selector = fatal), `ChildRunResult`, `SptRunSummary`, `failure_mode: continue | fail_fast`
-- [ ] `libs/agent-common` + `libs/platform-adapters` stubs (SecretBroker / Sandbox / Llm / Redactor)
-- [ ] `catalog/prompts/` skeleton
-- [ ] Prove reuse: another agent path imports `TicketStore` (or fake) from `am_platform_ports` only
+- [ ] **`RunStore`** + schemas: `create_run`, `upsert_step`, `claim_pending`, `heartbeat`, `complete` (`agent_runs` / `agent_run_steps`)
+- [ ] SPT schemas/ports (stubs OK until P3): `TargetCatalog`, `TargetResolver`, `LoadPolicy`, `LoadTestRunner`, `DataPrep`, `ObservabilityPort`
+- [ ] SPT request/result schemas: `SptDemandRequest`, `ChildRunResult`, `SptRunSummary`, `failure_mode`
+- [ ] `libs/agent-common` + `libs/platform-adapters` stubs (SecretBroker / Sandbox / Llm / Redactor / RunStore fake)
+- [ ] `catalog/prompts/` + `catalog/verify/` skeletons
+- [ ] Prove reuse: another agent imports from `am_platform_ports` only
 
 **Done when:** CI green on ports package; no vendor SDKs inside `am_platform_ports`.
 
@@ -39,18 +41,23 @@ Parent: [DESIGN.md](DESIGN.md) · Layout: [FOLDER_STRUCTURE.md](FOLDER_STRUCTURE
 
 - [ ] Temporal lab + `platform_worker`
 - [ ] `AlertIncidentWorkflow` + Alert Ops thin edge (`StartWorkflow` / `Signal` only)
+- [ ] **`RunStore.create_run` on Start** (kind=`alert_incident`, initial status); upsert steps for triage / ticket / notify
 - [ ] OpenProject `TicketStore` + `Directory`; Cliq `Notifier` (follow-up cards only)
 - [ ] Flap / silence / race state machine
 - [ ] PromptRegistry from catalog (no prompt bodies in Python)
-- [ ] Lab smoke: FIRING → ticket + Cliq ≤ 60s; RESOLVED
+- [ ] Lab smoke: FIRING → **run row** + ticket + Cliq ≤ 60s; RESOLVED updates run status
 
 ---
 
-## Phase 2 — Docs + infra
+## Phase 2 — Docs + infra + verify
 
 - [ ] DocStore MinIO primary + `FailoverDocStore` → GDrive
 - [ ] InfraOps + `Approve` signal (allowlisted)
-- [ ] `work_done` on `agent.resolved`
+- [ ] **Postgres RunStore adapter** (`RUN_STORE_PROVIDER=postgres`)
+- [ ] After `work_done` → **`kind=verify` run** + pending steps (metrics, logs, health via `check_ref`)
+- [ ] Claim loop (Temporal Schedule / activity): pull `pending` → lease → execute → update
+- [ ] **Gate A:** block done / success notify until verify `passed` or human Approve
+- [ ] Lab smoke: fix applied + metrics still bad → verify `failed`; metrics good → `passed` → done
 
 ---
 
@@ -64,17 +71,18 @@ Parent: [DESIGN.md](DESIGN.md) · Layout: [FOLDER_STRUCTURE.md](FOLDER_STRUCTURE
 - [ ] Lab catalog: ≥3 services (2 share one `prep_ref`, 1 without) + 1 flow
 - [ ] Zero service/repo names in `platform_worker/` or `libs/platform-ports/` (catalog data only)
 
-### Workflow
+### Workflow + RunStore
 
+- [ ] **`RunStore.create_run` on SPT demand** (kind=`spt`); step/child updates aligned with `SptRunSummary`
 - [ ] `SptRunWorkflow` resolve → policy → fan-out children (bounded parallelism)
 - [ ] Default `failure_mode: continue`; optional `fail_fast`
-- [ ] Aggregate `SptRunSummary` (`succeeded` / `partial` / `failed`); `spt.completed` notify with counts (never false all-green on partial)
+- [ ] Aggregate `SptRunSummary`; `spt.completed` notify with counts (never false all-green on partial)
 - [ ] Observe via `query_ref` (Grafana HTTP); aggregate report → DocStore → Cliq
 
 ### Acceptance (lab)
 
-- [ ] Smoke: request ≥2 targets, `parallelism: 2`
-- [ ] Partial drill: one child fails, sibling succeeds → parent `overall_status: partial` + correct counts
+- [ ] Smoke: request ≥2 targets, `parallelism: 2`; RunStore shows parent + children statuses
+- [ ] Partial drill: one child fails, sibling succeeds → parent `partial` + correct counts
 - [ ] Parent summary + `docs_ref` within `max(child durations) + 5m`
 
 ### Growth / CI
@@ -96,7 +104,7 @@ Parent: [DESIGN.md](DESIGN.md) · Layout: [FOLDER_STRUCTURE.md](FOLDER_STRUCTURE
 
 ## Phase 5 — Gateway / handoff / prod SPT
 
-- [ ] L2 chat gateway (Start / Signal / status + auth)
+- [ ] L2 chat gateway (Start / Signal / status + auth) — gateway Start also **create_run**
 - [ ] `HandoffPort` max depth 1
 - [ ] Policy-gated prod SPT: catalog `enabled: false` default; Approve + change window; mandatory observe + doc
 - [ ] Runaway guards live: `SPT_MAX_TARGETS_PER_RUN`, `SPT_MAX_PARALLEL`, `SPT_MAX_CONCURRENT_RUNS`; empty selector fatal; `all: true` only lab + Approve + under max
@@ -110,6 +118,7 @@ Parent: [DESIGN.md](DESIGN.md) · Layout: [FOLDER_STRUCTURE.md](FOLDER_STRUCTURE
 - [ ] ≥ 1 intentional partial run with correct Cliq counts
 - [ ] Growth CI green on every PR touching worker/ports
 - [ ] Sandbox time/RPS kill proven under fault injection
+- [ ] Verify gate A exercised in lab (≥1 fail + ≥1 pass path)
 
 ---
 
@@ -119,7 +128,7 @@ Parent: [DESIGN.md](DESIGN.md) · Layout: [FOLDER_STRUCTURE.md](FOLDER_STRUCTURE
 Status: AWAITING CONFIRMATION
 Approved by: —
 Approved at: —
-Approved design revision: 1.3 (ADR-002 + ADR-003 + ADR-004)
+Approved design revision: 1.4 (ADR-002 + ADR-003 + ADR-005; ADR-004 pending)
 Next step after approve: Phase 0b — libs/platform-ports first
 ```
 

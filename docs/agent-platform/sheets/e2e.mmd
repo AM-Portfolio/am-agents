@@ -13,27 +13,44 @@ flowchart TB
   end
 
   subgraph wf ["C. AlertIncidentWorkflow"]
+    RunIns["RunStore.create_run accepted"]
     Triage["TriagePort.classify"]
     Dir["DirectoryPort.resolve"]
     Ticket["TicketStore.create + assign"]
     Notify["Notifier ticket.created + card"]
+    StepUp["RunStore.upsert_step each stage"]
+    Fix["InfraOps work_done P2"]
+    Verify["kind=verify run — metrics + logs"]
+    Gate["Gate A: block done until verify passed"]
     Close["first closer wins"]
   end
 
   subgraph adapters ["D. Adapters"]
     OP["OpenProject"]
     Cliq["Cliq follow-up card"]
+    PG["Postgres RunStore"]
+    GrafObs["Grafana HTTP observe"]
   end
 
-  Graf --> Hook --> Triage --> Dir --> Ticket --> Notify
+  Graf --> Hook --> RunIns --> Triage --> Dir --> Ticket --> Notify
+  Triage --> StepUp
+  Ticket --> StepUp
+  Notify --> StepUp
+  StepUp --> PG
   Ticket --> OP
   Notify --> Cliq
+  Notify --> Fix --> Verify --> Gate
+  Verify --> GrafObs
+  Verify --> PG
+  Gate -->|passed| Close
+  Gate -->|failed| Ticket
   Res --> SigR --> Close
   Graf -.->|re-FIRING while open| SigF
   SigF --> Ticket
   Silence -.->|no close| Silence
   Close --> OP
   Close --> Cliq
+  Close --> PG
 
   linkStyle default stroke:#0EA5E9,stroke-width:2px,color:#0F172A
 
@@ -42,6 +59,6 @@ flowchart TB
   classDef alert fill:#FECDD3,stroke:#E11D48,stroke-width:2px,color:#881337
   classDef external fill:#FFFFFF,stroke:#2563EB,stroke-width:2px,color:#0F172A
 
-  class Triage,Dir,Ticket,Notify,Close,Hook,SigR,SigF core
-  class OP,Cliq provider
+  class Triage,Dir,Ticket,Notify,Close,Hook,SigR,SigF,RunIns,StepUp,Fix,Verify,Gate core
+  class OP,Cliq,PG,GrafObs provider
   class Graf,Res,Silence alert

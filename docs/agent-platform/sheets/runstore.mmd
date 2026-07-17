@@ -1,67 +1,45 @@
 %%{init: {"theme":"base","themeVariables":{"darkMode":false,"background":"#FFFFFF","fontFamily":"Segoe UI, Inter, system-ui, sans-serif","fontSize":"16px","primaryColor":"#EFF6FF","primaryTextColor":"#0F172A","primaryBorderColor":"#2563EB","secondaryColor":"#F8FAFC","lineColor":"#0EA5E9","textColor":"#0F172A","mainBkg":"#EFF6FF","clusterBkg":"#F8FAFC","clusterBorder":"#1E293B","edgeLabelBackground":"#FFFFFF"},"themeCSS":"svg{background-color:#FFFFFF!important}.edgePath .path,.flowchart-link,path.path{stroke:#0EA5E9!important;stroke-width:2px!important}.arrowheadPath,marker path{fill:#0EA5E9!important;stroke:#0EA5E9!important}.cluster rect{fill:#F8FAFC!important;stroke:#1E293B!important;stroke-width:2.5px!important}.cluster-label span,.cluster-label foreignObject div,.cluster-label foreignObject span{color:#020617!important;font-weight:700!important;font-size:15px!important;background-color:#E2E8F0!important;padding:2px 8px!important;border-radius:4px!important}.nodeLabel,.label,.edgeLabel{color:#0F172A!important;font-weight:600}","flowchart":{"curve":"basis","htmlLabels":true,"padding":24,"nodeSpacing":50,"rankSpacing":70}} }%%
 flowchart TB
-  subgraph ports ["libs/platform-ports OWNS"]
-    P1["Protocols only"]
-    P2["pydantic DTOs"]
-    P3["error taxonomy"]
-    P4["RunStore schemas"]
+  subgraph intake ["A. Intake — every request"]
+    Req["AlertIncident / SPT / Verify request"]
+    Create["RunStore.create_run initial status"]
   end
 
-  subgraph wire ["libs/platform-adapters OWNS"]
-    W1["build_* factories"]
-    W2["env provider select"]
-    W3["Postgres RunStore"]
+  subgraph orch ["B. Temporal"]
+    WF["Workflow + activities via ports"]
+    Step["Execute step"]
+    Upd["RunStore.upsert_step + rollup"]
   end
 
-  subgraph worker ["am-agents Temporal worker OWNS"]
-    T1["workflows"]
-    T2["activities via ports"]
-    T3["claim loop pending steps"]
+  subgraph db ["C. Postgres RunStore"]
+    Runs["agent_runs"]
+    Steps["agent_run_steps"]
+    Claim["claim pending SKIP LOCKED"]
   end
 
-  subgraph edge ["Alert Ops edge OWNS"]
-    E1["StartWorkflow / Signal"]
-    E2["ledger columns"]
-    E3["card notify path via Notifier"]
+  subgraph verify ["D. Post-fix verify gate A"]
+    Fix["InfraOps work_done"]
+    VRun["create_run kind=verify"]
+    M["metrics check_ref"]
+    L["logs check_ref"]
+    H["health / custom"]
+    Pass["passed → unblock done"]
+    Fail["failed → reopen / escalate"]
   end
 
-  subgraph providers ["providers/* OWNS"]
-    V1["OpenProject / Jira"]
-    V2["Cliq"]
-    V3["MinIO / GDrive"]
-    V4["Langfuse / prompt http"]
-    V5["Grafana HTTP observe"]
-    V6["Postgres agent_runs"]
-  end
+  Req --> Create --> Runs
+  Create --> WF
+  WF --> Step --> Upd
+  Upd --> Steps
+  Upd --> Runs
+  Upd -->|more| Step
 
-  subgraph catalog ["catalog OWNS"]
-    C1["prompts content"]
-    C2["verify check_ref templates"]
-    C3["spt services / flows"]
-  end
-
-  subgraph notOwn ["DOES NOT OWN"]
-    N1["Grafana Loki Promtail pods"]
-    N2["prompt bodies in Python"]
-    N3["vendor IDs in workflows"]
-    N4["dual relay card formatters"]
-    N5["per-agent Protocol forks"]
-    N6["secrets in RunStore rows"]
-  end
-
-  T1 --> T2
-  T2 --> P1
-  T3 --> P4
-  W1 --> V1
-  W1 --> V2
-  W1 --> V3
-  W1 --> V4
-  W1 --> V5
-  W3 --> V6
-  E1 --> T1
-  C1 --> V4
-  C2 --> T2
-  C3 --> T1
+  Fix --> VRun --> Steps
+  Claim --> M --> L --> H
+  H -->|all pass| Pass
+  H -->|any fail| Fail
+  Pass --> Runs
+  Fail --> Runs
 
   linkStyle default stroke:#0EA5E9,stroke-width:2px,color:#0F172A
 
@@ -69,10 +47,8 @@ flowchart TB
   classDef provider fill:#FDE68A,stroke:#B45309,stroke-width:2px,color:#78350F
   classDef alert fill:#FECDD3,stroke:#E11D48,stroke-width:2px,color:#881337
   classDef dest fill:#BFDBFE,stroke:#1D4ED8,stroke-width:2px,color:#1E3A8A
-  classDef external fill:#FFFFFF,stroke:#2563EB,stroke-width:2px,color:#0F172A
 
-  class P1,P2,P3,P4,W1,W2,W3,T1,T2,T3 core
-  class V1,V2,V3,V4,V5,V6 provider
-  class E1,E2,E3 alert
-  class C1,C2,C3 dest
-  class N1,N2,N3,N4,N5,N6 external
+  class Create,Upd,Claim,WF,Step core
+  class Runs,Steps,M,L,H provider
+  class Req,Fix,VRun alert
+  class Pass,Fail dest

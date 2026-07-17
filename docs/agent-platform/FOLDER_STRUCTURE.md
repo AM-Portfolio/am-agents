@@ -16,6 +16,8 @@ Legend: `[P0]` … `[P5]` = first phase that introduces the path. Paths without 
 | **am-agents/libs/platform-adapters** | `build_*` + vendor adapters (optional extras; SecretBroker inside) |
 | **am-agents/platform_worker** | Temporal app — depends on ports (+ adapters at runtime) |
 | **am-agents/catalog/prompts** | Prompt data (not a Python package of logic) |
+| **am-agents/catalog/verify** | Verify `check_ref` templates (metrics/logs/health) |
+| **am-agents/catalog/spt** | SPT service/flow catalog (P3) |
 | **am-agents/gateway** | P5 — Temporal client only |
 | **am-obs-platform** | Alert Ops edge + Grafana content; may *consume* platform-ports for notify types |
 | **am-infra** | Helm/K8s only |
@@ -31,7 +33,8 @@ am-agents/
 ├── docs/agent-platform/                       # [P0a] design SoT
 │   ├── FOLDER_STRUCTURE.md
 │   ├── DESIGN.md
-│   ├── decisions/ADR-001 … ADR-003
+│   ├── decisions/ADR-001 … ADR-005
+│   ├── sheets/runstore.mmd
 │   └── …
 │
 ├── libs/
@@ -49,11 +52,12 @@ am-agents/
 │   │   │   │   ├── sandbox.py
 │   │   │   │   ├── redact.py
 │   │   │   │   ├── llm.py
+│   │   │   │   ├── run.py                    # [P0b] RunStore
 │   │   │   │   ├── docs.py                   # [P2]
 │   │   │   │   ├── infra.py                  # [P2]
 │   │   │   │   ├── prep.py                   # [P3]
 │   │   │   │   ├── loadtest.py               # [P3]
-│   │   │   │   ├── observe.py                # [P3]
+│   │   │   │   ├── observe.py                # [P2/P3]
 │   │   │   │   ├── mail.py                   # [P4]
 │   │   │   │   ├── calendar.py               # [P4]
 │   │   │   │   └── handoff.py                # [P5]
@@ -80,12 +84,15 @@ am-agents/
 │               ├── llm_gateway/               # [P1]
 │               ├── minio/                     # [P2]
 │               ├── gdrive/                    # [P2]
-│               ├── grafana_observe/           # [P3]
+│               ├── postgres_runstore/         # [P2] agent_runs + agent_run_steps
+│               ├── grafana_observe/           # [P2/P3]
 │               ├── jira/                      # [P4]
 │               ├── zoho_mail/                 # [P4]
 │               └── zoho_calendar/             # [P4]
 │
 ├── catalog/prompts/                           # [P0b] data only
+├── catalog/verify/                            # [P0b/P2] check_ref templates
+├── catalog/spt/                               # [P3] services + flows
 ├── platform_worker/                           # [P1] Temporal app
 │   └── src/platform_worker/
 │       ├── di.py                              # imports am_platform_adapters.factory
@@ -162,7 +169,7 @@ am-infra/
 | Agent ports inside `am-obs-platform/platform_ctl/ports/` | Blocks extraction; use `libs/platform-ports` |
 | Per-agent fork of `am_platform_ports` | Anti-dupe / ADR-003 |
 | `platform-ports` importing worker or providers | Breaks extract + other-agent reuse |
-| Secrets in workflows / Temporal payloads | ADR-002 |
+| Secrets in workflows / Temporal payloads / RunStore rows | ADR-002 / ADR-005 |
 | Prompt bodies in Python | PromptRegistry |
 | `am-obs-platform/docs/agent-platform/` | Docs only in am-agents |
 
@@ -173,10 +180,10 @@ am-infra/
 | Phase | Adds |
 |-------|------|
 | **0a** | `docs/agent-platform/**` (done) |
-| **0b** | `libs/platform-ports`, `libs/agent-common`, `libs/platform-adapters` (stubs), `catalog/prompts`, contract tests |
-| **1** | `platform_worker` workflows/activities, OP/Cliq/Vault/Langfuse/LLM adapters, Alert Ops temporal_client |
-| **2** | DocStore + InfraOps ports/adapters, docs/tool agents |
-| **3** | SPT workflow + prep/loadtest/observe |
+| **0b** | `libs/platform-ports` (incl. RunStore), stubs, `catalog/prompts` + `catalog/verify`, contract tests |
+| **1** | `platform_worker`, create_run on AlertIncident, OP/Cliq adapters, Alert Ops temporal_client |
+| **2** | DocStore + InfraOps + Postgres RunStore + verify claim loop + observe for checks |
+| **3** | SPT workflow + catalog/spt + prep/loadtest + RunStore step updates |
 | **4** | Jira + Zoho mail/calendar |
 | **5** | `gateway/`, HandoffPort — **optional: publish platform-ports to private PyPI** |
 
