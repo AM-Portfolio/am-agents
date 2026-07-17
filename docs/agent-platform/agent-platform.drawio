@@ -491,9 +491,9 @@
                 <mxCell id="e6" style="endArrow=classic;strokeColor=#9CA3AF;strokeWidth=1;" parent="1" source="ph4" target="ph5" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="note" value="Rev 1.4 — approve 0a before 0b code" style="rounded=1;fillColor=#FFFFFF;fontColor=#111827;strokeColor=#D1D5DB;fontFamily=Segoe UI;" parent="1" vertex="1">
-                    <mxGeometry x="40" y="220" width="320" height="40" as="geometry"/>
-                </mxCell>
+        <mxCell id="note" value="Rev 1.4 — 0b first (no Temporal). Phase 1 blocked: Temporal not installed locally yet." style="rounded=1;fillColor=#FFFFFF;fontColor=#111827;strokeColor=#D1D5DB;fontFamily=Segoe UI;" parent="1" vertex="1">
+          <mxGeometry x="40" y="220" width="520" height="40" as="geometry"/>
+        </mxCell>
             </root>
         </mxGraphModel>
     </diagram>

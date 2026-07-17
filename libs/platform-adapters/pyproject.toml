@@ -1,0 +1,25 @@
+[project]
+name = "am-platform-adapters"
+version = "0.1.0"
+description = "Vendor adapters + build_* composition root for agent platform"
+requires-python = ">=3.11"
+dependencies = [
+  "am-platform-ports>=0.1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+minio = ["minio>=7.2"]
+postgres = ["psycopg[binary]>=3.1"]
+openproject = []
+cliq = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/am_platform_adapters"]
+
+[tool.uv.sources]
+am-platform-ports = { path = "../platform-ports", editable = true }

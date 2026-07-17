@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://asrax.local/schemas/spt-target.json",
+  "title": "SPT catalog target",
+  "type": "object",
+  "required": ["id", "kind", "enabled", "tags", "scenario_ref"],
+  "additionalProperties": true,
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "kind": { "type": "string", "enum": ["service", "flow"] },
+    "enabled": { "type": "boolean" },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "prep_ref": { "type": ["string", "null"] },
+    "scenario_ref": { "type": "string" },
+    "query_ref": { "type": "string" },
+    "base_url_secret_ref": { "type": "string" },
+    "steps": { "type": "array", "items": { "type": "string" } }
+  }
+}

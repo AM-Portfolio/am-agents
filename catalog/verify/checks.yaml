@@ -1,0 +1,10 @@
+# Verify check_ref templates (Phase 2) — catalog data only
+checks:
+  - check_ref: verify.metrics.error_rate
+    kind: metrics
+    query_ref: grafana.prom.error_rate
+    pass_when: "value < threshold"
+  - check_ref: verify.logs.no_fatal
+    kind: logs
+    query_ref: grafana.loki.no_fatal
+    pass_when: "count == 0"

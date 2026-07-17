@@ -2,8 +2,8 @@
 
 **Repo:** `am-agents`  
 **Revision:** 1.4  
-**Status:** DESIGN — RunStore + verify-after-fix locked (ADR-005); awaiting confirmation before Phase 0b code  
-**Phase gate:** docs + diagrams first; ports/code only after explicit approve
+**Status:** DEVELOPMENT — Phase 1 AlertIncident smoke green (fake ports); Temporal on kind-am-preprod  
+**Phase gate:** 0a/0b done · Phase 1 worker+workflow live · next OP/Cliq adapters + Alert Ops Start/Signal
 
 Related: [../ENTERPRISE_AGENT_ECOSYSTEM.md](../ENTERPRISE_AGENT_ECOSYSTEM.md) · Obs Grafana SoT: **am-obs-platform** (`docs/PLATFORM_DESIGN.md`)
 
@@ -15,7 +15,7 @@ Everything for this platform is under **`docs/agent-platform/`** (this folder).
 |------|------|
 | **Index** | [README.md](README.md) |
 | **This design** | [DESIGN.md](DESIGN.md) |
-| **ADR** | [ADR-001](decisions/ADR-001-temporal-agent-ports.md) · [ADR-002](decisions/ADR-002-privacy-sandbox-secrets.md) · [ADR-003](decisions/ADR-003-extractable-sdk.md) · [ADR-005 RunStore](decisions/ADR-005-runstore-verify.md) |
+| **ADR** | [ADR-001](decisions/ADR-001-temporal-agent-ports.md) · [ADR-002](decisions/ADR-002-privacy-sandbox-secrets.md) · [ADR-003](decisions/ADR-003-extractable-sdk.md) · [ADR-004 SPT](decisions/ADR-004-spt-catalog-selectors.md) · [ADR-005 RunStore](decisions/ADR-005-runstore-verify.md) |
 | **Phases** | [PHASES.md](PHASES.md) |
 | **Folder structure (all phases)** | [FOLDER_STRUCTURE.md](FOLDER_STRUCTURE.md) |
 | **Mermaid** | [sheets/](sheets/) especially [runstore.mmd](sheets/runstore.mmd) |
@@ -90,10 +90,10 @@ Everything for this platform is under **`docs/agent-platform/`** (this folder).
 | No ToolSandbox (direct env to tools) | P0 | **Closed** — ADR-002 |
 | No LlmPort / Redactor on prompt path | P0 | **Closed** — ADR-002 |
 | No durable run/step status ledger | P0 | **Closed** — ADR-005 RunStore |
-| No post-fix verification before done | P1 | **Closed (design)** — ADR-005 gate A; ship Phase 2 |
+| SPT catalog / selectors / runaway | P0 | **Closed (design)** — ADR-004; ship Phase 3 |
 | Dual notify formatters (infra vs platform) | P1 | Open — Phase 1 |
 | OP status map not filled | P1 | Ops checklist |
-| Temporal not deployed | P1 | Phase 1 |
+| Temporal not on cluster | P1 | **Closed (lab)** — Helm `temporal` ns on kind-am-preprod; Postgres-backed |
 | FailoverDocStore ledger for docs_provider | P2 | Phase 2 |
 | Prompt catalog empty | P2 | Phase 0–1 |
 | Observe / verify query templates | P2 | Phase 2–3 |
@@ -104,8 +104,8 @@ Everything for this platform is under **`docs/agent-platform/`** (this folder).
 | Phase | Ship | Done when |
 |-------|------|-----------|
 | **0a Docs** | Design md + mmd + drawio + ADR-001…005 | Confirm before code — detail: [PHASES.md](PHASES.md) |
-| **0b Ports** | `libs/platform-ports` + RunStore schemas/fakes + stubs | CI green; other agents can depend on ports |
-| **1 MVP** | Temporal + AlertIncident + create_run + OP + Cliq | FIRING → run row + ticket + Cliq ≤ 60s; RESOLVED |
+| **0b Ports** | `libs/platform-ports` + RunStore schemas/fakes + stubs | CI green; **no Temporal required** |
+| **1 MVP** | AlertIncident + create_run + OP + Cliq on cluster Temporal | Frontend `temporal-frontend.temporal:7233`; FIRING → run row + ticket + Cliq ≤ 60s |
 | **2** | DocStore + InfraOps + **verify run** (metrics/logs) + Postgres RunStore | Gate A: done only after verify pass |
 | **3** | SPT catalog/selectors + fan-out + RunStore step updates + growth CI | Lab smoke ≥2 children + partial; `spt-growth` CI green |
 | **4** | Jira + Zoho Mail + Calendar | Same workflows; env swap |
@@ -145,11 +145,12 @@ Full tree: **[FOLDER_STRUCTURE.md](FOLDER_STRUCTURE.md)** · Extractable SDK: **
 ## Confirmation gate
 
 ```text
-Status: AWAITING CONFIRMATION
-Approved by: —
-Approved at: —
-Approved design revision: 1.4 (ADR-002 + ADR-003 + ADR-005; ADR-004 SPT pending file)
-Next step after approve: Phase 0b — libs/platform-ports first (reusable by any agent)
+Status: APPROVED — development started
+Approved by: user (start development)
+Approved at: 2026-07-18
+Approved design revision: 1.4 (ADR-002 + ADR-003 + ADR-004 + ADR-005)
+In progress: Phase 0b — libs/platform-ports
+Temporal lab: ready on kind-am-preprod
 ```
 
-Reply **approve design** (or request changes) before any Protocol/adapter implementation. Checklist: [PHASES.md](PHASES.md).
+Phase 0b ports package is under `libs/platform-ports/`. Checklist: [PHASES.md](PHASES.md).

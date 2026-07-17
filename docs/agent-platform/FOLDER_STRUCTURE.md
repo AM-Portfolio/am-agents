@@ -149,15 +149,31 @@ Optional later: Alert Ops depends on `am-platform-ports` + `am-platform-adapters
 
 ## 3. `am-infra` (deploy only)
 
+**Temporal lab (done):** Helm release `temporal` in namespace `temporal` on **kind-am-preprod**.  
+Uses **existing** `postgresql` in `infra` — databases `temporal` + `temporal_visibility` only (no new DB server, no Cassandra/ES).
+
 ```text
 am-infra/
 └── k8s/
-    ├── temporal/                              # [P1]
+    ├── temporal/                              # [P1] values-lab.yaml + README
+    │   ├── values-lab.yaml                    # Postgres → postgresql.infra
+    │   └── README.md
+    ├── postgresql/                            # [exists] shared DB server
     ├── minio/                                 # [P2]
     ├── agent-platform/
     │   ├── platform-worker/                   # [P1]
     │   └── agent-gateway/                     # [P5]
     └── grafana/alert-ops/
+```
+
+In-cluster endpoints:
+
+```text
+TEMPORAL_HOST=temporal-frontend.temporal.svc.cluster.local:7233
+TEMPORAL_NAMESPACE=default
+# UI: kubectl -n temporal port-forward svc/temporal-web 8080:8080
+# Kubeconfig: VPS/VPS/kubeconfig.vps
+# Namespace (one-time): kubectl -n temporal exec deploy/temporal-admintools -- temporal operator namespace create --namespace default --retention 7d
 ```
 
 ---
@@ -180,7 +196,8 @@ am-infra/
 | Phase | Adds |
 |-------|------|
 | **0a** | `docs/agent-platform/**` (done) |
-| **0b** | `libs/platform-ports` (incl. RunStore), stubs, `catalog/prompts` + `catalog/verify`, contract tests |
+| **0b** | `libs/platform-ports` (incl. RunStore), stubs, `catalog/prompts` + `catalog/verify`, contract tests — **no Temporal** |
+| **1 prereq** | Temporal Helm on kind-am-preprod → existing infra Postgres (**done**) |
 | **1** | `platform_worker`, create_run on AlertIncident, OP/Cliq adapters, Alert Ops temporal_client |
 | **2** | DocStore + InfraOps + Postgres RunStore + verify claim loop + observe for checks |
 | **3** | SPT workflow + catalog/spt + prep/loadtest + RunStore step updates |

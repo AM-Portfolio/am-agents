@@ -12,11 +12,22 @@ Unified home for AM AI agents.
 
 ## Documentation
 
+- **[Agent platform (Temporal)](docs/agent-platform/)** — Design SoT, phases, RunStore, ports SDK
 - **[Enterprise agent ecosystem](docs/ENTERPRISE_AGENT_ECOSYSTEM.md)** — Gap analysis, components, anti-duplication rules, phase plan
 - **[Deploy guide](docs/DEPLOY.md)** — Docker, Helm 3-env, Vault, CI/CD
 - **[Monorepo implementation plan](docs/MONOREPO_PLAN.md)** — Phase 1: full copy into `am-agents/`, npm workspaces
 - **[Universal DB agents plan](docs/UNIVERSAL_DB_AGENTS_PLAN.md)** — MCP catalog, phases
 - **[db-agent design spec](docs/DB_AGENT_DESIGN.md)** — API, LangGraph, registry, safety
+
+## Platform ports (Phase 0b)
+
+```bash
+cd libs/platform-ports
+pip install -e ".[dev]"
+pytest
+```
+
+Package: `am_platform_ports` — Protocols + schemas + fakes (no Temporal / no vendors).
 
 ## db-agent quick start
 

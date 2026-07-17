@@ -1,0 +1,9 @@
+id: flow-lab-1
+kind: flow
+enabled: true
+tags: [lab, flow]
+prep_ref: prep.flow-lab
+scenario_ref: scenario.flow-smoke
+query_ref: grafana.prom.error_rate
+base_url_secret_ref: secret.lab.flow.base_url
+steps: [tgt-a, tgt-b]

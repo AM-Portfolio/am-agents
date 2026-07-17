@@ -10,6 +10,7 @@
 | [decisions/ADR-001-temporal-agent-ports.md](decisions/ADR-001-temporal-agent-ports.md) | Ports ADR |
 | [decisions/ADR-002-privacy-sandbox-secrets.md](decisions/ADR-002-privacy-sandbox-secrets.md) | Privacy / sandbox / no creds to LLM |
 | [decisions/ADR-003-extractable-sdk.md](decisions/ADR-003-extractable-sdk.md) | Extractable SDK — other agents reuse ports |
+| [decisions/ADR-004-spt-catalog-selectors.md](decisions/ADR-004-spt-catalog-selectors.md) | SPT catalog + selectors + partial-failure + prep_ref |
 | [decisions/ADR-005-runstore-verify.md](decisions/ADR-005-runstore-verify.md) | RunStore ledger + post-fix verify gate A |
 | [sheets/modules.mmd](sheets/modules.mmd) | Owns / does-not-own |
 | [sheets/e2e.mmd](sheets/e2e.mmd) | AlertIncident E2E (+ RunStore + verify) |

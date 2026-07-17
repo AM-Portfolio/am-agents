@@ -1,0 +1,11 @@
+# Prompt catalog skeleton — content only, no Python bodies
+# Keys referenced via PromptRegistry.get(prompt_key=...)
+
+prompts:
+  - key: triage.default
+    version: "1"
+    system: |
+      Classify the alert. Return priority and short summary.
+    user: |
+      Alert: {{summary}}
+      Labels: {{labels}}

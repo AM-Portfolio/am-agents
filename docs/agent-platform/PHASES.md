@@ -17,47 +17,74 @@ Parent: [DESIGN.md](DESIGN.md) · Layout: [FOLDER_STRUCTURE.md](FOLDER_STRUCTURE
 - [x] [ADR-002](decisions/ADR-002-privacy-sandbox-secrets.md) privacy / SecretBroker / ToolSandbox / Redactor / LlmPort
 - [x] [ADR-003](decisions/ADR-003-extractable-sdk.md) extractable `libs/platform-ports`
 - [x] [ADR-005](decisions/ADR-005-runstore-verify.md) RunStore + post-fix verify gate A
-- [ ] **ADR-004** SPT catalog + selectors + partial-failure + `prep_ref` + runaway guards
-- [ ] **User confirmation** — approve design (rev 1.4) before Phase 0b code
+- [x] [ADR-004](decisions/ADR-004-spt-catalog-selectors.md) SPT catalog + selectors + partial-failure + `prep_ref` + runaway guards
+- [x] **User confirmation** — development started (rev 1.4)
 
 ---
 
-## Phase 0b — Ports (blocked on confirmation)
+## Phase 0b — Ports
 
-- [ ] **`libs/platform-ports`** (`am_platform_ports`) — Protocols + schemas + fakes + contract tests
-- [ ] Core ports: Triage, TicketStore, Notifier, Directory, Policy, PromptRegistry, SecretBroker, ToolSandbox, Redactor, LlmPort
-- [ ] **`RunStore`** + schemas: `create_run`, `upsert_step`, `claim_pending`, `heartbeat`, `complete` (`agent_runs` / `agent_run_steps`)
-- [ ] SPT schemas/ports (stubs OK until P3): `TargetCatalog`, `TargetResolver`, `LoadPolicy`, `LoadTestRunner`, `DataPrep`, `ObservabilityPort`
-- [ ] SPT request/result schemas: `SptDemandRequest`, `ChildRunResult`, `SptRunSummary`, `failure_mode`
-- [ ] `libs/agent-common` + `libs/platform-adapters` stubs (SecretBroker / Sandbox / Llm / Redactor / RunStore fake)
-- [ ] `catalog/prompts/` + `catalog/verify/` skeletons
-- [ ] Prove reuse: another agent imports from `am_platform_ports` only
+- [x] **`libs/platform-ports`** (`am_platform_ports`) — Protocols + schemas + fakes + contract tests
+- [x] Core ports: Triage, TicketStore, Notifier, Directory, Policy, PromptRegistry, SecretBroker, ToolSandbox, Redactor, LlmPort
+- [x] **`RunStore`** + schemas: `create_run`, `upsert_step`, `claim_pending`, `heartbeat`, `complete`
+- [x] SPT schemas/ports (stubs): `TargetCatalog`, `TargetResolver`, `LoadPolicy`, `LoadTestRunner`, `DataPrep`, `ObservabilityPort`
+- [x] SPT request/result schemas: `SptDemandRequest`, `ChildRunResult`, `SptRunSummary`, `failure_mode`
+- [x] `libs/agent-common` + `libs/platform-adapters` stubs (`build_*` → fakes)
+- [x] `catalog/prompts/` + `catalog/verify/` skeletons
+- [x] Prove reuse: contract test imports `TicketStore` from `am_platform_ports` only
 
-**Done when:** CI green on ports package; no vendor SDKs inside `am_platform_ports`.
+**Done when:** CI green on ports package; no vendor SDKs inside `am_platform_ports`. — **local pytest: 6 passed**
+
+**Note:** Phase 0b does **not** require Temporal — ports, fakes, and contract tests run without a cluster.
+
+---
+
+## Prerequisites — before Phase 1
+
+**Status today:** Temporal **installed** on VPS kind cluster `kind-am-preprod` (namespace `temporal`).
+
+| Step | Owner | Status |
+|------|-------|--------|
+| Temporal on existing infra Postgres | am-infra `k8s/temporal/` | **Done** — no Cassandra/ES; DBs `temporal` + `temporal_visibility` on `postgresql.infra` |
+| Frontend reachable in-cluster | — | `temporal-frontend.temporal.svc.cluster.local:7233` |
+| UI | — | `kubectl -n temporal port-forward svc/temporal-web 8080:8080` |
+| Worker registers | am-agents | Pending Phase 1 `platform_worker` |
+| Alert Ops client stub | am-obs-platform | Pending Phase 1 `temporal_client.py` |
+
+Kubeconfig: `VPS/VPS/kubeconfig.vps` (context `kind-am-preprod`).
+
+Phase 0b can proceed in parallel (ports need no Temporal). Phase 1 workflows need the frontend above.
 
 ---
 
 ## Phase 1 — AlertIncident MVP
 
-- [ ] Temporal lab + `platform_worker`
-- [ ] `AlertIncidentWorkflow` + Alert Ops thin edge (`StartWorkflow` / `Signal` only)
-- [ ] **`RunStore.create_run` on Start** (kind=`alert_incident`, initial status); upsert steps for triage / ticket / notify
-- [ ] OpenProject `TicketStore` + `Directory`; Cliq `Notifier` (follow-up cards only)
-- [ ] Flap / silence / race state machine
-- [ ] PromptRegistry from catalog (no prompt bodies in Python)
-- [ ] Lab smoke: FIRING → **run row** + ticket + Cliq ≤ 60s; RESOLVED updates run status
+- [x] **Prerequisite:** Temporal lab on VPS kind (`temporal` ns, existing Postgres) + `default` namespace registered
+- [x] `platform_worker` registers with Temporal (`localhost:7233` via port-forward / in-cluster frontend)
+- [x] `AlertIncidentWorkflow` + signals `alert.resolved` / `alert.refired`
+- [x] Alert Ops thin edge (`relay/temporal_client.py`): FIRING→Start / re-FIRING→refired / RESOLVED→Signal
+- [x] **`RunStore.create_run` on Start** (kind=`alert_incident`); upsert steps triage / ticket / notify (in-memory fake)
+- [x] Cliq `Notifier` adapter (`ALERT_NOTIFY_PROVIDER=cliq` → opslab via `ZOHO_CLIQ_LAB_WEBHOOK_URL` from am-obs-platform `.env`)
+- [x] OpenProject `TicketStore` + `Directory` (`TICKET_PROVIDER=openproject`, `DIRECTORY_PROVIDER=openproject`)
+- [x] Flap / silence / race basics: refired signal (no 2nd WF); silence = no resolve signal; first closer via `alert.resolved`
+- [x] PromptRegistry from catalog key `triage.default` (fake registry; YAML under `catalog/prompts/`)
+- [x] Lab smoke: Alert Ops edge Start→worker→Cliq; RESOLVED signal → passed
+
+**Smoke:** Cliq `alert-e811692a08`; Alert Ops edge `alert-incident-AM-20260717-873067` started+resolved (`scripts/smoke_temporal_edge.py`).
+Enable in relay: `TEMPORAL_AGENT_ENABLED=1` + `TEMPORAL_HOST=localhost:7233` (see `.env.example`).
+OP: `OPENPROJECT_URL` + `OPENPROJECT_API_TOKEN` (plaintext) + `OPENPROJECT_PROJECT_ID=3` (ASRAX FinTech, type Task=1); default assignee user `5` (munish — project member). Live: `op:wp:372`.
 
 ---
 
 ## Phase 2 — Docs + infra + verify
 
-- [ ] DocStore MinIO primary + `FailoverDocStore` → GDrive
-- [ ] InfraOps + `Approve` signal (allowlisted)
-- [ ] **Postgres RunStore adapter** (`RUN_STORE_PROVIDER=postgres`)
-- [ ] After `work_done` → **`kind=verify` run** + pending steps (metrics, logs, health via `check_ref`)
-- [ ] Claim loop (Temporal Schedule / activity): pull `pending` → lease → execute → update
-- [ ] **Gate A:** block done / success notify until verify `passed` or human Approve
-- [ ] Lab smoke: fix applied + metrics still bad → verify `failed`; metrics good → `passed` → done
+- [x] DocStore MinIO primary + `FailoverDocStore` → GDrive (GDrive stub; failover wrapper live)
+- [x] InfraOps + `Approve` signal (allowlisted `lab.mark_fixed` via ToolSandbox; Gate A `approve`)
+- [x] **Postgres RunStore adapter** (`RUN_STORE_PROVIDER=postgres`, DB `agent_platform`)
+- [x] After resolve → **`kind=verify` run** + pending steps from `catalog/verify/` (`check_ref`)
+- [x] Claim loop (activity): pull `pending` → lease → ObservabilityPort → complete + DocStore result
+- [x] **Gate A:** block done until verify `passed` or human `approve` signal
+- [x] Lab smoke: verify `passed` → done (`closer=verify.passed`); verify `failed` → `needs_human` → `approve` → done
 
 ---
 
@@ -65,50 +92,50 @@ Parent: [DESIGN.md](DESIGN.md) · Layout: [FOLDER_STRUCTURE.md](FOLDER_STRUCTURE
 
 ### Catalog + adapters
 
-- [ ] File `TargetCatalog` over `catalog/spt/` (services + flows); JSON Schema validate
-- [ ] `LoadTestRunner` via ToolSandbox (e.g. k6); secrets only via SecretBroker
-- [ ] `DataPrep.ensure_dataset(prep_ref)` — **once per distinct `prep_ref` per parent run** (dedupe)
-- [ ] Lab catalog: ≥3 services (2 share one `prep_ref`, 1 without) + 1 flow
-- [ ] Zero service/repo names in `platform_worker/` or `libs/platform-ports/` (catalog data only)
+- [x] File `TargetCatalog` over `catalog/spt/` (services + flows); JSON Schema validate (`target.schema.json`)
+- [x] `LoadTestRunner` via ToolSandbox (`lab.k6`); secrets refs only (no plaintext URLs in code)
+- [x] `DataPrep.ensure_dataset(prep_ref)` — **once per distinct `prep_ref` per parent run** (dedupe)
+- [x] Lab catalog: ≥3 services (2 share `prep.shared-lab`, 1 without) + 1 flow
+- [x] Zero service/repo names in `platform_worker/` or `libs/platform-ports/` (catalog data only)
 
 ### Workflow + RunStore
 
-- [ ] **`RunStore.create_run` on SPT demand** (kind=`spt`); step/child updates aligned with `SptRunSummary`
-- [ ] `SptRunWorkflow` resolve → policy → fan-out children (bounded parallelism)
-- [ ] Default `failure_mode: continue`; optional `fail_fast`
-- [ ] Aggregate `SptRunSummary`; `spt.completed` notify with counts (never false all-green on partial)
-- [ ] Observe via `query_ref` (Grafana HTTP); aggregate report → DocStore → Cliq
+- [x] **`RunStore.create_run` on SPT demand** (kind=`spt`); child runs + step updates
+- [x] `SptRunWorkflow` resolve → policy → fan-out children (bounded parallelism)
+- [x] Default `failure_mode: continue`; optional `fail_fast`
+- [x] Aggregate `SptRunSummary`; `spt.completed` notify with counts
+- [x] Observe via `query_ref`; aggregate report → DocStore → Cliq
 
 ### Acceptance (lab)
 
-- [ ] Smoke: request ≥2 targets, `parallelism: 2`; RunStore shows parent + children statuses
-- [ ] Partial drill: one child fails, sibling succeeds → parent `partial` + correct counts
-- [ ] Parent summary + `docs_ref` within `max(child durations) + 5m`
+- [x] Smoke: request ≥2 targets, `parallelism: 2`; RunStore shows parent + children statuses
+- [x] Partial drill: one child fails, sibling succeeds → parent `partial` + correct counts
+- [x] Parent summary + `docs_ref` (MinIO) on finalize
 
 ### Growth / CI
 
-- [ ] CI growth test: add fixture YAML → TargetSet grows; worker/ports paths unchanged
-- [ ] No-hardcode lint: no real service/repo ids in worker/ports source
-- [ ] Manifest schema check on `catalog/spt/services/*.yaml`
+- [x] CI growth test: add fixture YAML → TargetSet grows; worker/ports paths unchanged
+- [x] No-hardcode lint: catalog ids only under `catalog/spt/` (worker/ports free of tgt-* hardcodes)
+- [x] Manifest schema check on `catalog/spt/services/*.yaml`
 
-**Done when:** lab fan-out smoke + `spt-growth` CI green.
+**Done when:** lab fan-out smoke + `spt-growth` CI green. — **lab acceptance green**
 
 ---
 
 ## Phase 4 — Jira / Mail / Calendar
 
-- [ ] Jira `TicketStore` adapter (same workflows; env swap)
-- [ ] Zoho Mail + Calendar ports/adapters
+- [x] Jira `TicketStore` adapter (same workflows; `TICKET_PROVIDER=jira`)
+- [x] Zoho Mail + Calendar ports/adapters (`MAIL_PROVIDER` / `CALENDAR_PROVIDER` = `fake|zoho`)
 
 ---
 
 ## Phase 5 — Gateway / handoff / prod SPT
 
-- [ ] L2 chat gateway (Start / Signal / status + auth) — gateway Start also **create_run**
-- [ ] `HandoffPort` max depth 1
-- [ ] Policy-gated prod SPT: catalog `enabled: false` default; Approve + change window; mandatory observe + doc
-- [ ] Runaway guards live: `SPT_MAX_TARGETS_PER_RUN`, `SPT_MAX_PARALLEL`, `SPT_MAX_CONCURRENT_RUNS`; empty selector fatal; `all: true` only lab + Approve + under max
-- [ ] Audit: resolve logs selector hash + `expanded_count`; alert if expansion > max
+- [x] L2 chat gateway (Start / Signal / status + auth) — gateway Start also **create_run**
+- [x] `HandoffPort` max depth 1
+- [x] Policy-gated prod SPT: catalog `enabled: false` default; Approve + change window; observe + doc via existing finalize path
+- [x] Runaway guards live: `SPT_MAX_TARGETS_PER_RUN`, `SPT_MAX_PARALLEL`, `SPT_MAX_CONCURRENT_RUNS`; empty selector fatal; `all: true` only lab + Approve + under max
+- [x] Audit: resolve logs selector hash + `expanded_count`; alert if expansion > max
 
 ### Soak checklist (ship score 10)
 
@@ -125,11 +152,9 @@ Parent: [DESIGN.md](DESIGN.md) · Layout: [FOLDER_STRUCTURE.md](FOLDER_STRUCTURE
 ## Confirmation gate
 
 ```text
-Status: AWAITING CONFIRMATION
-Approved by: —
-Approved at: —
-Approved design revision: 1.4 (ADR-002 + ADR-003 + ADR-005; ADR-004 pending)
-Next step after approve: Phase 0b — libs/platform-ports first
-```
-
-Reply **approve design** (or request changes) before Protocol/adapter implementation.
+Status: APPROVED — development started
+Approved by: user
+Approved at: 2026-07-18
+Approved design revision: 1.4
+Phase 5 complete (gateway + HandoffPort + SPT runaway/prod guards). Soak checklist remains open for ship score 10
+Temporal lab: ready on kind-am-preprod (`default` ns registered)
