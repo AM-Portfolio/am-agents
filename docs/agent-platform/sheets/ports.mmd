@@ -1,0 +1,43 @@
+%%{init: {"theme":"base","themeVariables":{"darkMode":false,"background":"#FFFFFF","fontFamily":"Segoe UI, Inter, system-ui, sans-serif","fontSize":"16px","primaryColor":"#EFF6FF","primaryTextColor":"#0F172A","primaryBorderColor":"#2563EB","secondaryColor":"#F8FAFC","lineColor":"#0EA5E9","textColor":"#0F172A","mainBkg":"#EFF6FF","clusterBkg":"#F8FAFC","clusterBorder":"#1E293B","edgeLabelBackground":"#FFFFFF"},"themeCSS":"svg{background-color:#FFFFFF!important}.edgePath .path,.flowchart-link,path.path{stroke:#0EA5E9!important;stroke-width:2px!important}.arrowheadPath,marker path{fill:#0EA5E9!important;stroke:#0EA5E9!important}.cluster rect{fill:#F8FAFC!important;stroke:#1E293B!important;stroke-width:2.5px!important}.cluster-label span,.cluster-label foreignObject div,.cluster-label foreignObject span{color:#020617!important;font-weight:700!important;font-size:15px!important;background-color:#E2E8F0!important;padding:2px 8px!important;border-radius:4px!important}.nodeLabel,.label,.edgeLabel{color:#0F172A!important;font-weight:600}","flowchart":{"curve":"basis","htmlLabels":true,"padding":24,"nodeSpacing":50,"rankSpacing":70}} }%%
+flowchart LR
+  subgraph factories ["Composition root adapters.py"]
+    F1["build_ticket_store"]
+    F2["build_notifier"]
+    F3["build_directory"]
+    F4["build_prompt_registry"]
+    F5["build_doc_store"]
+    F6["build_observability"]
+  end
+
+  subgraph env ["Env"]
+    E1["TICKET_PROVIDER"]
+    E2["ALERT_NOTIFY_PROVIDER"]
+    E3["PROMPT_PROVIDER"]
+    E4["DOC_PROVIDER / DOC_FALLBACK"]
+  end
+
+  subgraph ports ["Ports"]
+    TicketStore
+    Notifier
+    DirectoryPort
+    PromptRegistry
+    DocStore
+    ObservabilityPort
+  end
+
+  E1 --> F1 --> TicketStore
+  E2 --> F2 --> Notifier
+  F3 --> DirectoryPort
+  E3 --> F4 --> PromptRegistry
+  E4 --> F5 --> DocStore
+  F6 --> ObservabilityPort
+
+  linkStyle default stroke:#0EA5E9,stroke-width:2px,color:#0F172A
+
+  classDef core fill:#BBF7D0,stroke:#15803D,stroke-width:2px,color:#14532D
+  classDef provider fill:#FDE68A,stroke:#B45309,stroke-width:2px,color:#78350F
+  classDef dest fill:#BFDBFE,stroke:#1D4ED8,stroke-width:2px,color:#1E3A8A
+
+  class TicketStore,Notifier,DirectoryPort,PromptRegistry,DocStore,ObservabilityPort core
+  class F1,F2,F3,F4,F5,F6 provider
+  class E1,E2,E3,E4 dest

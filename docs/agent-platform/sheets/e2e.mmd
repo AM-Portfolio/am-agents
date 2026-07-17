@@ -1,0 +1,47 @@
+%%{init: {"theme":"base","themeVariables":{"darkMode":false,"background":"#FFFFFF","fontFamily":"Segoe UI, Inter, system-ui, sans-serif","fontSize":"16px","primaryColor":"#EFF6FF","primaryTextColor":"#0F172A","primaryBorderColor":"#2563EB","secondaryColor":"#F8FAFC","lineColor":"#0EA5E9","textColor":"#0F172A","mainBkg":"#EFF6FF","clusterBkg":"#F8FAFC","clusterBorder":"#1E293B","edgeLabelBackground":"#FFFFFF"},"themeCSS":"svg{background-color:#FFFFFF!important}.edgePath .path,.flowchart-link,path.path{stroke:#0EA5E9!important;stroke-width:2px!important}.arrowheadPath,marker path{fill:#0EA5E9!important;stroke:#0EA5E9!important}.cluster rect{fill:#F8FAFC!important;stroke:#1E293B!important;stroke-width:2.5px!important}.cluster-label span,.cluster-label foreignObject div,.cluster-label foreignObject span{color:#020617!important;font-weight:700!important;font-size:15px!important;background-color:#E2E8F0!important;padding:2px 8px!important;border-radius:4px!important}.nodeLabel,.label,.edgeLabel{color:#0F172A!important;font-weight:600}","flowchart":{"curve":"basis","htmlLabels":true,"padding":24,"nodeSpacing":50,"rankSpacing":70}} }%%
+flowchart TB
+  subgraph triggers ["A. Triggers"]
+    Graf["Grafana FIRING"]
+    Res["Grafana RESOLVED"]
+    Silence["Silence - ignored"]
+  end
+
+  subgraph edge ["B. Alert Ops edge"]
+    Hook["StartWorkflow alert-tracking_id"]
+    SigR["Signal alert.resolved"]
+    SigF["Signal alert.refired"]
+  end
+
+  subgraph wf ["C. AlertIncidentWorkflow"]
+    Triage["TriagePort.classify"]
+    Dir["DirectoryPort.resolve"]
+    Ticket["TicketStore.create + assign"]
+    Notify["Notifier ticket.created + card"]
+    Close["first closer wins"]
+  end
+
+  subgraph adapters ["D. Adapters"]
+    OP["OpenProject"]
+    Cliq["Cliq follow-up card"]
+  end
+
+  Graf --> Hook --> Triage --> Dir --> Ticket --> Notify
+  Ticket --> OP
+  Notify --> Cliq
+  Res --> SigR --> Close
+  Graf -.->|re-FIRING while open| SigF
+  SigF --> Ticket
+  Silence -.->|no close| Silence
+  Close --> OP
+  Close --> Cliq
+
+  linkStyle default stroke:#0EA5E9,stroke-width:2px,color:#0F172A
+
+  classDef core fill:#BBF7D0,stroke:#15803D,stroke-width:2px,color:#14532D
+  classDef provider fill:#FDE68A,stroke:#B45309,stroke-width:2px,color:#78350F
+  classDef alert fill:#FECDD3,stroke:#E11D48,stroke-width:2px,color:#881337
+  classDef external fill:#FFFFFF,stroke:#2563EB,stroke-width:2px,color:#0F172A
+
+  class Triage,Dir,Ticket,Notify,Close,Hook,SigR,SigF core
+  class OP,Cliq provider
+  class Graf,Res,Silence alert
