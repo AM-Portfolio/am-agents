@@ -1,4 +1,4 @@
-"""AlertIncident activities — parity path uses composition + intelligence gate."""
+"""AlertIncident activities — parity path uses composition + durable memory."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ from typing import Any
 
 from temporalio import activity
 
-from am_support_agent.adapters.security import Redactor
 from am_support_agent.composition import build_runtime
 from am_support_agent.contracts.capabilities import (
     ApprovalMetadata,
@@ -18,14 +17,14 @@ from am_support_agent.contracts.capabilities import (
     WorkItemRef,
 )
 from am_support_agent.contracts.enums import ApprovalRisk, IncidentValidationStatus
-from am_support_agent.contracts.incident import IncidentEpisode
+from am_support_agent.contracts.incident import IncidentEpisode, episode_id_for
 from am_support_agent.intelligence import (
     ActionPlanner,
     ContextBuilder,
     EpisodeRetriever,
     IncidentValidator,
 )
-from am_support_agent.learning import episode_store, persist_episode
+from am_support_agent.learning import ingest_feedback_event, persist_episode
 
 
 def incident_parity_enabled() -> bool:
@@ -81,12 +80,10 @@ async def bootstrap_incident(payload: dict[str, Any]) -> dict[str, Any]:
         return _gate_payload("bootstrap", tracking_id)
 
     runtime = build_runtime()
-    redactor = Redactor()
-    alert = redactor.redact_dict(alert)
+    alert = runtime.redactor.redact_dict(alert)
     cap = runtime.capability
     run_ref = str(payload.get("run_ref") or tracking_id)
 
-    # 1) directory resolve
     owner_res = await cap.call(
         CapabilityCall(
             capability="directory.owner.resolve",
@@ -108,7 +105,6 @@ async def bootstrap_incident(payload: dict[str, Any]) -> dict[str, Any]:
             }
         )
 
-    # 2) work-item create + assign
     create = await cap.call(
         CapabilityCall(
             capability="work-item.create",
@@ -142,7 +138,6 @@ async def bootstrap_incident(payload: dict[str, Any]) -> dict[str, Any]:
             )
         )
 
-    # 3) mandatory read-back
     if work_item:
         got = await cap.call(
             CapabilityCall(
@@ -153,7 +148,6 @@ async def bootstrap_incident(payload: dict[str, Any]) -> dict[str, Any]:
         if got.ok:
             work_item = _work_item_from_data(got.data, provider=got.provider or create.provider)
 
-    # 4) gather observe evidence
     observe: list[ObserveEvidence] = []
     for kind, capability in (
         ("metrics", "observe.metrics.query"),
@@ -180,8 +174,10 @@ async def bootstrap_incident(payload: dict[str, Any]) -> dict[str, Any]:
             )
         )
 
-    # 5) similar incidents from episodic memory
-    similar = EpisodeRetriever(episode_store()).similar(alert, limit=5)
+    retriever = EpisodeRetriever(runtime.episodes)
+    similar_eps = retriever.similar_episodes(alert, limit=5)
+    similar = [ep.episode_id for ep in similar_eps]
+    similar_summaries = retriever.summaries(alert, limit=5)
     catalog_refs = []
     try:
         summary = runtime.catalog.summary()
@@ -198,11 +194,11 @@ async def bootstrap_incident(payload: dict[str, Any]) -> dict[str, Any]:
         owner=owner,
         observe=observe,
         similar_incident_ids=similar,
+        similar_summaries=similar_summaries,
         catalog_refs=catalog_refs,
     )
     validation = IncidentValidator().validate(ctx)
 
-    # annotate not_confirmed tickets
     if (
         validation.status == IncidentValidationStatus.NOT_CONFIRMED
         and work_item
@@ -221,16 +217,20 @@ async def bootstrap_incident(payload: dict[str, Any]) -> dict[str, Any]:
         )
 
     actions = ActionPlanner().plan(validation=validation, ctx=ctx)
+    eid = episode_id_for(tracking_id=tracking_id, run_ref=run_ref)
+    outcome = "pending"
+    if validation.status == IncidentValidationStatus.NOT_CONFIRMED:
+        outcome = "not_confirmed"
     episode = persist_episode(
         IncidentEpisode(
-            episode_id="",
+            episode_id=eid,
             tracking_id=tracking_id,
             run_ref=run_ref,
             context=ctx,
             validation=validation,
             decision=validation.status.value,
             actions=actions,
-            outcome="pending",
+            outcome=outcome,
             provenance={"module": "support-agent", "policy": validation.policy_version},
         )
     )
@@ -244,6 +244,7 @@ async def bootstrap_incident(payload: dict[str, Any]) -> dict[str, Any]:
         "validation": validation.model_dump(),
         "actions": actions,
         "episode_id": episode.episode_id,
+        "similar_summaries": similar_summaries,
         "needs_hitl": validation.status == IncidentValidationStatus.INCONCLUSIVE,
         "continue": validation.status == IncidentValidationStatus.CONFIRMED,
         "stop": validation.status == IncidentValidationStatus.NOT_CONFIRMED,
@@ -259,8 +260,9 @@ async def finalize_incident(payload: dict[str, Any]) -> dict[str, Any]:
 
     runtime = build_runtime()
     actions = list(payload.get("actions") or [])
+    episode_id = str(payload.get("episode_id") or "")
     results: list[dict[str, Any]] = []
-    for action in actions:
+    for idx, action in enumerate(actions):
         capability = str(action.get("capability") or "")
         if not capability:
             continue
@@ -271,7 +273,7 @@ async def finalize_incident(payload: dict[str, Any]) -> dict[str, Any]:
                 args=dict(action.get("args") or {}),
                 approval=ApprovalMetadata(risk=risk),
                 idempotency=IdempotencyMetadata(
-                    key=f"{tracking_id}:{capability}:{len(results)}"
+                    key=f"{tracking_id}:{capability}:{idx}"
                 ),
             )
         )
@@ -282,10 +284,29 @@ async def finalize_incident(payload: dict[str, Any]) -> dict[str, Any]:
                 "error": res.error,
             }
         )
+
+    outcome = "confirmed" if all(r.get("ok") for r in results) or not results else "finalize_partial"
+    if episode_id:
+        try:
+            runtime.episodes.update_outcome(
+                episode_id,
+                outcome=outcome,
+                verify_status="passed" if outcome == "confirmed" else "partial",
+                evidence=[
+                    {"kind": "finalize", "ref": r["capability"], "provenance": "capability"}
+                    for r in results
+                    if r.get("ok")
+                ],
+            )
+        except KeyError:
+            pass
+
     return {
         "gated": False,
         "phase": "finalize",
         "tracking_id": tracking_id,
+        "episode_id": episode_id,
+        "outcome": outcome,
         "results": results,
     }
 
@@ -295,14 +316,24 @@ async def record_hitl(payload: dict[str, Any]) -> dict[str, Any]:
     """Persist HITL outcome metadata into episodic/feedback stores."""
     tracking_id = str(payload.get("tracking_id") or "")
     hitl = dict(payload.get("hitl") or {})
-    from am_support_agent.learning import ingest_feedback_event
+    episode_id = str(payload.get("episode_id") or "")
+    outcome = "hitl_recorded"
+    if hitl.get("approved"):
+        outcome = "hitl_approved"
+    elif hitl.get("resolved"):
+        outcome = "hitl_resolved"
+    elif hitl.get("closed"):
+        outcome = "inconclusive_closed"
 
     fb = ingest_feedback_event(
         {
-            "episode_id": str(payload.get("episode_id") or ""),
+            "episode_id": episode_id,
             "tracking_id": tracking_id,
             "kind": "hitl",
+            "rating": outcome,
             "notes": "hitl signal received",
+            "outcome": outcome,
+            "idempotency_key": f"{tracking_id}:hitl:{episode_id}",
             "payload": hitl,
         }
     )
@@ -312,5 +343,6 @@ async def record_hitl(payload: dict[str, Any]) -> dict[str, Any]:
         "tracking_id": tracking_id,
         "hitl": hitl,
         "feedback": fb,
+        "outcome": outcome,
         "module": "support-agent",
     }

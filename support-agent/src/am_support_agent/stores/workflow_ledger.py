@@ -631,11 +631,18 @@ def build_workflow_ledger() -> WorkflowLedger:
             path = path.replace("support-agent-runs.db", "support-agent-workflows.db")
         return SqliteWorkflowLedger(path)
     if backend == "postgres":
-        # Postgres implementation lands with composition root; fail closed for now.
-        raise RuntimeError(
-            "SUPPORT_AGENT_WORKFLOW_STORE=postgres not implemented yet; "
-            "use memory or sqlite until the dedicated workflow_runs schema ships."
+        dsn = (
+            os.getenv("SUPPORT_AGENT_DATABASE_URL", "").strip()
+            or os.getenv("DATABASE_URL", "").strip()
         )
+        if not dsn:
+            raise RuntimeError(
+                "SUPPORT_AGENT_WORKFLOW_STORE=postgres requires "
+                "SUPPORT_AGENT_DATABASE_URL (or DATABASE_URL)."
+            )
+        from am_support_agent.stores.postgres_workflow import PostgresWorkflowLedger
+
+        return PostgresWorkflowLedger(dsn)
     raise ValueError(f"unsupported SUPPORT_AGENT_WORKFLOW_STORE: {backend}")
 
 

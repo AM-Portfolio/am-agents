@@ -13,7 +13,7 @@ from typing import Any
 from am_support_agent.contracts.enums import A2AOp, TaskStatus
 from am_support_agent.contracts.schemas import TaskRequest, TaskResult
 from am_support_agent.stores.run_store import TaskRun, _now, _synthetic_request
-from am_support_agent.stores.schema import SUPPORT_AGENT_SCHEMA_SQL
+from am_support_agent.stores.migrations import apply_migrations
 
 
 class PostgresTaskRunStore:
@@ -37,9 +37,7 @@ class PostgresTaskRunStore:
 
     def _init_schema(self) -> None:
         with self._lock:
-            with self._conn.cursor() as cur:
-                cur.execute(SUPPORT_AGENT_SCHEMA_SQL)
-            self._conn.commit()
+            apply_migrations(self._conn)
 
     def create(self, request: TaskRequest) -> TaskRun:
         now = _now()

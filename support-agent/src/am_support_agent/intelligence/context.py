@@ -13,7 +13,7 @@ from am_support_agent.contracts.enums import IncidentValidationStatus
 from am_support_agent.contracts.incident import IncidentContext, IncidentValidation
 from am_support_agent.contracts.schemas import EvidenceItem
 from am_support_agent.ports.clock import Clock, SystemClock
-from am_support_agent.stores.episodes import MemoryEpisodeStore
+from am_support_agent.ports.episodes import EpisodeStore
 
 
 class ContextBuilder:
@@ -31,6 +31,7 @@ class ContextBuilder:
         observe: list[ObserveEvidence],
         similar_incident_ids: list[str],
         catalog_refs: list[str],
+        similar_summaries: list[dict[str, Any]] | None = None,
     ) -> IncidentContext:
         return IncidentContext(
             tracking_id=tracking_id,
@@ -40,6 +41,7 @@ class ContextBuilder:
             owner=owner,
             observe=observe,
             similar_incidents=similar_incident_ids,
+            similar_summaries=list(similar_summaries or []),
             memory_refs=list(similar_incident_ids),
             catalog_refs=catalog_refs,
             built_at=self._clock.now_iso(),
@@ -171,16 +173,45 @@ class OutcomeEvaluator:
 
 
 class EpisodeRetriever:
-    def __init__(self, store: MemoryEpisodeStore) -> None:
+    def __init__(self, store: EpisodeStore) -> None:
         self._store = store
 
     def similar(self, alert: dict[str, Any], *, limit: int = 5) -> list[str]:
-        from am_support_agent.contracts.incident import MemoryQuery
+        return [ep.episode_id for ep in self.similar_episodes(alert, limit=limit)]
 
+    def similar_episodes(
+        self, alert: dict[str, Any], *, limit: int = 5
+    ) -> list[Any]:
+        from am_support_agent.contracts.incident import MemoryQuery
+        from am_support_agent.learning import _METRICS
+
+        labels = alert.get("labels") if isinstance(alert.get("labels"), dict) else {}
         q = MemoryQuery(
             service=str(alert.get("service") or ""),
             env=str(alert.get("env") or alert.get("environment") or ""),
             fingerprint=str(alert.get("fingerprint") or ""),
+            labels={str(k): str(v) for k, v in labels.items()},
             limit=limit,
         )
-        return [ep.episode_id for ep in self._store.query(q)]
+        if not q.has_discriminating_filter():
+            if _METRICS is not None:
+                _METRICS.observe_retrieval(result="skipped")
+            return []
+        hits = self._store.query(q)
+        if _METRICS is not None:
+            _METRICS.observe_retrieval(result="hit" if hits else "empty")
+        return hits
+
+    def summaries(self, alert: dict[str, Any], *, limit: int = 5) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
+        for ep in self.similar_episodes(alert, limit=limit):
+            out.append(
+                {
+                    "episode_id": ep.episode_id,
+                    "tracking_id": ep.tracking_id,
+                    "decision": ep.decision,
+                    "outcome": ep.outcome,
+                    "created_at": ep.created_at,
+                }
+            )
+        return out

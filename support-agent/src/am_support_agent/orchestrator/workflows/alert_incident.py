@@ -6,6 +6,7 @@ from datetime import timedelta
 from typing import Any
 
 from temporalio import workflow
+from temporalio.common import RetryPolicy
 
 with workflow.unsafe.imports_passed_through():
     from am_support_agent.orchestrator.activities.incident import (
@@ -19,6 +20,14 @@ with workflow.unsafe.imports_passed_through():
         SIGNAL_APPROVE,
         HitlState,
     )
+
+
+_ACTIVITY_RETRY = RetryPolicy(
+    initial_interval=timedelta(seconds=1),
+    backoff_coefficient=2.0,
+    maximum_interval=timedelta(seconds=30),
+    maximum_attempts=5,
+)
 
 
 @workflow.defn(name="AlertIncidentWorkflow")
@@ -68,6 +77,7 @@ class AlertIncidentWorkflow:
                 "alert": dict(payload.get("alert") or {}),
             },
             start_to_close_timeout=timedelta(seconds=120),
+            retry_policy=_ACTIVITY_RETRY,
         )
         if self._bootstrap.get("gated"):
             self._phase = "gated"
@@ -99,6 +109,7 @@ class AlertIncidentWorkflow:
                     "hitl": self._hitl.as_dict(),
                 },
                 start_to_close_timeout=timedelta(seconds=30),
+                retry_policy=_ACTIVITY_RETRY,
             )
             if not self._hitl.approved and not self._hitl.resolved:
                 self._hitl.closed = True
@@ -131,6 +142,7 @@ class AlertIncidentWorkflow:
                     "episode_id": self._bootstrap.get("episode_id"),
                 },
                 start_to_close_timeout=timedelta(seconds=120),
+                retry_policy=_ACTIVITY_RETRY,
             )
             self._hitl.closed = True
             self._phase = "closed"

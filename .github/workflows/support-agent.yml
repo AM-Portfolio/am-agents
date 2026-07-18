@@ -54,11 +54,20 @@ jobs:
       - name: Assert central helm values (universal-chart)
         run: |
           test -f support-agent/helm/values.yaml
+          test -f support-agent/helm/vault-mappings.yaml
+          test -f support-agent/helm/values.preprod.yaml
+          test -f support-agent/helm/values.prod.yaml
           grep -q 'companionWorker:' support-agent/helm/values.yaml
           grep -q 'am-support-agent-worker\|exec am-support-agent-worker' support-agent/helm/values.yaml
           grep -q 'support-agent-v2' support-agent/helm/values.yaml
           grep -q 'SUPPORT_AGENT_CANARY_MODE' support-agent/helm/values.yaml
+          grep -q 'SUPPORT_AGENT_EPISODE_STORE' support-agent/helm/values.yaml
+          grep -q 'SUPPORT_AGENT_DATABASE_URL' support-agent/helm/vault-mappings.yaml
+          grep -q 'SUPPORT_AGENT_EPISODE_STORE: "postgres"' support-agent/helm/values.preprod.yaml
+          grep -q 'SUPPORT_AGENT_EPISODE_STORE: "postgres"' support-agent/helm/values.prod.yaml
           ! grep -q 'agent-platform' support-agent/helm/values.yaml
+          ! grep -E 'postgresql://[^:]+:[^@]+@' support-agent/helm/values*.yaml
+          ! grep -E '(password|api_key|token):' support-agent/helm/values*.yaml
 
   publish:
     name: Publish AM Support Agent

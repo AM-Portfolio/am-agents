@@ -1,0 +1,8 @@
+vault:
+  secretPaths:
+    growthbook:
+      mappings:
+        GROWTHBOOK_CLIENT_KEY: "GROWTHBOOK_CLIENT_KEY"
+    postgres:
+      mappings:
+        SUPPORT_AGENT_DATABASE_URL: "SUPPORT_AGENT_DATABASE_URL"

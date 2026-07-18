@@ -14,17 +14,18 @@ from am_support_agent.adapters.catalog_store import FileCatalogStore, StubSemant
 from am_support_agent.adapters.documents import MemoryDocumentStore, MinioDocumentStore
 from am_support_agent.adapters.llm import FakeLlmClient, GatedLlmClient
 from am_support_agent.adapters.prompts import FilePromptRegistry, LangfusePromptRegistry
+from am_support_agent.adapters.security import Redactor, SandboxPolicy, SecretBroker
 from am_support_agent.adapters.storage import DocStoreNamespace
+from am_support_agent.learning import configure_learning
 from am_support_agent.ports.capability import CapabilityClient
 from am_support_agent.ports.catalog import CatalogStore
 from am_support_agent.ports.clock import Clock, IdGenerator, SystemClock, UuidGenerator
 from am_support_agent.ports.documents import DocumentStore
+from am_support_agent.ports.episodes import EpisodeStore, FeedbackStore
 from am_support_agent.ports.llm import LlmClient
 from am_support_agent.ports.prompts import PromptRegistry
 from am_support_agent.ports.semantic import SemanticIndex
-from am_support_agent.adapters.security import Redactor, SandboxPolicy, SecretBroker
-from am_support_agent.stores.episodes import MemoryEpisodeStore, MemoryFeedbackStore
-from am_support_agent.learning import episode_store, feedback_store
+from am_support_agent.stores.episodes import build_episode_store, build_feedback_store
 from am_support_agent.stores.workflow_ledger import WorkflowLedger, build_workflow_ledger
 
 
@@ -40,8 +41,8 @@ class SupportRuntime:
     prompts: PromptRegistry
     semantic: SemanticIndex
     workflow_ledger: WorkflowLedger
-    episodes: MemoryEpisodeStore = field(default_factory=episode_store)
-    feedback: MemoryFeedbackStore = field(default_factory=feedback_store)
+    episodes: EpisodeStore
+    feedback: FeedbackStore
     redactor: Redactor = field(default_factory=Redactor)
     secrets: SecretBroker = field(default_factory=SecretBroker)
     sandbox: SandboxPolicy = field(default_factory=SandboxPolicy)
@@ -59,6 +60,8 @@ class SupportRuntime:
             "workflow_ledger": {
                 "name": type(self.workflow_ledger).__name__,
                 "wired": True,
+                "durable": type(self.workflow_ledger).__name__.startswith("Postgres"),
+                "ready": self.workflow_ledger.ready(),
             },
             "episodes": self.episodes.status(),
             "feedback": self.feedback.status(),
@@ -75,6 +78,10 @@ class SupportRuntime:
         if require_live:
             for key in ("capability", "documents", "prompts", "catalog"):
                 if not components[key].get("wired"):
+                    missing.append(key)
+            for key in ("episodes", "feedback", "workflow_ledger"):
+                info = components[key]
+                if not info.get("durable") or not info.get("ready", True):
                     missing.append(key)
             if self.mode == "prod" and not components["llm"].get("wired") and os.getenv(
                 "SUPPORT_AGENT_LLM_ENABLED", ""
@@ -111,7 +118,7 @@ def _build_documents(*, mode: str) -> DocumentStore:
             "true",
             "yes",
         }:
-            return store  # fail-closed via readiness.wired=False
+            return store
         return MemoryDocumentStore(namespace=ns)
     return MemoryDocumentStore(namespace=ns)
 
@@ -148,8 +155,13 @@ def build_runtime(
     catalog: CatalogStore | None = None,
     prompts: PromptRegistry | None = None,
     semantic: SemanticIndex | None = None,
+    episodes: EpisodeStore | None = None,
+    feedback: FeedbackStore | None = None,
 ) -> SupportRuntime:
     resolved_mode = mode or _runtime_mode()
+    episode_store = episodes or build_episode_store()
+    feedback_store = feedback or build_feedback_store()
+    configure_learning(episodes=episode_store, feedback=feedback_store)
     return SupportRuntime(
         mode=resolved_mode,
         capability=capability or _build_capability(mode=resolved_mode),
@@ -159,6 +171,8 @@ def build_runtime(
         prompts=prompts or _build_prompts(),
         semantic=semantic or StubSemanticIndex(),
         workflow_ledger=workflow_ledger or build_workflow_ledger(),
+        episodes=episode_store,
+        feedback=feedback_store,
     )
 
 

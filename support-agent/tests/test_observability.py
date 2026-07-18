@@ -116,6 +116,12 @@ def test_prometheus_metrics_include_technical_and_business_series():
     metrics.idempotency_hit(request)
     metrics.set_run_store_health(True)
     metrics.observe_parity(SupportDomain.TECHNICAL, False)
+    metrics.observe_episode(result="write")
+    metrics.observe_feedback(result="write")
+    metrics.observe_retrieval(result="hit")
+    metrics.observe_learning(kind="evaluation")
+    metrics.set_episode_store_health(True)
+    metrics.set_feedback_store_health(True)
 
     rendered = metrics.render()
     assert "support_agent_adapter_latency_seconds_bucket" in rendered
@@ -123,6 +129,9 @@ def test_prometheus_metrics_include_technical_and_business_series():
     assert "support_agent_idempotency_hits_total" in rendered
     assert "support_agent_in_flight_tasks" in rendered
     assert 'support_agent_run_store_healthy{application="support-agent"} 1' in rendered
+    assert "support_agent_memory_events_total" in rendered
+    assert "support_agent_learning_events_total" in rendered
+    assert "support_agent_episode_store_healthy" in rendered
     assert 'domain="technical"} 1' in rendered
     assert 'outcome="timed_out"' in rendered
     assert 'mode="human_needed"' in rendered

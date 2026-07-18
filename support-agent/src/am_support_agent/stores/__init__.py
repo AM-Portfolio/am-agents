@@ -4,6 +4,12 @@ from __future__ import annotations
 
 import os
 
+from am_support_agent.stores.episodes import (
+    MemoryEpisodeStore,
+    MemoryFeedbackStore,
+    build_episode_store,
+    build_feedback_store,
+)
 from am_support_agent.stores.run_store import (
     MemoryTaskRunStore,
     SqliteTaskRunStore,
@@ -58,6 +64,10 @@ __all__ = [
     "MemoryTaskRunStore",
     "SqliteTaskRunStore",
     "build_task_run_store",
+    "MemoryEpisodeStore",
+    "MemoryFeedbackStore",
+    "build_episode_store",
+    "build_feedback_store",
     "WorkflowKind",
     "WorkflowRunStatus",
     "WorkflowStepStatus",

@@ -17,7 +17,7 @@ from am_support_agent.contracts.schemas import TaskRequest, TaskResult
 from am_support_agent.identity import agent_id as platform_agent_id
 from am_support_agent.identity import display_name as platform_display_name
 from am_support_agent.integrations import kagent_integration_status
-from am_support_agent.learning import learning_status
+from am_support_agent.learning import configure_learning, learning_status
 from am_support_agent.orchestrator import PlanRunner, PlannedTask, Planner
 from am_support_agent.orchestrator.execution import ExecutionService
 from am_support_agent.orchestrator.hitl import HITL_SIGNAL_NAMES
@@ -154,6 +154,13 @@ def create_app(
     workflow_ledger = workflow_ledger or build_workflow_ledger()
     metrics = metrics or Metrics()
     runtime = runtime or build_runtime(workflow_ledger=workflow_ledger)
+    configure_learning(
+        episodes=runtime.episodes,
+        feedback=runtime.feedback,
+        metrics=metrics,
+    )
+    metrics.set_episode_store_health(runtime.episodes.ready())
+    metrics.set_feedback_store_health(runtime.feedback.ready())
     router = Router(registry)
     planner = Planner(registry)
     execution = ExecutionService(adapters, store, metrics)
@@ -195,6 +202,11 @@ def create_app(
             "status": "ready",
             "run_store": "ready",
             "runtime_mode": readiness["mode"],
+            "memory": {
+                "episodes": readiness["components"]["episodes"],
+                "feedback": readiness["components"]["feedback"],
+                "workflow_ledger": readiness["components"]["workflow_ledger"],
+            },
             "adapters": {
                 name: bool(info.get("wired"))
                 for name, info in readiness["components"].items()
@@ -236,6 +248,9 @@ def create_app(
             "prompts": readiness["components"]["prompts"],
             "catalog": readiness["components"]["catalog"],
             "semantic": readiness["components"]["semantic"],
+            "episodes": readiness["components"]["episodes"],
+            "feedback": readiness["components"]["feedback"],
+            "workflow_ledger": readiness["components"]["workflow_ledger"],
             "learning": learning_status(),
             "hitl_signals": sorted(HITL_SIGNAL_NAMES),
             "canary": {

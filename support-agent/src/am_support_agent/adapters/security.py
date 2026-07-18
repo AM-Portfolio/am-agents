@@ -29,6 +29,15 @@ class Redactor:
                 out[k] = "[REDACTED]"
             elif isinstance(v, dict):
                 out[k] = self.redact_dict(v)
+            elif isinstance(v, list):
+                out[k] = [
+                    self.redact_dict(item)
+                    if isinstance(item, dict)
+                    else self.redact_text(item)
+                    if isinstance(item, str)
+                    else item
+                    for item in v
+                ]
             elif isinstance(v, str):
                 out[k] = self.redact_text(v)
             else:

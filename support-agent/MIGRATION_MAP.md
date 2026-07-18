@@ -78,11 +78,12 @@ Last audited: 2026-07-18
 
 | Concern | Current | Parallel rule | Status | Exact path |
 |---------|---------|---------------|--------|------------|
-| RunStore (A2A) | memory / sqlite / dedicated Postgres | Distinct from legacy `agent_runs` | ✅ | `stores/run_store.py`, `stores/postgres.py`, schema `support_agent.task_runs` (`stores/schema.py`). Env `SUPPORT_AGENT_RUNSTORE=memory\|sqlite\|postgres` + `SUPPORT_AGENT_DATABASE_URL` |
-| Workflow ledger (incident/SPT) | memory / sqlite | Distinct from A2A task_runs and legacy agent_runs | ✅ | `stores/workflow_ledger.py` + gateway `/v2/workflows/*` + `/v2/handoff`. Postgres backend 📄 |
+| RunStore (A2A) | memory / sqlite / dedicated Postgres | Distinct from legacy `agent_runs` | ✅ | `stores/run_store.py`, `stores/postgres.py`, schema `support_agent.task_runs` (`stores/migrations.py`). Env `SUPPORT_AGENT_RUNSTORE=memory\|sqlite\|postgres` + `SUPPORT_AGENT_DATABASE_URL` |
+| Workflow ledger (incident/SPT) | memory / postgres | Distinct from A2A task_runs and legacy agent_runs | ✅ | `stores/workflow_ledger.py` + `stores/postgres_workflow.py` + gateway `/v2/workflows/*`. Env `SUPPORT_AGENT_WORKFLOW_STORE` |
+| Incident episodes / feedback | memory / postgres | Never write into `task_runs` or legacy `agent_runs` | ✅ | `stores/episodes.py`, `stores/postgres_episodes.py`; env `SUPPORT_AGENT_EPISODE_STORE` / `FEEDBACK_STORE` |
 | RunStore (legacy) | Postgres via `platform-adapters` | **Never** overloaded for A2A | 📄 gate | Documented in `docs/run-store.md`; `legacy_postgres_runstore_compatible() == False` |
 | DocStore | MinIO (+ GDrive failover) | Distinct bucket/prefix for v2 | ✅ | `adapters/storage.py` + `adapters/documents.py` via composition; prefix `support-agent-v2/` |
-| Qdrant | Agent-local only | Do not claim platform ownership | 📄 | See `memory/README.md` |
+| Qdrant | Agent-local only | Do not claim platform ownership | 📄 | Out of first production release; see `memory/README.md` |
 | Temporal | Queue `agent-platform` | Use `support-agent-v2` until cutover | ✅ | Worker refuses `agent-platform` |
 
 ## Learning
@@ -90,8 +91,9 @@ Last audited: 2026-07-18
 | Concern | Status | Exact path |
 |---------|--------|------------|
 | Feedback ingest + promotion gate | ✅ hard gate (no auto-promote) | `src/am_support_agent/learning/__init__.py` |
-| Episode store (in-memory) | ✅ | `stores/episodes.py` + `persist_episode` / `EpisodeRetriever` |
-| Offline eval / candidates store | 📄 | Folder intent in `learning/README.md` |
+| Episode store (memory + Postgres) | ✅ | `stores/episodes.py` / `postgres_episodes.py` + `persist_episode` / `EpisodeRetriever` |
+| Offline eval / candidates | ✅ audited, never auto-live | `learning/offline.py` |
+| Retention cleanup | ✅ | `stores/retention.py` (`SUPPORT_AGENT_EPISODE_RETENTION_DAYS`) |
 | Context / validator / planner | ✅ | `intelligence/context.py` |
 
 ## Deletion eligibility (legacy only)

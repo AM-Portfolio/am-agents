@@ -25,6 +25,7 @@ class IncidentContext(BaseModel):
     owner: DirectoryOwner | None = None
     observe: list[ObserveEvidence] = Field(default_factory=list)
     similar_incidents: list[str] = Field(default_factory=list)
+    similar_summaries: list[dict[str, Any]] = Field(default_factory=list)
     memory_refs: list[str] = Field(default_factory=list)
     catalog_refs: list[str] = Field(default_factory=list)
     built_at: str = ""
@@ -62,6 +63,7 @@ class IncidentEpisode(BaseModel):
     human_feedback_refs: list[str] = Field(default_factory=list)
     provenance: dict[str, str] = Field(default_factory=dict)
     created_at: str = ""
+    updated_at: str = ""
 
 
 class MemoryQuery(BaseModel):
@@ -73,15 +75,29 @@ class MemoryQuery(BaseModel):
     labels: dict[str, str] = Field(default_factory=dict)
     limit: int = 10
 
+    def has_discriminating_filter(self) -> bool:
+        return bool(self.service or self.env or self.fingerprint or self.labels)
+
 
 class IncidentFeedbackEvent(BaseModel):
     """Learning/feedback capture for an incident episode (not A2A FeedbackEvent)."""
 
+    feedback_id: str = ""
     episode_id: str = ""
     tracking_id: str = ""
     run_ref: str = ""
     kind: str = "outcome"
+    rating: str = ""
     labels: list[str] = Field(default_factory=list)
     notes: str = ""
     payload: dict[str, Any] = Field(default_factory=dict)
     auto_promote: bool = False
+    idempotency_key: str | None = None
+    created_at: str = ""
+
+
+def episode_id_for(*, tracking_id: str, run_ref: str) -> str:
+    """Deterministic episode id for Temporal activity retries."""
+    tid = (tracking_id or "").strip() or "unknown"
+    rid = (run_ref or "").strip() or tid
+    return f"ep-{tid}-{rid}"

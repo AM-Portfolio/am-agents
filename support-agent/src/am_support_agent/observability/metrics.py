@@ -56,8 +56,12 @@ class Metrics:
         self._hitl: Counter[str] = Counter()
         self._parity: Counter[tuple[str, str]] = Counter()
         self._canary: Counter[tuple[str, str]] = Counter()
+        self._memory: Counter[tuple[str, str]] = Counter()
+        self._learning: Counter[str] = Counter()
         self._in_flight: Counter[tuple[str, str]] = Counter()
         self._run_store_healthy = 0
+        self._episode_store_healthy = 0
+        self._feedback_store_healthy = 0
         self._lock = threading.Lock()
 
     def task_started(self, request: TaskRequest) -> None:
@@ -117,6 +121,34 @@ class Metrics:
     def observe_canary(self, *, mode: str, route: str) -> None:
         with self._lock:
             self._canary[(mode or "off", route or "legacy")] += 1
+
+    def observe_episode(self, *, result: str) -> None:
+        """result: write | conflict | outcome | failure"""
+        with self._lock:
+            self._memory[("episode", result or "unknown")] += 1
+
+    def observe_feedback(self, *, result: str) -> None:
+        """result: write | conflict | failure"""
+        with self._lock:
+            self._memory[("feedback", result or "unknown")] += 1
+
+    def observe_retrieval(self, *, result: str) -> None:
+        """result: hit | empty | skipped"""
+        with self._lock:
+            self._memory[("retrieval", result or "unknown")] += 1
+
+    def observe_learning(self, *, kind: str) -> None:
+        """kind: evaluation | candidate | promotion_allowed | promotion_blocked"""
+        with self._lock:
+            self._learning[kind or "unknown"] += 1
+
+    def set_episode_store_health(self, healthy: bool) -> None:
+        with self._lock:
+            self._episode_store_healthy = int(healthy)
+
+    def set_feedback_store_health(self, healthy: bool) -> None:
+        with self._lock:
+            self._feedback_store_healthy = int(healthy)
 
     def render(self) -> str:
         application = f'application="{_escape(self.application)}"'
@@ -242,6 +274,41 @@ class Metrics:
                     f'{{{application},mode="{_escape(mode)}",route="{_escape(route)}"}} '
                     f"{count}"
                 )
+            lines.extend(
+                [
+                    "# HELP support_agent_memory_events_total Episode/feedback/retrieval events.",
+                    "# TYPE support_agent_memory_events_total counter",
+                ]
+            )
+            for (kind, result), count in sorted(self._memory.items()):
+                lines.append(
+                    "support_agent_memory_events_total"
+                    f'{{{application},kind="{_escape(kind)}",result="{_escape(result)}"}} '
+                    f"{count}"
+                )
+            lines.extend(
+                [
+                    "# HELP support_agent_learning_events_total Offline learning pipeline events.",
+                    "# TYPE support_agent_learning_events_total counter",
+                ]
+            )
+            for kind, count in sorted(self._learning.items()):
+                lines.append(
+                    "support_agent_learning_events_total"
+                    f'{{{application},kind="{_escape(kind)}"}} {count}'
+                )
+            lines.extend(
+                [
+                    "# HELP support_agent_episode_store_healthy Episode store readiness (1 healthy).",
+                    "# TYPE support_agent_episode_store_healthy gauge",
+                    "support_agent_episode_store_healthy"
+                    f"{{{application}}} {self._episode_store_healthy}",
+                    "# HELP support_agent_feedback_store_healthy Feedback store readiness (1 healthy).",
+                    "# TYPE support_agent_feedback_store_healthy gauge",
+                    "support_agent_feedback_store_healthy"
+                    f"{{{application}}} {self._feedback_store_healthy}",
+                ]
+            )
         return "\n".join(lines) + "\n"
 
     def _render_events(self, application: str) -> list[str]:
