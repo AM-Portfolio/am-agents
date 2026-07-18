@@ -13,7 +13,7 @@ from am_support_agent.orchestrator.lifecycle import (
     final_status_for_domain,
 )
 from am_support_agent.stores.telemetry_outbox import build_telemetry_outbox
-from am_support_agent.stores.workflow_ledger import WorkflowRunStatus
+from am_support_agent.stores.workflow_ledger import WorkflowKind, WorkflowRunStatus
 
 LOG = logging.getLogger("support_agent.telemetry")
 
@@ -68,14 +68,34 @@ def _append_event(event: AgentWorkEvent):
         return memory_telemetry_outbox().append(event)
 
 
-def _merge_run_summary(run_ref: str, patch: dict[str, Any], *, status: WorkflowRunStatus | None = None) -> None:
+def _merge_run_summary(
+    run_ref: str,
+    patch: dict[str, Any],
+    *,
+    status: WorkflowRunStatus | None = None,
+    tracking_id: str = "",
+    workflow_id: str = "",
+) -> None:
+    """Upsert workflow_runs — alerting-runtime starts Temporal without a gateway ledger row."""
     runtime = build_runtime()
     current = runtime.workflow_ledger.get_run(run_ref)
+    if current is None:
+        runtime.workflow_ledger.create_run(
+            kind=WorkflowKind.ALERT_INCIDENT,
+            tracking_id=tracking_id or run_ref,
+            workflow_id=workflow_id or (f"alert-incident-{tracking_id}" if tracking_id else ""),
+            run_ref=run_ref,
+            summary=dict(patch),
+        )
+        if status is not None:
+            runtime.workflow_ledger.update_run(run_ref, status=status)
+        return
     base = dict(current.summary) if current is not None else {}
     runtime.workflow_ledger.update_run(
         run_ref,
         status=status,
         summary={**base, **patch},
+        workflow_id=workflow_id or None,
     )
 
 
@@ -136,8 +156,16 @@ async def persist_lifecycle(payload: dict[str, Any]) -> dict[str, Any]:
     )
     if body.get("summary") and isinstance(body.get("summary"), dict):
         summary = {**summary, **dict(body["summary"])}
+    tracking_id = str(body.get("tracking_id") or "").strip()
+    workflow_id = str(body.get("workflow_id") or "").strip()
     try:
-        _merge_run_summary(run_ref, summary)
+        _merge_run_summary(
+            run_ref,
+            summary,
+            tracking_id=tracking_id,
+            workflow_id=workflow_id,
+            status=WorkflowRunStatus.RUNNING,
+        )
     except Exception as exc:  # noqa: BLE001
         LOG.warning("persist_lifecycle failed run_ref=%s err=%s", run_ref, exc)
         return {"ok": False, "error": str(exc)[:200]}
@@ -193,7 +221,13 @@ async def finalize_run(payload: dict[str, Any]) -> dict[str, Any]:
         summary["ticket_ref"] = str(body.get("ticket_ref"))
 
     try:
-        _merge_run_summary(run_ref, summary, status=ledger_status)
+        _merge_run_summary(
+            run_ref,
+            summary,
+            status=ledger_status,
+            tracking_id=str(body.get("tracking_id") or "").strip(),
+            workflow_id=str(body.get("workflow_id") or "").strip(),
+        )
     except Exception as exc:  # noqa: BLE001
         LOG.warning("finalize_run ledger update failed run_ref=%s err=%s", run_ref, exc)
 

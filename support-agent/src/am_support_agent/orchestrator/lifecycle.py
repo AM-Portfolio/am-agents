@@ -113,7 +113,18 @@ def build_lifecycle_summary(
     st = dict(state or {})
     alert = st.get("alert") if isinstance(st.get("alert"), dict) else {}
     familiar, fingerprint = familiar_type_from_alert(alert)
-    ticket_ref = ticket_ref_from_work_item(st.get("work_item"))
+    work_item = st.get("work_item") if isinstance(st.get("work_item"), dict) else {}
+    owner = st.get("owner") if isinstance(st.get("owner"), dict) else {}
+    ticket_ref = ticket_ref_from_work_item(work_item)
+    assignee_ref = str(
+        owner.get("assignee_ref") or work_item.get("assignee_ref") or ""
+    ).strip()
+    assignee_name = str(
+        owner.get("assignee_name") or work_item.get("assignee_name") or ""
+    ).strip()
+    assignee_email = str(
+        owner.get("assignee_email") or work_item.get("assignee_email") or ""
+    ).strip()
     side = dict(st.get("side_effects") or {})
     known = st.get("known_fix")
     known_id = ""
@@ -126,6 +137,9 @@ def build_lifecycle_summary(
         "final_status": fs,
         "ticket_ref": ticket_ref,
         "ticket_status": str(side.get("ticket_status") or ("created" if ticket_ref else "none")),
+        "assignee_ref": assignee_ref,
+        "assignee_name": assignee_name,
+        "assignee_email": assignee_email,
         "chat_sent": str(side.get("chat_notify") or "skipped"),
         "mail_sent": str(side.get("mail_notify") or "n/a"),
         "side_effects": side,

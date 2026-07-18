@@ -220,7 +220,11 @@ class AlertIncidentWorkflow:
             await self._act(
                 persist_lifecycle,
                 {
-                    "run_ref": str(self._state.get("run_ref") or ""),
+                    "run_ref": str(
+                        self._state.get("run_ref") or self._tracking_id or ""
+                    ),
+                    "tracking_id": self._tracking_id,
+                    "workflow_id": f"alert-incident-{self._tracking_id}",
                     "phase": self._phase,
                     "final_status": final_status,
                     "steps": self._steps,
