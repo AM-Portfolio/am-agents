@@ -87,9 +87,17 @@ def _aggregate_reason(evidence: list[dict[str, Any]], status: str) -> str:
 
 @activity.defn
 async def spawn_verify_run(payload: dict[str, Any]) -> dict[str, str]:
-    """Create kind=verify run + pending steps from catalog."""
+    """Create kind=verify run + pending steps from catalog (idempotent on parent summary)."""
     ports = get_ports()
     parent = payload["parent_run_ref"]
+    parent_run = ports.runs.get_run(run_ref=parent)
+    parent_summary = dict((parent_run.summary if parent_run else None) or {})
+    existing_verify = str(parent_summary.get("verify_run_ref") or "").strip()
+    if existing_verify:
+        existing = ports.runs.get_run(run_ref=existing_verify)
+        if existing is not None:
+            return {"verify_run_ref": existing_verify, "reused": "1"}
+
     verify = ports.runs.create_run(
         CreateRunRequest(
             kind=RunKind.VERIFY,
@@ -99,6 +107,17 @@ async def spawn_verify_run(payload: dict[str, Any]) -> dict[str, str]:
             ticket_ref=payload.get("ticket_ref"),
             workflow_id=payload.get("workflow_id"),
         )
+    )
+    # Persist immediately so a timeout after create cannot spawn a duplicate verify run
+    ports.runs.update_run_status(
+        run_ref=parent,
+        status=RunStatus.RUNNING,
+        summary={
+            **parent_summary,
+            "ticket_ref": payload.get("ticket_ref") or parent_summary.get("ticket_ref"),
+            "verify_run_ref": verify.run_ref,
+            "gate": "awaiting_verify",
+        },
     )
     for check in load_verify_checks():
         check_ref = str(check["check_ref"])
@@ -111,16 +130,7 @@ async def spawn_verify_run(payload: dict[str, Any]) -> dict[str, str]:
                 status=StepStatus.PENDING,
             )
         )
-    ports.runs.update_run_status(
-        run_ref=parent,
-        status=RunStatus.RUNNING,
-        summary={
-            "ticket_ref": payload.get("ticket_ref"),
-            "verify_run_ref": verify.run_ref,
-            "gate": "awaiting_verify",
-        },
-    )
-    return {"verify_run_ref": verify.run_ref}
+    return {"verify_run_ref": verify.run_ref, "reused": "0"}
 
 
 @activity.defn

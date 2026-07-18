@@ -12,6 +12,7 @@ class MailPort(Protocol):
         subject: str,
         body: str,
         refs: dict[str, str] | None = None,
+        html_body: str | None = None,
     ) -> str:
-        """Return opaque mail_ref."""
+        """Return opaque mail_ref. Prefer html_body when the provider supports HTML."""
         ...

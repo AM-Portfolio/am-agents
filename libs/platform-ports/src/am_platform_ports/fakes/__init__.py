@@ -80,6 +80,8 @@ class FakeDirectory:
 
 
 class FakeMail:
+    """In-memory mail; optionally dumps HTML/text under INCIDENT_MAIL_DUMP_DIR for E2E review."""
+
     def __init__(self) -> None:
         self.sent: list[dict[str, Any]] = []
 
@@ -90,9 +92,35 @@ class FakeMail:
         subject: str,
         body: str,
         refs: dict[str, str] | None = None,
+        html_body: str | None = None,
     ) -> str:
+        import os
+        from pathlib import Path
+
         ref = _ref("mail")
-        self.sent.append({"to": to, "subject": subject, "body": body, "refs": refs or {}, "mail_ref": ref})
+        record = {
+            "to": to,
+            "subject": subject,
+            "body": body,
+            "html_body": html_body,
+            "refs": refs or {},
+            "mail_ref": ref,
+        }
+        self.sent.append(record)
+        dump_dir = (os.getenv("INCIDENT_MAIL_DUMP_DIR") or "").strip()
+        if dump_dir:
+            out = Path(dump_dir)
+            out.mkdir(parents=True, exist_ok=True)
+            stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+            tid = str((refs or {}).get("tracking_id") or (refs or {}).get("ticket_ref") or ref)
+            safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in tid)[:80]
+            base = out / f"{stamp}_{safe}"
+            (base.with_suffix(".txt")).write_text(
+                f"To: {', '.join(to)}\nSubject: {subject}\n\n{body}",
+                encoding="utf-8",
+            )
+            if html_body:
+                (base.with_suffix(".html")).write_text(html_body, encoding="utf-8")
         return ref
 
 
@@ -402,13 +430,13 @@ class FakeRunStore:
 
     def update_run_status(self, *, run_ref: str, status: RunStatus, summary: dict | None = None) -> AgentRun:
         run = self.runs[run_ref]
-        updated = run.model_copy(
-            update={
-                "status": status,
-                "summary": summary if summary is not None else run.summary,
-                "updated_at": _now(),
-            }
-        )
+        updates: dict[str, Any] = {"status": status, "updated_at": _now()}
+        if summary is not None:
+            updates["summary"] = summary
+            ticket_ref = summary.get("ticket_ref")
+            if ticket_ref:
+                updates["ticket_ref"] = str(ticket_ref)
+        updated = run.model_copy(update=updates)
         self.runs[run_ref] = updated
         return updated
 

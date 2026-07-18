@@ -29,6 +29,11 @@ class DirectoryHit(BaseModel):
     assignee_ref: str
     team: str | None = None
     channel_ref: str | None = None
+    assignee_name: str | None = None
+    backup_name: str | None = None
+    assignee_email: str | None = None
+    backup_email: str | None = None
+    owner_source: str | None = None
 
 
 class DocRef(BaseModel):

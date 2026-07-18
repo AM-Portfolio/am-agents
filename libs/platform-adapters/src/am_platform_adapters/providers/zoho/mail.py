@@ -28,17 +28,22 @@ class ZohoMail:
         subject: str,
         body: str,
         refs: dict[str, str] | None = None,
+        html_body: str | None = None,
     ) -> str:
         if not self._token or not self._account:
             raise RuntimeError(
                 "ZOHO_MAIL_ACCESS_TOKEN and ZOHO_MAIL_ACCOUNT_ID required (or MAIL_PROVIDER=fake)"
             )
         refs = refs or {}
+        content = html_body or body
+        if refs and not html_body:
+            content = content + ("\n\n" + "\n".join(f"{k}={v}" for k, v in refs.items()))
         payload: dict[str, Any] = {
             "fromAddress": os.environ.get("ZOHO_MAIL_FROM", ""),
             "toAddress": ",".join(to),
             "subject": subject,
-            "content": body + ("\n\n" + "\n".join(f"{k}={v}" for k, v in refs.items()) if refs else ""),
+            "content": content,
+            "mailFormat": "html" if html_body else "plaintext",
         }
         url = f"{self._api}/accounts/{self._account}/messages"
         req = urllib.request.Request(

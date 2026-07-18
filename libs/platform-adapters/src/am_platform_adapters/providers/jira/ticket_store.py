@@ -97,21 +97,33 @@ class JiraTicketStore:
         )
 
     def comment(self, *, ticket_ref: str, body: str) -> None:
+        """Post a multi-line comment (ADF paragraphs + hardBreaks) so phase logs stay readable."""
         key = _issue_key(ticket_ref)
+        # Split on blank lines → paragraphs; within a paragraph use hardBreak for newlines
+        paragraphs: list[dict[str, Any]] = []
+        blocks = (body or "").replace("\r\n", "\n").split("\n\n")
+        for block in blocks[:40]:
+            lines = [ln for ln in block.split("\n")]
+            if not any(ln.strip() for ln in lines):
+                continue
+            content: list[dict[str, Any]] = []
+            for i, ln in enumerate(lines[:80]):
+                if i:
+                    content.append({"type": "hardBreak"})
+                if ln:
+                    content.append({"type": "text", "text": ln[:8000]})
+            if content:
+                paragraphs.append({"type": "paragraph", "content": content})
+        if not paragraphs:
+            paragraphs = [
+                {
+                    "type": "paragraph",
+                    "content": [{"type": "text", "text": (body or "(empty)")[:30000]}],
+                }
+            ]
         self._client.post(
             f"/rest/api/3/issue/{key}/comment",
-            {
-                "body": {
-                    "type": "doc",
-                    "version": 1,
-                    "content": [
-                        {
-                            "type": "paragraph",
-                            "content": [{"type": "text", "text": body[:30000]}],
-                        }
-                    ],
-                }
-            },
+            {"body": {"type": "doc", "version": 1, "content": paragraphs}},
         )
 
     def update_status(self, *, ticket_ref: str, status: str) -> None:

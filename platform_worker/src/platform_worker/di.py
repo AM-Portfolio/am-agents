@@ -10,6 +10,7 @@ from am_platform_ports.ports.docs import DocStore
 from am_platform_ports.ports.handoff import HandoffPort
 from am_platform_ports.ports.infra import InfraOps
 from am_platform_ports.ports.llm import LlmPort
+from am_platform_ports.ports.mail import MailPort
 from am_platform_ports.ports.notifier import Notifier
 from am_platform_ports.ports.prompt import PromptRegistry
 from am_platform_ports.ports.redact import Redactor
@@ -39,6 +40,7 @@ class Ports:
     infra: InfraOps
     redactor: Redactor
     llm: LlmPort
+    mail: MailPort
     handoff: HandoffPort
     spt_catalog: TargetCatalog
     spt_resolver: TargetResolver
@@ -66,6 +68,7 @@ def get_ports() -> Ports:
             infra=af.build_infra_ops(),
             redactor=af.build_redactor(),
             llm=af.build_llm(),
+            mail=af.build_mail(),
             handoff=af.build_handoff(runs),
             spt_catalog=af.build_target_catalog(),
             spt_resolver=af.build_target_resolver(),

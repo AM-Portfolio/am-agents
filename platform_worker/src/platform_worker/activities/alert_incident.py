@@ -70,13 +70,30 @@ async def triage_alert(payload: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _ticket_meta_from_summary(summary: dict[str, Any], *, env: str = "") -> dict[str, str]:
+    return {
+        "ticket_ref": str(summary.get("ticket_ref") or ""),
+        "ticket_url": str(summary.get("ticket_url") or ""),
+        "assignee_ref": str(summary.get("assignee_ref") or ""),
+        "assignee_name": str(summary.get("assignee_name") or ""),
+        "assignee_email": str(summary.get("assignee_email") or ""),
+        "backup_name": str(summary.get("backup_name") or ""),
+        "backup_email": str(summary.get("backup_email") or ""),
+        "owner_source": str(summary.get("owner_source") or ""),
+        "channel_ref": str(summary.get("channel_ref") or "cliq:lab"),
+        "env": str(summary.get("env") or env or "unknown"),
+        "reused": "1",
+    }
+
+
 @activity.defn
 async def create_and_assign_ticket(payload: dict[str, Any]) -> dict[str, str]:
+    """Idempotent ticket ensure: reuse run.ticket_ref / summary.ticket_ref on retry."""
     from am_platform_ports.agent_identity import (
-        agent_prefix,
         ensure_env_label,
         title_with_env,
     )
+    from platform_worker.notify_incident import build_incident_message, comment_incident_phase
 
     ports = get_ports()
     run_ref = payload["run_ref"]
@@ -86,6 +103,21 @@ async def create_and_assign_ticket(payload: dict[str, Any]) -> dict[str, str]:
     env = str(labels.get("env") or alert.get("env") or "unknown")
     labels["env"] = env
     triage["labels"] = labels
+    tracking_id = str(payload.get("tracking_id") or payload.get("incident_ref") or "")
+    workflow_id = str(payload.get("workflow_id") or "")
+
+    existing = ports.runs.get_run(run_ref=run_ref)
+    summary = dict((existing.summary if existing else None) or {})
+    existing_ticket = str(
+        (existing.ticket_ref if existing else None) or summary.get("ticket_ref") or ""
+    ).strip()
+    if existing_ticket:
+        # Retry-safe: never create a second ticket after create already succeeded
+        meta = _ticket_meta_from_summary(summary, env=env)
+        meta["ticket_ref"] = existing_ticket
+        if not meta.get("ticket_url"):
+            meta["ticket_url"] = str(summary.get("ticket_url") or "")
+        return meta
 
     ports.runs.upsert_step(
         UpsertStepRequest(
@@ -104,15 +136,56 @@ async def create_and_assign_ticket(payload: dict[str, Any]) -> dict[str, str]:
         priority=triage.get("priority") or "P3",
         labels=labels,
     )
-    ports.tickets.assign(ticket_ref=ticket.ticket_ref, assignee_ref=hit.assignee_ref)
-    ports.tickets.comment(
-        ticket_ref=ticket.ticket_ref,
-        body=f"{agent_prefix(env=env)} intake — assignee {hit.assignee_ref}",
-    )
+    # Persist ticket_ref immediately so a timeout after create cannot spawn a duplicate
+    early_summary = {
+        **summary,
+        "ticket_ref": ticket.ticket_ref,
+        "ticket_url": ticket.url or "",
+        "env": env,
+        "assignee_ref": hit.assignee_ref,
+        "assignee_name": str(getattr(hit, "assignee_name", None) or ""),
+        "assignee_email": str(getattr(hit, "assignee_email", None) or ""),
+        "backup_name": str(getattr(hit, "backup_name", None) or ""),
+        "backup_email": str(getattr(hit, "backup_email", None) or ""),
+        "owner_source": str(getattr(hit, "owner_source", None) or ""),
+        "channel_ref": hit.channel_ref or "cliq:lab",
+    }
     ports.runs.update_run_status(
         run_ref=run_ref,
         status=RunStatus.RUNNING,
-        summary={"ticket_ref": ticket.ticket_ref, "env": env},
+        summary=early_summary,
+    )
+
+    ports.tickets.assign(ticket_ref=ticket.ticket_ref, assignee_ref=hit.assignee_ref)
+
+    msg = build_incident_message(
+        status="INVESTIGATING",
+        tracking_id=tracking_id,
+        alert=alert,
+        ticket_ref=ticket.ticket_ref,
+        ticket_url=ticket.url,
+        env=env,
+        reason="Ticket created and assigned — investigation started.",
+        decision="intake",
+        run_ref=run_ref,
+        workflow_id=workflow_id,
+        responsible=str(getattr(hit, "assignee_name", None) or hit.assignee_ref),
+        backup=str(getattr(hit, "backup_name", None) or ""),
+        owner_source=str(getattr(hit, "owner_source", None) or ""),
+        assignee_email=str(getattr(hit, "assignee_email", None) or ""),
+        backup_email=str(getattr(hit, "backup_email", None) or ""),
+        done_by="IT-Support-agent",
+    )
+    comment_incident_phase(
+        ports,
+        msg=msg,
+        phase="INTAKE",
+        extras=[
+            f"Assignee ref: {hit.assignee_ref}",
+            f"Channel: {hit.channel_ref or 'cliq:lab'}",
+            f"Ticket URL: {ticket.url or 'n/a'}",
+            f"checkpoint_key=incident:{run_ref}:phase:intake",
+        ],
     )
     ports.runs.upsert_step(
         UpsertStepRequest(
@@ -125,15 +198,22 @@ async def create_and_assign_ticket(payload: dict[str, Any]) -> dict[str, str]:
     )
     return {
         "ticket_ref": ticket.ticket_ref,
+        "ticket_url": ticket.url or "",
         "assignee_ref": hit.assignee_ref,
+        "assignee_name": str(getattr(hit, "assignee_name", None) or ""),
+        "assignee_email": str(getattr(hit, "assignee_email", None) or ""),
+        "backup_name": str(getattr(hit, "backup_name", None) or ""),
+        "backup_email": str(getattr(hit, "backup_email", None) or ""),
+        "owner_source": str(getattr(hit, "owner_source", None) or ""),
         "channel_ref": hit.channel_ref or "cliq:lab",
         "env": env,
+        "reused": "0",
     }
 
 
 @activity.defn
 async def notify_ticket_created(payload: dict[str, Any]) -> dict[str, str]:
-    from am_platform_ports.schemas.core import NotifyCard
+    from platform_worker.notify_incident import build_incident_message, notify_incident_channels
 
     ports = get_ports()
     run_ref = payload["run_ref"]
@@ -147,29 +227,79 @@ async def notify_ticket_created(payload: dict[str, Any]) -> dict[str, str]:
             bump_attempts=True,
         )
     )
-    card = NotifyCard(
-        event="ticket.created",
-        title=payload.get("title") or "Ticket created",
-        body=payload.get("body") or "",
-        refs={
-            "ticket_ref": payload["ticket_ref"],
-            "run_ref": run_ref,
-            "incident_ref": payload.get("incident_ref") or "",
-            "env": env,
-            "decision": "intake",
-        },
+    msg = build_incident_message(
+        status="INVESTIGATING",
+        tracking_id=str(payload.get("tracking_id") or payload.get("incident_ref") or ""),
+        alert=payload.get("alert") or {},
+        ticket_ref=payload["ticket_ref"],
+        ticket_url=payload.get("ticket_url"),
+        env=env,
+        reason="Ticket created and assigned — investigation started.",
+        decision="intake",
+        run_ref=run_ref,
+        workflow_id=str(payload.get("workflow_id") or ""),
+        run_id=str(payload.get("run_id") or ""),
+        responsible=str(payload.get("assignee_name") or payload.get("assignee_ref") or ""),
+        backup=str(payload.get("backup_name") or ""),
+        owner_source=str(payload.get("owner_source") or ""),
+        assignee_email=str(payload.get("assignee_email") or ""),
+        backup_email=str(payload.get("backup_email") or ""),
+        done_by="IT-Support-agent",
     )
-    notify_ref = ports.notifier.send_card(channel_ref=payload["channel_ref"], card=card)
+    # Avoid duplicate OP comment — intake already commented
+    result = notify_incident_channels(
+        ports,
+        msg=msg,
+        channel_ref=payload["channel_ref"],
+        also_ticket_comment=False,
+    )
     ports.runs.upsert_step(
         UpsertStepRequest(
             step_ref=f"{run_ref}:notify",
             run_ref=run_ref,
             name="notify",
             status=StepStatus.PASSED,
-            result_ref=notify_ref,
+            result_ref=result.get("cliq") or "ok",
         )
     )
-    return {"notify_ref": notify_ref}
+    return {"notify_ref": result.get("cliq") or "", "mail_ref": result.get("mail") or ""}
+
+
+@activity.defn
+async def post_incident_phase(payload: dict[str, Any]) -> dict[str, str]:
+    """Post a soft phase checkpoint to Jira/OP so prior phases survive later failures."""
+    from platform_worker.notify_incident import build_incident_message, comment_incident_phase
+
+    ports = get_ports()
+    phase = str(payload.get("phase") or "UPDATE").upper()
+    status = str(payload.get("status") or "INVESTIGATING")
+    if status not in {"INVESTIGATING", "AUTO_INFRA", "NEEDS_HUMAN", "RESOLVED", "FAILED"}:
+        status = "INVESTIGATING"
+    msg = build_incident_message(
+        status=status,  # type: ignore[arg-type]
+        tracking_id=str(payload.get("tracking_id") or payload.get("incident_ref") or ""),
+        alert=payload.get("alert") or {},
+        ticket_ref=str(payload.get("ticket_ref") or ""),
+        ticket_url=payload.get("ticket_url"),
+        env=str(payload.get("env") or ""),
+        reason=str(payload.get("reason") or ""),
+        success_summary=str(payload.get("success_summary") or ""),
+        decision=str(payload.get("decision") or ""),
+        run_ref=str(payload.get("run_ref") or ""),
+        workflow_id=str(payload.get("workflow_id") or ""),
+        run_id=str(payload.get("run_id") or ""),
+        responsible=str(payload.get("assignee_name") or ""),
+        backup=str(payload.get("backup_name") or ""),
+        assignee_email=str(payload.get("assignee_email") or ""),
+        backup_email=str(payload.get("backup_email") or ""),
+        evidence_url=str(payload.get("evidence_url") or ""),
+        done_by="IT-Support-agent",
+    )
+    extras = payload.get("extras")
+    if not isinstance(extras, list):
+        extras = [str(extras)] if extras else None
+    result = comment_incident_phase(ports, msg=msg, phase=phase, extras=extras)
+    return {"ticket_comment": result, "phase": phase}
 
 
 @activity.defn

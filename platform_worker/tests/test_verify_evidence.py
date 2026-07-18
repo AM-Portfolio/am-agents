@@ -39,6 +39,7 @@ def _install_ports(observe: Any) -> Ports:
         infra=MagicMock(),
         redactor=MagicMock(),
         llm=MagicMock(),
+        mail=MagicMock(),
         handoff=MagicMock(),
         spt_catalog=MagicMock(),
         spt_resolver=MagicMock(),
