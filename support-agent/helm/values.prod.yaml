@@ -1,12 +1,12 @@
 # Prod values — durable Postgres memory (deploy still gated off in CI).
-# Vault folder: apps/data/prod/services/am-agents-ops
+# Vault folder: apps/data/prod/services/am-agents (prod stores the ops secret here).
 environment: prod
 
 vault:
   enabled: true
   secretPaths:
     am-agents-ops:
-      path: "apps/data/prod/services/am-agents-ops"
+      path: "apps/data/prod/services/am-agents"
 
 # Profile-specific settings stay in the environment overlay.
 env:

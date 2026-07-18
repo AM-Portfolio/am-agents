@@ -6,7 +6,7 @@ vault:
   enabled: true
   secretPaths:
     am-agents-ops:
-      path: "apps/data/dev/services/am-agents-ops"
+      path: "apps/data/dev/services/am-agents"
 
 # Profile-specific settings stay in the environment overlay.
 env:
