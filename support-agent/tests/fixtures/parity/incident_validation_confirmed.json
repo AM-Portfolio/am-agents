@@ -1,0 +1,14 @@
+{
+  "name": "incident_validation_confirmed",
+  "legacy": {
+    "status": "confirmed",
+    "work_item_ok": true,
+    "missing_evidence": []
+  },
+  "replacement": {
+    "status": "confirmed",
+    "work_item_ok": true,
+    "missing_evidence": []
+  },
+  "expect_matched": true
+}

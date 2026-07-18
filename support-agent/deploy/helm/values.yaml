@@ -1,0 +1,65 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/am-portfolio/am-support-agent
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8091
+
+env:
+  SUPPORT_AGENT_GATEWAY_PORT: "8091"
+  SUPPORT_AGENT_RUNSTORE: "memory"
+  SUPPORT_AGENT_TRACING_ENABLED: "true"
+  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: "http://otel-collector.monitoring.svc.cluster.local:4318/v1/traces"
+  OTEL_SERVICE_NAME: "support-agent"
+  OTEL_SERVICE_NAMESPACE: "am-agents"
+  OTEL_TRACES_SAMPLER: "parentbased_traceidratio"
+  OTEL_TRACES_SAMPLER_ARG: "1.0"
+  DEPLOYMENT_ENVIRONMENT: "unknown"
+  PYTHONDONTWRITEBYTECODE: "1"
+  TOOL_AGENT_BASE_URL: "http://am-tool-agent.am-ai.svc.cluster.local:8141"
+  DB_AGENT_BASE_URL: "http://am-db-agent.am-ai.svc.cluster.local:8140"
+  UI_TEST_AGENT_BASE_URL: "http://am-ui-test-agent.am-ai.svc.cluster.local:8130"
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/path: "/metrics"
+  prometheus.io/port: "8091"
+
+# Create secret separately; do not commit tokens.
+existingSecret: support-agent-gateway
+secretKeys:
+  apiToken: SUPPORT_AGENT_API_TOKEN
+
+# Optional single-replica SQLite PVC (not for multi-replica HA).
+persistence:
+  enabled: false
+  size: 1Gi
+  storageClassName: ""
+  mountPath: /data
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+worker:
+  enabled: false
+  replicaCount: 1
+  temporal:
+    host: temporal-frontend.temporal.svc.cluster.local:7233
+    namespace: default
+    taskQueue: support-agent-v2
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi

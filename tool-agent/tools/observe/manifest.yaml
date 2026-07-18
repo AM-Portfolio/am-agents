@@ -1,0 +1,19 @@
+name: observe
+display_name: Observe
+enabled: false
+version: "0.1.0"
+
+infer_keywords: ['observe', 'metrics', 'logs', 'timeseries', 'grafana']
+
+env_prefix: OBSERVE_
+
+supports_mcp: false
+has_entities: false
+health_check: skip
+
+prompts:
+  intent:
+    source: file
+    name: tool-agent/intent/observe
+    label: "{{APP_ENV}}"
+    fallback: prompts/intent.yaml

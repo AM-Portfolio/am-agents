@@ -1,0 +1,28 @@
+{
+  "name": "tool_discover_happy",
+  "legacy": {
+    "task_id": "legacy-disc-1",
+    "status": "succeeded",
+    "agent_id": "tool-agent",
+    "evidence": [],
+    "error": null,
+    "metrics": {"latency_ms": 12, "cost_units": 0.0},
+    "data": {
+      "http_status": 200,
+      "health": {"status": "ok"}
+    }
+  },
+  "replacement": {
+    "task_id": "v2-disc-3",
+    "status": "succeeded",
+    "agent_id": "tool-agent",
+    "evidence": [],
+    "error": null,
+    "metrics": {"latency_ms": 3, "cost_units": 0.0},
+    "data": {
+      "http_status": 200,
+      "health": {"status": "ok"}
+    }
+  },
+  "expect_matched": true
+}

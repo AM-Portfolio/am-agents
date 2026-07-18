@@ -1,0 +1,26 @@
+adapter: work-item
+operations:
+  search:
+    adapter_method: search
+    read_only: true
+    approval_risk: read
+  get:
+    adapter_method: get
+    read_only: true
+    approval_risk: read
+  create:
+    adapter_method: create
+    read_only: false
+    approval_risk: create
+  comment:
+    adapter_method: comment
+    read_only: false
+    approval_risk: update
+  assign:
+    adapter_method: assign
+    read_only: false
+    approval_risk: update
+  transition:
+    adapter_method: transition
+    read_only: false
+    approval_risk: update

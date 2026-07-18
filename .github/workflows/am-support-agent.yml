@@ -1,0 +1,112 @@
+name: AM Support Agent Publish
+
+on:
+  push:
+    branches: ["main", "develop", "test/**", "feature/**", "hotfix/**", "fix/**"]
+    paths:
+      - "support-agent/**"
+      - ".dockerignore"
+      - ".github/workflows/am-support-agent.yml"
+  pull_request:
+    branches: ["main", "develop", "test/**", "feature/**", "hotfix/**", "fix/**"]
+    paths:
+      - "support-agent/**"
+      - ".dockerignore"
+      - ".github/workflows/am-support-agent.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test support-agent
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: support-agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: support-agent/pyproject.toml
+      - run: pip install -e ".[dev,temporal]"
+      - run: pytest -q
+      - run: python -m compileall -q src
+
+  helm:
+    name: Validate support-agent Helm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Lint standalone chart (local / PVC)
+        run: helm lint support-agent/deploy/helm
+      - name: Render standalone worker + sqlite
+        run: >
+          helm template support-agent support-agent/deploy/helm
+          --set worker.enabled=true
+          --set persistence.enabled=true
+          --set persistence.storageClassName=standard
+          > /tmp/support-agent-worker.yaml
+      - name: Assert standalone markers
+        run: |
+          grep -q 'support-agent-v2' /tmp/support-agent-worker.yaml
+          grep -q 'support-agent-gateway-data' /tmp/support-agent-worker.yaml
+          ! grep -q 'agent-platform' /tmp/support-agent-worker.yaml
+      - name: Assert central helm values (universal-chart)
+        run: |
+          test -f support-agent/helm/values.yaml
+          test -f support-agent/helm/vault-mappings.yaml
+          test -f support-agent/helm/values.dev.yaml
+          test -f support-agent/helm/values.preprod.yaml
+          test -f support-agent/helm/values.prod.yaml
+          grep -q 'companionWorker:' support-agent/helm/values.yaml
+          grep -q 'am-support-agent-worker\|exec am-support-agent-worker' support-agent/helm/values.yaml
+          grep -q 'SUPPORT_AGENT_DATABASE_URL' support-agent/helm/vault-mappings.yaml
+          grep -q 'SUPPORT_AGENT_CANARY_MODE: "SUPPORT_AGENT_CANARY_MODE"' support-agent/helm/vault-mappings.yaml
+          grep -q 'SUPPORT_AGENT_EPISODE_STORE: "SUPPORT_AGENT_EPISODE_STORE"' support-agent/helm/vault-mappings.yaml
+          grep -q 'GROWTHBOOK_CLIENT_KEY' support-agent/helm/vault-mappings.yaml
+          grep -q 'GROWTHBOOK_API_HOST' support-agent/helm/vault-mappings.yaml
+          grep -q 'GROWTHBOOK_ROUTE_FEATURE_KEY' support-agent/helm/vault-mappings.yaml
+          grep -q 'TEMPORAL_TASK_QUEUE' support-agent/helm/vault-mappings.yaml
+          grep -q 'TEMPORAL_TASK_QUEUE: "TEMPORAL_TASK_QUEUE"' support-agent/helm/vault-mappings.yaml
+          grep -q 'ZOHO_REFRESH_TOKEN' support-agent/helm/vault-mappings.yaml
+          grep -q 'SUPPORT_AGENT_DATABASE_URL: "url"' support-agent/helm/vault-mappings.yaml
+          grep -q 'am-agents-ops:' support-agent/helm/vault-mappings.yaml
+          # Shared runtime env comes from Vault; profile identity stays in overlays.
+          grep -q '^env: {}' support-agent/helm/values.yaml
+          grep -q 'DEPLOYMENT_ENVIRONMENT: "dev"' support-agent/helm/values.dev.yaml
+          grep -q 'SUPPORT_AGENT_RUNTIME_MODE: "dev"' support-agent/helm/values.dev.yaml
+          grep -q 'DEPLOYMENT_ENVIRONMENT: "preprod"' support-agent/helm/values.preprod.yaml
+          grep -q 'SUPPORT_AGENT_RUNTIME_MODE: "prod"' support-agent/helm/values.preprod.yaml
+          grep -q 'DEPLOYMENT_ENVIRONMENT: "prod"' support-agent/helm/values.prod.yaml
+          grep -q 'SUPPORT_AGENT_RUNTIME_MODE: "prod"' support-agent/helm/values.prod.yaml
+          ! grep -q 'GROWTHBOOK_API_HOST:' support-agent/helm/values.yaml
+          ! grep -q 'TEMPORAL_HOST:' support-agent/helm/values.yaml
+          ! grep -q 'TEMPORAL_TASK_QUEUE:' support-agent/helm/values.yaml
+          grep -q 'apps/data/dev/services/am-agents-ops' support-agent/helm/values.dev.yaml
+          grep -q 'apps/data/preprod/services/am-agents-ops' support-agent/helm/values.preprod.yaml
+          grep -q 'apps/data/prod/services/am-agents"' support-agent/helm/values.prod.yaml
+          ! grep -E 'services/am-agents"' support-agent/helm/values.dev.yaml support-agent/helm/values.preprod.yaml
+          ! grep -q 'apps/data/.*/infra/postgres' support-agent/helm/values.dev.yaml support-agent/helm/values.preprod.yaml support-agent/helm/values.prod.yaml
+          ! grep -q 'agent-platform' support-agent/helm/values.yaml
+          ! grep -E 'postgresql://[^:]+:[^@]+@' support-agent/helm/values*.yaml
+          ! grep -E '(password|api_key|token):' support-agent/helm/values*.yaml
+
+  publish:
+    name: Publish AM Support Agent
+    needs: [test, helm]
+    permissions:
+      contents: read
+      packages: write
+    uses: AM-Portfolio/am-pipelines/.github/workflows/central-build-publish.yml@main
+    with:
+      language: "python"
+      working_directory: "support-agent"
+      image_name: "am-support-agent"
+      build_context: "."
+      preprod_namespace: "am-apps-preprod"
+      prod_namespace: "am-apps-prod"
+      deploy_dev: true
+      deploy_prod: true
+    secrets: inherit

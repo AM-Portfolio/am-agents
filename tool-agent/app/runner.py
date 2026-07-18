@@ -118,6 +118,7 @@ async def run_tools_plan(request: ToolsPlanRequest, *, agent_caller: str | None 
 
     request_id = str(uuid.uuid4())
     state = _base_state(request_id=request_id, request=query_request, agent_caller=agent_caller)
+    state["is_plan_path"] = True
 
     await tracer.start_trace(request_id, query=request.query, metadata=trace_metadata(backend_hint=request.backend))
 
@@ -138,6 +139,12 @@ async def run_tools_plan(request: ToolsPlanRequest, *, agent_caller: str | None 
 
     intent = state["intent"]
     parse_source = state.get("parse_source") or "rules"
+    from tools._shared.capability.approval import requires_write_confirmation, risk_for_operation
+    from tools._shared.capability.plan_binding import intent_plan_hash, issue_plan_binding
+    from app.safety import CAPABILITY_BACKENDS
+
+    plan_hash = intent_plan_hash(intent)
+    risk = risk_for_operation(intent.operation)
     plan = ToolsPlanResponse(
         request_id=request_id,
         intent=intent,
@@ -145,6 +152,8 @@ async def run_tools_plan(request: ToolsPlanRequest, *, agent_caller: str | None 
         confidence_ok=intent.confidence >= settings.TOOL_AGENT_INTENT_MIN_CONFIDENCE,
         parse_source=parse_source,
         min_confidence=settings.TOOL_AGENT_INTENT_MIN_CONFIDENCE,
+        plan_hash=plan_hash,
+        approval_risk=risk,
     )
     if intent.backend == "vault":
         from tools.vault.safety import is_write_operation
@@ -155,6 +164,11 @@ async def run_tools_plan(request: ToolsPlanRequest, *, agent_caller: str | None 
             plan.requires_write_confirmation = True
             plan.confirmation_token = token
             plan.confirmation_phrase = phrase
+    elif intent.backend in CAPABILITY_BACKENDS and requires_write_confirmation(risk):
+        _, token, phrase = issue_plan_binding(intent)
+        plan.requires_write_confirmation = True
+        plan.confirmation_token = token
+        plan.confirmation_phrase = phrase
     await tracer.end_trace(
         request_id,
         output=plan.model_dump(),
@@ -174,10 +188,16 @@ async def run_tools_execute(request: ToolsExecuteRequest, *, agent_caller: str |
 
     request_id = str(uuid.uuid4())
     state = _base_state(request_id=request_id, request=query_request, agent_caller=agent_caller)
-    state["intent"] = request.intent.model_copy()
+    state["intent"] = request.intent.model_copy(deep=True)
     state["parse_source"] = "structured"
     state["write_confirmation"] = request.write_confirmation
-
+    state["plan_hash"] = request.plan_hash
+    if request.idempotency_key:
+        state["idempotency_key"] = request.idempotency_key
+        state["intent"].params = {
+            **(state["intent"].params or {}),
+            "idempotency_key": request.idempotency_key,
+        }
     await tracer.start_trace(
         request_id,
         query=query_request.query,

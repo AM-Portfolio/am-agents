@@ -270,6 +270,7 @@ async def stream_tools_plan(
 
     request_id = str(uuid.uuid4())
     state = _base_state(request_id=request_id, request=query_request, agent_caller=agent_caller)
+    state["is_plan_path"] = True
     queue: asyncio.Queue[str | None] = asyncio.Queue()
 
     async def run() -> None:
@@ -282,6 +283,12 @@ async def stream_tools_plan(
             return
         intent = current["intent"]
         parse_source = current.get("parse_source") or "rules"
+        from tools._shared.capability.approval import requires_write_confirmation, risk_for_operation
+        from tools._shared.capability.plan_binding import intent_plan_hash, issue_plan_binding
+        from app.safety import CAPABILITY_BACKENDS
+
+        plan_hash = intent_plan_hash(intent)
+        risk = risk_for_operation(intent.operation)
         plan = ToolsPlanResponse(
             request_id=request_id,
             intent=intent,
@@ -289,9 +296,16 @@ async def stream_tools_plan(
             confidence_ok=intent.confidence >= settings.TOOL_AGENT_INTENT_MIN_CONFIDENCE,
             parse_source=parse_source,
             min_confidence=settings.TOOL_AGENT_INTENT_MIN_CONFIDENCE,
+            plan_hash=plan_hash,
+            approval_risk=risk,
         )
         if intent.backend == "vault" and is_write_operation(intent.operation):
             token, phrase = issue_write_confirmation(intent)
+            plan.requires_write_confirmation = True
+            plan.confirmation_token = token
+            plan.confirmation_phrase = phrase
+        elif intent.backend in CAPABILITY_BACKENDS and requires_write_confirmation(risk):
+            _, token, phrase = issue_plan_binding(intent)
             plan.requires_write_confirmation = True
             plan.confirmation_token = token
             plan.confirmation_phrase = phrase

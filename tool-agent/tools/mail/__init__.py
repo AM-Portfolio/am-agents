@@ -1,0 +1,1 @@
+"""Generic mail capability plugin."""

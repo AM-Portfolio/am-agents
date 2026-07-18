@@ -1,0 +1,15 @@
+{
+  "name": "tool_plan_mismatch",
+  "legacy": {
+    "status": "succeeded",
+    "agent_id": "tool-agent",
+    "data": {"steps": ["inspect", "verify"]}
+  },
+  "replacement": {
+    "status": "succeeded",
+    "agent_id": "tool-agent",
+    "data": {"steps": ["inspect", "escalate"]}
+  },
+  "expect_matched": false,
+  "expected_paths": ["data.steps"]
+}

@@ -1,0 +1,18 @@
+adapter: spt
+operations:
+  test-data.prepare:
+    adapter_method: test_data_prepare
+    read_only: false
+    approval_risk: create
+  execute:
+    adapter_method: execute
+    read_only: false
+    approval_risk: execute
+  status:
+    adapter_method: status
+    read_only: true
+    approval_risk: read
+  cancel:
+    adapter_method: cancel
+    read_only: false
+    approval_risk: update

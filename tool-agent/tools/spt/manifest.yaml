@@ -1,0 +1,19 @@
+name: spt
+display_name: SPT
+enabled: false
+version: "0.1.0"
+
+infer_keywords: ['spt', 'synthetic', 'performance', 'load test', 'k6']
+
+env_prefix: SPT_
+
+supports_mcp: false
+has_entities: false
+health_check: skip
+
+prompts:
+  intent:
+    source: file
+    name: tool-agent/intent/spt
+    label: "{{APP_ENV}}"
+    fallback: prompts/intent.yaml

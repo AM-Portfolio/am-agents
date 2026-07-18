@@ -1,0 +1,14 @@
+# Dev: companion worker on; canary off (legacy remains default).
+# Vault folder: apps/data/dev/services/am-agents-ops
+environment: dev
+
+vault:
+  enabled: true
+  secretPaths:
+    am-agents-ops:
+      path: "apps/data/dev/services/am-agents"
+
+# Profile-specific settings stay in the environment overlay.
+env:
+  DEPLOYMENT_ENVIRONMENT: "dev"
+  SUPPORT_AGENT_RUNTIME_MODE: "dev"

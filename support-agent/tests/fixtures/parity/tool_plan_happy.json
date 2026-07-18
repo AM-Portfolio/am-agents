@@ -1,0 +1,22 @@
+{
+  "name": "tool_plan_happy",
+  "legacy": {
+    "task_id": "legacy-plan-1",
+    "status": "succeeded",
+    "agent_id": "tool-agent",
+    "evidence": [],
+    "error": null,
+    "metrics": {"latency_ms": 42, "cost_units": 0.0},
+    "data": {"steps": ["inspect", "verify"]}
+  },
+  "replacement": {
+    "task_id": "v2-plan-9",
+    "status": "succeeded",
+    "agent_id": "tool-agent",
+    "evidence": [],
+    "error": null,
+    "metrics": {"latency_ms": 7, "cost_units": 0.0},
+    "data": {"steps": ["inspect", "verify"]}
+  },
+  "expect_matched": true
+}

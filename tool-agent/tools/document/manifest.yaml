@@ -1,0 +1,19 @@
+name: document
+display_name: Document
+enabled: false
+version: "0.1.0"
+
+infer_keywords: ['document', 'docstore', 'minio', 'object']
+
+env_prefix: DOCUMENT_
+
+supports_mcp: false
+has_entities: false
+health_check: skip
+
+prompts:
+  intent:
+    source: file
+    name: tool-agent/intent/document
+    label: "{{APP_ENV}}"
+    fallback: prompts/intent.yaml

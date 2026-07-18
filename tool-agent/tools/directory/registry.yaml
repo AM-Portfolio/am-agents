@@ -1,0 +1,6 @@
+adapter: directory
+operations:
+  owner.resolve:
+    adapter_method: owner_resolve
+    read_only: true
+    approval_risk: read

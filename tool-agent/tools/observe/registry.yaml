@@ -1,0 +1,14 @@
+adapter: observe
+operations:
+  metrics.query:
+    adapter_method: metrics_query
+    read_only: true
+    approval_risk: read
+  logs.query:
+    adapter_method: logs_query
+    read_only: true
+    approval_risk: read
+  timeseries.query:
+    adapter_method: timeseries_query
+    read_only: true
+    approval_risk: read

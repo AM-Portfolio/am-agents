@@ -4,9 +4,9 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Protocol
 
 import httpx
-import yaml
 
 from app.config import AGENT_ROOT, settings
 from tools._shared.text import load_yaml_text, render_template
@@ -20,18 +20,47 @@ class PromptTemplate:
     content: str
     source: str
     version: str | None = None
+    label: str | None = None
+    cached_at: float | None = None
+
+
+class PromptProvider(Protocol):
+    def get(self, name: str, *, label: str, fallback_path: Path | None) -> PromptTemplate: ...
+
+    def clear_cache(self) -> int: ...
+
+    def cache_entries(self) -> list[dict[str, Any]]: ...
 
 
 class FilePromptProvider:
     def get(self, name: str, *, label: str, fallback_path: Path | None) -> PromptTemplate:
+        now = time.time()
         if fallback_path and fallback_path.exists():
-            return PromptTemplate(name=name, content=load_yaml_text(fallback_path), source="file")
+            return PromptTemplate(
+                name=name,
+                content=load_yaml_text(fallback_path),
+                source="file",
+                label=label,
+                cached_at=now,
+            )
         base_path = AGENT_ROOT / "app" / "prompts" / "base.yaml"
         if name.endswith("base") or name == "tool-agent/intent/base":
-            return PromptTemplate(name=name, content=load_yaml_text(base_path), source="file")
+            return PromptTemplate(
+                name=name,
+                content=load_yaml_text(base_path),
+                source="file",
+                label=label,
+                cached_at=now,
+            )
         if fallback_path:
             logger.warning("prompt fallback missing for %s at %s", name, fallback_path)
-        return PromptTemplate(name=name, content="", source="file")
+        return PromptTemplate(name=name, content="", source="file", label=label, cached_at=now)
+
+    def clear_cache(self) -> int:
+        return 0
+
+    def cache_entries(self) -> list[dict[str, Any]]:
+        return []
 
 
 class LangfusePromptProvider:
@@ -46,6 +75,26 @@ class LangfusePromptProvider:
             return None
         token = f"{settings.LANGFUSE_PUBLIC_KEY}:{settings.LANGFUSE_SECRET_KEY}"
         return base64.b64encode(token.encode()).decode()
+
+    def clear_cache(self) -> int:
+        n = len(self._cache)
+        self._cache.clear()
+        return n
+
+    def cache_entries(self) -> list[dict[str, Any]]:
+        now = time.time()
+        entries: list[dict[str, Any]] = []
+        for (name, label), (cached_at, template) in sorted(self._cache.items()):
+            entries.append(
+                {
+                    "name": name,
+                    "label": label,
+                    "version": template.version,
+                    "source": template.source,
+                    "age_seconds": round(now - cached_at, 3),
+                }
+            )
+        return entries
 
     def get(self, name: str, *, label: str, fallback_path: Path | None) -> PromptTemplate:
         cache_key = (name, label)
@@ -82,6 +131,8 @@ class LangfusePromptProvider:
                     content=content,
                     source="langfuse",
                     version=str(body.get("version")) if body.get("version") is not None else None,
+                    label=label,
+                    cached_at=now,
                 )
                 self._cache[cache_key] = (now, template)
                 return template
@@ -92,10 +143,28 @@ class LangfusePromptProvider:
         return self._file_fallback.get(name, label=label, fallback_path=fallback_path)
 
 
-def get_prompt_provider():
-    if settings.PROMPT_SOURCE == "langfuse" and settings.LANGFUSE_ENABLED:
-        return LangfusePromptProvider()
-    return FilePromptProvider()
+_provider: PromptProvider | None = None
+_provider_key: tuple[str, bool] | None = None
+
+
+def get_prompt_provider() -> PromptProvider:
+    global _provider, _provider_key
+    key = (settings.PROMPT_SOURCE, bool(settings.LANGFUSE_ENABLED))
+    if _provider is None or _provider_key != key:
+        if settings.PROMPT_SOURCE == "langfuse" and settings.LANGFUSE_ENABLED:
+            _provider = LangfusePromptProvider()
+        else:
+            _provider = FilePromptProvider()
+        _provider_key = key
+    return _provider
+
+
+def reset_prompt_provider() -> None:
+    global _provider, _provider_key
+    if _provider is not None:
+        _provider.clear_cache()
+    _provider = None
+    _provider_key = None
 
 
 def compile_prompt(template: str, variables: dict[str, str]) -> str:

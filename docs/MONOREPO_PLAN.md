@@ -1,6 +1,11 @@
 # AM Agents Monorepo Plan
 
-**Status: deferred** — implement when ready. Say *"execute the am-agents plan"* in Cursor to run this checklist.
+**Status: historical / superseded for layout** — see
+[`docs/architecture/`](architecture/) and [`support-agent/MIGRATION_MAP.md`](../support-agent/MIGRATION_MAP.md)
+for the current Agent Platform parallel-module plan. This file remains for
+archive context only.
+
+**Original status: deferred** — implement when ready. Say *"execute the am-agents plan"* in Cursor to run this checklist.
 
 ## Decisions locked in
 

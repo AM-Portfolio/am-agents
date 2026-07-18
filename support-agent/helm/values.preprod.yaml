@@ -1,0 +1,14 @@
+# Preprod: durable Postgres memory + GrowthBook shadow routing.
+# Vault folder: apps/data/preprod/services/am-agents-ops
+environment: preprod
+
+vault:
+  enabled: true
+  secretPaths:
+    am-agents-ops:
+      path: "apps/data/preprod/services/am-agents"
+
+# Profile-specific settings stay in the environment overlay.
+env:
+  DEPLOYMENT_ENVIRONMENT: "preprod"
+  SUPPORT_AGENT_RUNTIME_MODE: "prod"
