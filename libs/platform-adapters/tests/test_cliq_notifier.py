@@ -14,8 +14,8 @@ def test_webhook_lab_uses_lab_env(monkeypatch) -> None:
     assert _webhook_for_channel("cliq:lab") == "https://example.test/lab"
 
 
-def test_card_payload_view_more_preview() -> None:
-    """Single View more button → preview.url (popup panel) with details page URL."""
+def test_card_payload_link_buttons() -> None:
+    """In-chat open.url buttons (Cliq ⋮ popup for overflow) — no MinIO View more."""
     card = NotifyCard(
         event="incident.resolved",
         title="✅ RESOLVED · WARNING · KubeServiceDown",
@@ -30,20 +30,19 @@ def test_card_payload_view_more_preview() -> None:
                 {"Field": "Where", "Value": "env=lab · ns=infra · app=redis"},
             ],
             "buttons": [
-                {
-                    "label": "View more",
-                    "url": "https://example.test/incident-cliq/details.html",
-                    "action": "preview.url",
-                },
+                {"label": "OpenProject", "url": "https://openproject.asrax.in/work_packages/391"},
+                {"label": "Open alert", "url": "https://grafana.asrax.in/alerting/x"},
+                {"label": "Temporal", "url": "http://127.0.0.1:8080/wf"},
+                {"label": "Langfuse", "url": "https://langfuse.munish.org"},
             ],
         },
     )
     payload = _card_to_cliq_payload(card)
     assert set(payload.keys()) - {"_plain"} == {"text", "card", "slides", "buttons"}
-    assert len(payload["buttons"]) == 1
-    assert payload["buttons"][0]["label"] == "View more"
-    assert payload["buttons"][0]["action"]["type"] == "preview.url"
-    assert payload["buttons"][0]["action"]["data"]["web"].endswith("details.html")
+    assert len(payload["buttons"]) == 4
+    assert all(b["action"]["type"] == "open.url" for b in payload["buttons"])
+    assert payload["buttons"][0]["label"] == "OpenProject"
+    assert "url" not in payload["buttons"][0]["action"]["data"]  # only web key
 
 
 def test_plain_fallback_is_human() -> None:
@@ -52,8 +51,8 @@ def test_plain_fallback_is_human() -> None:
         title="✅ RESOLVED · WARNING · KubeServiceDown",
         body="redis down",
         refs={"ticket": "390", "env": "lab", "status": "RESOLVED"},
-        meta={"buttons": [{"label": "View more", "url": "https://openproject.asrax.in/work_packages/390"}]},
+        meta={"buttons": [{"label": "OpenProject", "url": "https://openproject.asrax.in/work_packages/390"}]},
     )
     plain = _plain_fallback(card)
     assert "Ticket: 390" in plain
-    assert "View more:" in plain
+    assert "OpenProject:" in plain

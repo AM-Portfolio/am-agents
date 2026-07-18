@@ -57,11 +57,13 @@ def to_cliq_card(msg: IncidentMessage, *, view_more_url: str | None = None) -> N
     Compact Cliq card matching am-obs-platform alert format:
       text     — mention / thin placeholder (no duplicate title)
       card     — emoji · status · severity · alertname
-      slides   — short Field|Value table (no long dumps)
-      buttons  — single View more → details page (links + summary/update)
+      slides   — Field|Value table (summary, update, timing)
+      buttons  — OpenProject / Alert / Temporal / Langfuse (Cliq ⋮ popup for overflow)
 
-    Full Summary/Update + Temporal/Langfuse/OpenProject/Alert live on View more page.
+    Channel webhooks cannot open a custom in-chat form; link buttons stay inside Cliq
+    (same pattern as original FIRING cards). Full HTML report stays in email.
     """
+    _ = view_more_url  # kept for callers; Cliq no longer navigates to MinIO
     from am_platform_ports.formatting.cliq_details import incident_timing, langfuse_public_url
 
     aid = (msg.tracking_id or msg.alert_id or "AM").strip()
@@ -84,7 +86,6 @@ def to_cliq_card(msg: IncidentMessage, *, view_more_url: str | None = None) -> N
     if len(summary) > 120:
         summary = summary[:117] + "…"
 
-    # One short action line — full text on View more page
     update = (msg.success_summary or msg.reason or "").strip()
     if not update:
         update = {
@@ -110,7 +111,6 @@ def to_cliq_card(msg: IncidentMessage, *, view_more_url: str | None = None) -> N
     timing = incident_timing(msg)
     ids = _join(aid, f"ticket={msg.ticket_number}" if msg.ticket_number else "")
 
-    # Keep card short — Summary/Update teasers only; full text in View more
     table_rows: list[dict[str, str]] = []
     for field, value in (
         ("Summary", summary),
@@ -127,21 +127,17 @@ def to_cliq_card(msg: IncidentMessage, *, view_more_url: str | None = None) -> N
             table_rows.append({"Field": field, "Value": value})
 
     links = msg.links
-    more_url = (view_more_url or "").strip()
-    if not more_url.startswith("http"):
-        # Prefer ticket, then alert — still one View more entry point
-        more_url = links.ticket_url or links.alert_url or links.temporal_url or langfuse_public_url()
-
+    # Same as original alert cards: short open.url buttons stay in Cliq (⋮ = popup)
     buttons: list[dict[str, str]] = []
-    if more_url.startswith("http"):
-        buttons.append(
-            {
-                "label": "View more",
-                "url": more_url,
-                # Cliq preview panel ≈ popup; open.url fallback handled by notifier
-                "action": "preview.url",
-            }
-        )
+    for label, url in (
+        (links.ticket_label or "OpenProject", links.ticket_url),
+        ("Open alert", links.alert_url),
+        ("Temporal", links.temporal_url),
+        ("Langfuse", langfuse_public_url()),
+    ):
+        if url and str(url).startswith("http") and len(str(url)) <= 256:
+            buttons.append({"label": label[:30], "url": str(url), "action": "open.url"})
+    buttons = buttons[:4]
 
     return NotifyCard(
         event=f"incident.{status.lower()}",
@@ -162,12 +158,6 @@ def to_cliq_card(msg: IncidentMessage, *, view_more_url: str | None = None) -> N
             "mention": "\u200b",  # avoid duplicating title in chat (obs-platform style)
             "table_rows": table_rows,
             "buttons": buttons,
-            "detail_links": {
-                "openproject": links.ticket_url,
-                "alert": links.alert_url,
-                "temporal": links.temporal_url,
-                "langfuse": langfuse_public_url(),
-            },
         },
     )
 

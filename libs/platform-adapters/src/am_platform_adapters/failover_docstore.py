@@ -56,6 +56,14 @@ class FailoverDocStore:
         store = self._store_for_ref(docs_ref)
         return store.exists(docs_ref=docs_ref)
 
+    def browser_url(self, *, docs_ref: str, expires_seconds: int = 86400) -> str:
+        """Delegate signed/browser URL generation to the provider that stored it."""
+        store = self._store_for_ref(docs_ref)
+        method = getattr(store, "browser_url", None)
+        if not callable(method):
+            return ""
+        return str(method(docs_ref=docs_ref, expires_seconds=expires_seconds) or "")
+
     def _store_for_ref(self, docs_ref: str) -> DocStore:
         if docs_ref.startswith("minio:") or docs_ref.startswith("fake:"):
             return self._primary

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 from am_platform_ports.agent_identity import agent_display_name
+from am_platform_ports.formatting.cliq_details import incident_timing, langfuse_public_url
 from am_platform_ports.schemas.incident_message import IncidentMessage
 
 
@@ -47,6 +48,7 @@ def render_incident_email_html(msg: IncidentMessage) -> str:
     problem = _e(msg.problem or "Incident")
     reason = _e(msg.success_summary or msg.reason or "—")
     agent = _e(msg.done_by or agent_display_name())
+    timing = incident_timing(msg)
 
     detail_rows = "".join(
         r
@@ -63,6 +65,9 @@ def render_incident_email_html(msg: IncidentMessage) -> str:
             _row("Started", msg.started_at),
             _row("Notified", msg.notified_at),
             _row("Ended", msg.ended_at),
+            _row("Received date", timing.get("received", "")),
+            _row("Resolution date", timing.get("resolved", "")),
+            _row("Time spent", timing.get("time_spent", "")),
             _row("Responsible", msg.responsible),
             _row("Backup", msg.backup),
             _row("Done by", msg.done_by or agent_display_name()),
@@ -80,6 +85,7 @@ def render_incident_email_html(msg: IncidentMessage) -> str:
         + _btn("Grafana trace", links.grafana_trace_url, color="#0f766e")
         + _btn(links.ticket_label or "Ticket", links.ticket_url, color="#2563eb")
         + _btn("Alert", links.alert_url, color="#7c3aed")
+        + _btn("Langfuse", langfuse_public_url(), color="#d97706")
         + "</tr>"
     )
     extra_btns = ""

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import os
+from datetime import timedelta
 from urllib.parse import urlparse
 
 from am_platform_ports.schemas.core import DocRef
@@ -94,6 +95,31 @@ class MinioDocStore:
         finally:
             resp.close()
             resp.release_conn()
+
+    def browser_url(self, *, docs_ref: str, expires_seconds: int = 86400) -> str:
+        """Return a signed browser URL; use public MinIO host when configured."""
+        bucket, object_key = _parse_docs_ref(docs_ref)
+        public = (os.getenv("MINIO_PUBLIC_URL") or "").strip()
+        client = self._client
+        if public:
+            parsed = urlparse(public if "://" in public else f"https://{public}")
+            host = parsed.hostname or public
+            port = parsed.port
+            endpoint = f"{host}:{port}" if port else host
+            from minio import Minio
+
+            client = Minio(
+                endpoint,
+                access_key=(os.environ.get("MINIO_ACCESS_KEY") or "").strip(),
+                secret_key=(os.environ.get("MINIO_SECRET_KEY") or "").strip(),
+                secure=parsed.scheme != "http",
+            )
+        return client.presigned_get_object(
+            bucket,
+            object_key,
+            expires=timedelta(seconds=max(60, min(expires_seconds, 604800))),
+            response_headers={"response-content-type": "text/html; charset=utf-8"},
+        )
 
     def exists(self, *, docs_ref: str) -> bool:
         from minio.error import S3Error

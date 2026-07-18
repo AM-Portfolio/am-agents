@@ -174,6 +174,10 @@ class FakeDocStore:
     def exists(self, *, docs_ref: str) -> bool:
         return docs_ref in self.objects
 
+    def browser_url(self, *, docs_ref: str, expires_seconds: int = 86400) -> str:
+        _ = expires_seconds
+        return f"https://docs.example.test/{docs_ref.removeprefix('fake:')}"
+
 
 class FakePolicy:
     def allow(self, *, action: str, context: dict) -> bool:

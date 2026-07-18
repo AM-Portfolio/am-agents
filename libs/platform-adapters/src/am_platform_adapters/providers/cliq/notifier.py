@@ -35,17 +35,11 @@ def _webhook_for_channel(channel_ref: str) -> str:
 
 
 def _cliq_button(label: str, url: str, tone: str = "+", *, action: str = "open.url") -> dict[str, Any]:
-    """Zoho button — open.url (new tab) or preview.url (in-chat panel ≈ popup)."""
-    action_type = (action or "open.url").strip() or "open.url"
-    if action_type == "preview.url":
-        # v3 docs use data.web; older docs use data.url — include web (primary)
-        data: dict[str, str] = {"web": url, "url": url}
-    else:
-        data = {"web": url}
+    """Zoho open.url button — opens in browser; Cliq keeps buttons in-chat (⋮ overflow popup)."""
     return {
         "label": (label or "Open")[:30],
         "type": tone,
-        "action": {"type": action_type, "data": data},
+        "action": {"type": "open.url", "data": {"web": url[:256]}},
     }
 
 
@@ -76,7 +70,8 @@ def _card_to_cliq_payload(card: NotifyCard) -> dict[str, Any]:
     Match am-obs-platform alert cards:
       text + card(modern-inline) + one table slide + top-level buttons(open.url).
 
-    Full detail lives behind a single View more button (preview panel / new tab).
+    Full detail: Summary/Update/timing on the card; links as open.url buttons
+    (Cliq ⋮ menu is the in-chat popup for overflow — same as original FIRING cards).
     """
     meta = card.meta or {}
     title = (card.title or "Incident").strip()[:100]
@@ -111,9 +106,8 @@ def _card_to_cliq_payload(card: NotifyCard) -> dict[str, Any]:
             continue
         label = str(b.get("label") or "").strip()
         url = str(b.get("url") or "").strip()
-        action = str(b.get("action") or "open.url").strip() or "open.url"
         if label and url.startswith("http"):
-            buttons.append(_cliq_button(label, url, action=action))
+            buttons.append(_cliq_button(label, url))
 
     # Same shape as obs-platform _to_cliq_message
     payload: dict[str, Any] = {

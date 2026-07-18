@@ -81,10 +81,9 @@ def _failed_msg() -> IncidentMessage:
 
 
 def test_cliq_card_is_compact(monkeypatch) -> None:
-    """Compact card with a single View more button (details page has all links)."""
+    """Compact card with in-chat link buttons (no MinIO View more)."""
     monkeypatch.setenv("LANGFUSE_HOST", "https://langfuse.munish.org")
-    details = "https://example.test/incident-cliq/view-more.html"
-    card = to_cliq_card(_resolved_msg(), view_more_url=details)
+    card = to_cliq_card(_resolved_msg())
     assert "RESOLVED" in card.title
     assert "KubeServiceDown" in card.title or "WARNING" in card.title
     assert "Evidence dump" not in card.body
@@ -96,17 +95,16 @@ def test_cliq_card_is_compact(monkeypatch) -> None:
     assert "cAdvisor" not in update
     assert len(update) <= 90
     buttons = card.meta.get("buttons") or []
-    assert len(buttons) == 1
-    assert buttons[0]["label"] == "View more"
-    assert buttons[0]["url"] == details
-    assert buttons[0]["action"] == "preview.url"
-    assert card.meta["detail_links"]["langfuse"] == "https://langfuse.munish.org"
+    labels = [b.get("label") for b in buttons]
+    assert "OpenProject" in labels
+    assert "Open alert" in labels
+    assert "Temporal" in labels
+    assert "Langfuse" in labels
+    assert "View more" not in labels
     assert "openproject.asrax.in" not in card.body
     payload = _card_to_cliq_payload(card)
     assert payload["slides"][0]["type"] == "table"
-    assert len(payload["buttons"]) == 1
-    assert payload["buttons"][0]["label"] == "View more"
-    assert payload["buttons"][0]["action"]["type"] == "preview.url"
+    assert all(b["action"]["type"] == "open.url" for b in payload["buttons"])
 
 
 def test_cliq_timing_fields() -> None:

@@ -217,10 +217,12 @@ def publish_cliq_view_more(
     docs: Any | None = None,
 ) -> str:
     """
-    Persist View-more HTML and return a browser URL when publicly reachable.
+    Persist the same complete HTML report used by email and return a signed URL.
     Falls back to empty string (caller should use ticket URL).
     """
-    html_body = render_cliq_view_more_html(msg)
+    from am_platform_ports.formatting.incident_email import render_incident_email_html
+
+    html_body = render_incident_email_html(msg)
     aid = re.sub(r"[^A-Za-z0-9._-]+", "-", (msg.tracking_id or msg.alert_id or "AM"))[:48]
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     object_key = f"incident-cliq/{aid}/{stamp}-{msg.status.lower()}.html"
@@ -241,9 +243,22 @@ def publish_cliq_view_more(
                 key=object_key,
                 content=html_body.encode("utf-8"),
                 content_type="text/html; charset=utf-8",
-                meta={"tracking_id": aid, "kind": "cliq-view-more"},
+                meta={"tracking_id": aid, "kind": "incident-html-report"},
             )
             docs_url = (getattr(ref, "url", None) or "") or ""
+            browser_url = getattr(docs, "browser_url", None)
+            if callable(browser_url):
+                signed = str(
+                    browser_url(
+                        docs_ref=ref.docs_ref,
+                        expires_seconds=int(
+                            os.getenv("INCIDENT_VIEW_MORE_URL_TTL_SECONDS", "86400")
+                        ),
+                    )
+                    or ""
+                )
+                if signed.startswith("http"):
+                    return signed
         except Exception as exc:  # noqa: BLE001
             LOG.warning("view-more docs put failed: %s", exc)
 
