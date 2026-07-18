@@ -39,6 +39,7 @@ with workflow.unsafe.imports_passed_through():
     )
     from am_support_agent.orchestrator.activities.telemetry import (
         finalize_run,
+        persist_lifecycle,
         record_event,
     )
     from am_support_agent.orchestrator.hitl import (
@@ -193,8 +194,47 @@ class AlertIncidentWorkflow:
                         or ""
                     ),
                     "side_effects": self._state.get("side_effects") or {},
+                    "steps": self._steps,
+                    "state": {
+                        "alert": self._state.get("alert") or {},
+                        "work_item": work_item,
+                        "side_effects": self._state.get("side_effects") or {},
+                        "human_required": self._state.get("human_required") or {},
+                        "similar_incident_ids": self._state.get("similar_incident_ids")
+                        or [],
+                        "known_fix": self._state.get("known_fix")
+                        or self._state.get("proposed_known_fix")
+                        or {},
+                    },
                     "sequence": self._event_seq + 1,
                     **extra,
+                },
+                timeout_s=30,
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
+    async def _persist_lifecycle(self, *, final_status: str = "open") -> None:
+        """Best-effort ticket/agent/final status snapshot for Grafana tables."""
+        try:
+            await self._act(
+                persist_lifecycle,
+                {
+                    "run_ref": str(self._state.get("run_ref") or ""),
+                    "phase": self._phase,
+                    "final_status": final_status,
+                    "steps": self._steps,
+                    "state": {
+                        "alert": self._state.get("alert") or {},
+                        "work_item": self._state.get("work_item") or {},
+                        "side_effects": self._state.get("side_effects") or {},
+                        "human_required": self._state.get("human_required") or {},
+                        "similar_incident_ids": self._state.get("similar_incident_ids")
+                        or [],
+                        "known_fix": self._state.get("known_fix")
+                        or self._state.get("proposed_known_fix")
+                        or {},
+                    },
                 },
                 timeout_s=30,
             )
@@ -299,6 +339,11 @@ class AlertIncidentWorkflow:
             },
             attributes={"error": str(created.get("error") or "")[:200]},
         )
+        self._state["side_effects"] = {
+            **(self._state.get("side_effects") or {}),
+            "ticket_create": "ok" if create_ok else "failed",
+            "ticket_status": "created" if create_ok else "create_failed",
+        }
 
         assigned = await self._act(
             assign_ticket,
@@ -310,6 +355,12 @@ class AlertIncidentWorkflow:
         )
         self._steps["assign_ticket"] = assigned
         self._state["work_item"] = assigned.get("work_item") or created.get("work_item")
+        self._state["side_effects"] = {
+            **(self._state.get("side_effects") or {}),
+            "ticket_status": "assigned"
+            if create_ok
+            else str((self._state.get("side_effects") or {}).get("ticket_status") or "none"),
+        }
 
         if actions:
             executed = await self._act(
@@ -327,6 +378,12 @@ class AlertIncidentWorkflow:
             },
         )
         self._steps["notify_firing"] = notify
+        notify_ok = bool(notify.get("ok", True)) and not notify.get("error")
+        self._state["side_effects"] = {
+            **(self._state.get("side_effects") or {}),
+            "chat_notify": "ok" if notify_ok else "failed",
+            "mail_notify": "n/a",
+        }
 
         comment = await self._act(
             comment_ticket,
@@ -338,6 +395,7 @@ class AlertIncidentWorkflow:
             },
         )
         self._steps["comment_ticket"] = comment
+        await self._persist_lifecycle(final_status="open")
 
     async def _handoff_to_human(
         self,
@@ -683,6 +741,8 @@ class AlertIncidentWorkflow:
         sample_batches: list[list[dict[str, Any]]] = list(
             self._state.get("recovery_batches") or []
         )
+        self._phase = "awaiting_resolved_or_refired"
+        await self._persist_lifecycle(final_status="open")
         while True:
             self._phase = "awaiting_resolved_or_refired"
             await workflow.wait_condition(

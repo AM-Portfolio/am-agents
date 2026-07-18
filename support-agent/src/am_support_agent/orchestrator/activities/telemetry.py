@@ -8,6 +8,10 @@ from typing import Any
 from am_support_agent.composition import build_runtime
 from am_support_agent.observability.agent_work import AgentWorkEvent, build_event, map_domain_status
 from am_support_agent.observability.metrics import get_shared_metrics
+from am_support_agent.orchestrator.lifecycle import (
+    build_lifecycle_summary,
+    final_status_for_domain,
+)
 from am_support_agent.stores.telemetry_outbox import build_telemetry_outbox
 from am_support_agent.stores.workflow_ledger import WorkflowRunStatus
 
@@ -64,6 +68,17 @@ def _append_event(event: AgentWorkEvent):
         return memory_telemetry_outbox().append(event)
 
 
+def _merge_run_summary(run_ref: str, patch: dict[str, Any], *, status: WorkflowRunStatus | None = None) -> None:
+    runtime = build_runtime()
+    current = runtime.workflow_ledger.get_run(run_ref)
+    base = dict(current.summary) if current is not None else {}
+    runtime.workflow_ledger.update_run(
+        run_ref,
+        status=status,
+        summary={**base, **patch},
+    )
+
+
 try:
     from temporalio import activity
 except ImportError:  # pragma: no cover
@@ -105,6 +120,36 @@ async def record_event(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@activity.defn(name="support_agent.telemetry.persist_lifecycle")
+async def persist_lifecycle(payload: dict[str, Any]) -> dict[str, Any]:
+    """Merge lifecycle snapshot into workflow_runs.summary (non-terminal)."""
+    body = dict(payload or {})
+    run_ref = str(body.get("run_ref") or "").strip()
+    if not run_ref:
+        return {"ok": False, "error": "run_ref required"}
+    summary = build_lifecycle_summary(
+        phase=str(body.get("phase") or ""),
+        steps=body.get("steps") if isinstance(body.get("steps"), dict) else {},
+        state=body.get("state") if isinstance(body.get("state"), dict) else {},
+        domain_status=str(body.get("domain_status") or "") or None,
+        final_status=str(body.get("final_status") or "") or None,
+    )
+    if body.get("summary") and isinstance(body.get("summary"), dict):
+        summary = {**summary, **dict(body["summary"])}
+    try:
+        _merge_run_summary(run_ref, summary)
+    except Exception as exc:  # noqa: BLE001
+        LOG.warning("persist_lifecycle failed run_ref=%s err=%s", run_ref, exc)
+        return {"ok": False, "error": str(exc)[:200]}
+    return {
+        "ok": True,
+        "run_ref": run_ref,
+        "agent_status": summary.get("agent_status"),
+        "final_status": summary.get("final_status"),
+        "ticket_ref": summary.get("ticket_ref"),
+    }
+
+
 @activity.defn(name="support_agent.telemetry.finalize_run")
 async def finalize_run(payload: dict[str, Any]) -> dict[str, Any]:
     """Mark workflow ledger terminal from domain status (Phase 1 honesty)."""
@@ -122,11 +167,35 @@ async def finalize_run(payload: dict[str, Any]) -> dict[str, Any]:
         "partial": WorkflowRunStatus.FAILED,
     }.get(status.value, WorkflowRunStatus.FAILED)
 
-    runtime = build_runtime()
+    life = build_lifecycle_summary(
+        phase=str(body.get("phase") or ""),
+        steps=body.get("steps") if isinstance(body.get("steps"), dict) else {},
+        state=body.get("state") if isinstance(body.get("state"), dict) else {
+            "work_item": {"work_item_ref": body.get("ticket_ref") or ""},
+            "side_effects": body.get("side_effects") or {},
+            "human_required": {
+                "approval_purpose": body.get("approval_purpose") or "",
+            }
+            if body.get("approval_purpose")
+            else {},
+            "alert": body.get("alert") or {},
+            "similar_incident_ids": body.get("similar_incident_ids") or [],
+            "known_fix": body.get("known_fix") or {},
+        },
+        domain_status=domain_status,
+        final_status=final_status_for_domain(domain_status),
+    )
     summary = dict(body.get("summary") or {})
+    summary.update(life)
     summary["domain_status"] = domain_status
     summary["outcome"] = outcome.value
-    runtime.workflow_ledger.update_run(run_ref, status=ledger_status, summary=summary)
+    if body.get("ticket_ref"):
+        summary["ticket_ref"] = str(body.get("ticket_ref"))
+
+    try:
+        _merge_run_summary(run_ref, summary, status=ledger_status)
+    except Exception as exc:  # noqa: BLE001
+        LOG.warning("finalize_run ledger update failed run_ref=%s err=%s", run_ref, exc)
 
     event = build_event(
         event_name=(
@@ -144,7 +213,7 @@ async def finalize_run(payload: dict[str, Any]) -> dict[str, Any]:
         run_ref=run_ref,
         tracking_id=str(body.get("tracking_id") or ""),
         episode_id=str(body.get("episode_id") or ""),
-        ticket_ref=str(body.get("ticket_ref") or ""),
+        ticket_ref=str(body.get("ticket_ref") or summary.get("ticket_ref") or ""),
         terminal=True,
         sequence=int(body.get("sequence") or 9000),
         labels={
@@ -153,7 +222,7 @@ async def finalize_run(payload: dict[str, Any]) -> dict[str, Any]:
             if ledger_status in {WorkflowRunStatus.PASSED, WorkflowRunStatus.NEEDS_HUMAN}
             else "failure",
         },
-        attributes={"side_effects": body.get("side_effects") or {}},
+        attributes={"side_effects": body.get("side_effects") or summary.get("side_effects") or {}},
     )
     if ledger_status == WorkflowRunStatus.NEEDS_HUMAN:
         event = build_event(
@@ -165,7 +234,7 @@ async def finalize_run(payload: dict[str, Any]) -> dict[str, Any]:
             run_ref=run_ref,
             tracking_id=str(body.get("tracking_id") or ""),
             episode_id=str(body.get("episode_id") or ""),
-            ticket_ref=str(body.get("ticket_ref") or ""),
+            ticket_ref=str(body.get("ticket_ref") or summary.get("ticket_ref") or ""),
             terminal=True,
             sequence=int(body.get("sequence") or 9000),
             labels={
@@ -183,10 +252,12 @@ async def finalize_run(payload: dict[str, Any]) -> dict[str, Any]:
         "run_ref": run_ref,
         "status": ledger_status.value,
         "outcome": outcome.value,
+        "final_status": summary.get("final_status"),
+        "agent_status": summary.get("agent_status"),
         "event_id": event.event_id,
     }
 
 
-TELEMETRY_ACTIVITIES = (record_event, finalize_run)
+TELEMETRY_ACTIVITIES = (record_event, persist_lifecycle, finalize_run)
 
-__all__ = ["TELEMETRY_ACTIVITIES", "finalize_run", "record_event"]
+__all__ = ["TELEMETRY_ACTIVITIES", "finalize_run", "persist_lifecycle", "record_event"]

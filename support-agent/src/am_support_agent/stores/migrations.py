@@ -194,10 +194,112 @@ CREATE INDEX IF NOT EXISTS agent_work_outbox_run_ref
     ON support_agent.agent_work_event_outbox (run_ref, occurred_at);
 """
 
+# Migration 4: Grafana lifecycle / ticket / familiar-type read models
+MIGRATION_004_LIFECYCLE_VIEWS = """
+CREATE OR REPLACE VIEW support_agent.v_incident_lifecycle AS
+SELECT
+    r.run_ref,
+    r.tracking_id,
+    r.workflow_id,
+    r.kind,
+    r.status AS ledger_status,
+    COALESCE(r.summary->>'phase', '') AS phase,
+    COALESCE(r.summary->>'agent_status', '') AS agent_status,
+    COALESCE(r.summary->>'final_status', 'open') AS final_status,
+    COALESCE(r.summary->>'ticket_ref', '') AS ticket_ref,
+    COALESCE(r.summary->>'ticket_status', 'none') AS ticket_status,
+    COALESCE(r.summary->>'chat_sent', 'skipped') AS chat_sent,
+    COALESCE(r.summary->>'mail_sent', 'n/a') AS mail_sent,
+    COALESCE(r.summary->>'familiar_type', '') AS familiar_type,
+    COALESCE(r.summary->>'alert_fingerprint', '') AS alert_fingerprint,
+    COALESCE(r.summary->>'hitl_state', '') AS hitl_state,
+    COALESCE(r.summary->>'approval_purpose', '') AS approval_purpose,
+    COALESCE(r.summary->>'known_fix', '') AS known_fix,
+    COALESCE((r.summary->>'solved')::boolean, FALSE) AS solved,
+    COALESCE(r.summary->'activities', '{}'::jsonb) AS activities,
+    COALESCE(r.summary->'side_effects', '{}'::jsonb) AS side_effects,
+    COALESCE(fb.feedback_count, 0) AS feedback_count,
+    fb.latest_feedback_at,
+    e.episode_id,
+    e.outcome AS episode_outcome,
+    e.service AS episode_service,
+    e.env AS episode_env,
+    r.created_at,
+    r.updated_at
+FROM support_agent.workflow_runs r
+LEFT JOIN LATERAL (
+    SELECT ep.episode_id, ep.outcome, ep.service, ep.env
+    FROM support_agent.incident_episodes ep
+    WHERE ep.tracking_id = r.tracking_id
+    ORDER BY ep.updated_at DESC
+    LIMIT 1
+) e ON TRUE
+LEFT JOIN LATERAL (
+    SELECT
+        count(*)::int AS feedback_count,
+        max(f.created_at) AS latest_feedback_at
+    FROM support_agent.incident_feedback_events f
+    WHERE f.tracking_id = r.tracking_id
+) fb ON TRUE;
+
+CREATE OR REPLACE VIEW support_agent.v_ticket_status AS
+SELECT
+    ticket_ref,
+    tracking_id,
+    run_ref,
+    workflow_id,
+    familiar_type,
+    agent_status,
+    final_status,
+    ticket_status,
+    chat_sent,
+    mail_sent,
+    CASE WHEN feedback_count > 0 THEN TRUE ELSE FALSE END AS feedback_received,
+    feedback_count,
+    hitl_state,
+    approval_purpose,
+    known_fix,
+    activities,
+    updated_at,
+    created_at
+FROM support_agent.v_incident_lifecycle
+WHERE ticket_ref <> ''
+ORDER BY updated_at DESC;
+
+CREATE OR REPLACE VIEW support_agent.v_unsolved_incidents AS
+SELECT *
+FROM support_agent.v_incident_lifecycle
+WHERE COALESCE(final_status, 'open') NOT IN ('recovered', 'closed')
+ORDER BY updated_at DESC;
+
+CREATE OR REPLACE VIEW support_agent.v_familiar_type_summary AS
+SELECT
+    COALESCE(NULLIF(familiar_type, ''), 'unknown') AS familiar_type,
+    count(*)::int AS incident_count,
+    count(*) FILTER (
+        WHERE COALESCE(final_status, 'open') NOT IN ('recovered', 'closed')
+    )::int AS unsolved_count,
+    count(*) FILTER (
+        WHERE final_status IN ('recovered', 'closed')
+    )::int AS solved_count,
+    count(*) FILTER (
+        WHERE final_status = 'human_required' OR hitl_state <> ''
+    )::int AS hitl_count,
+    max(updated_at) AS latest_updated_at,
+    (array_agg(tracking_id ORDER BY updated_at DESC))[1] AS latest_tracking_id,
+    (array_agg(NULLIF(ticket_ref, '') ORDER BY updated_at DESC)
+        FILTER (WHERE ticket_ref <> ''))[1] AS latest_ticket_ref,
+    (array_agg(agent_status ORDER BY updated_at DESC))[1] AS latest_agent_status,
+    (array_agg(final_status ORDER BY updated_at DESC))[1] AS latest_final_status
+FROM support_agent.v_incident_lifecycle
+GROUP BY COALESCE(NULLIF(familiar_type, ''), 'unknown');
+"""
+
 MIGRATIONS: Sequence[tuple[int, str, str]] = (
     (1, "task_runs", MIGRATION_001_TASK_RUNS),
     (2, "incident_memory", MIGRATION_002_INCIDENT_MEMORY),
     (3, "agent_work_outbox", MIGRATION_003_AGENT_WORK_OUTBOX),
+    (4, "lifecycle_views", MIGRATION_004_LIFECYCLE_VIEWS),
 )
 
 # Advisory lock key unique to support-agent migrations
@@ -255,4 +357,6 @@ SUPPORT_AGENT_SCHEMA_SQL = (
     + MIGRATION_002_INCIDENT_MEMORY
     + "\n"
     + MIGRATION_003_AGENT_WORK_OUTBOX
+    + "\n"
+    + MIGRATION_004_LIFECYCLE_VIEWS
 )
