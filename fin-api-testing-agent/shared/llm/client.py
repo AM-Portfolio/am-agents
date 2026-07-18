@@ -125,11 +125,27 @@ class DirectLiteLLMClient:
 
     def __init__(self) -> None:
         base_url = settings.LITELLM_BASE_URL.strip() if settings.LITELLM_BASE_URL else ""
+        openrouter_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+        together_key = (settings.LITELLM_MASTER_KEY or settings.TOGETHER_API_KEY or "").strip()
+        
         if not base_url:
-            base_url = "https://api.together.ai/v1"
+            # Fall back to OpenRouter if key is present and together key is default/empty/expired
+            if openrouter_key and (not together_key or together_key == "CHANGE_ME" or "bff39f3" in together_key):
+                base_url = "https://openrouter.ai/api/v1"
+                self.api_key = openrouter_key
+            else:
+                base_url = "https://api.together.ai/v1"
+                self.api_key = together_key
+        else:
+            self.api_key = together_key
+            
         self.base_url = base_url.rstrip("/")
-        self.api_key = settings.LITELLM_MASTER_KEY or settings.TOGETHER_API_KEY
         self.timeout = settings.LLM_TIMEOUT_SECONDS
+        
+        # Resolve Model
+        self.model = settings.LLM_PLANNER_MODEL
+        if "openrouter.ai" in self.base_url:
+            self.model = "meta-llama/llama-3.3-70b-instruct"
 
     @property
     def available(self) -> bool:
@@ -161,7 +177,7 @@ class DirectLiteLLMClient:
     ) -> Any:
         url = f"{self.base_url}/chat/completions"
         payload = {
-            "model": settings.LLM_PLANNER_MODEL,
+            "model": self.model,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": settings.LLM_MAX_TOKENS,
@@ -177,14 +193,14 @@ class DirectLiteLLMClient:
             resp = await client.post(url, headers=self._headers(), json=payload)
             if resp.status_code != 200:
                 err_text = resp.text[:500]
-                asyncio.create_task(_emit_langfuse("fin.chat", messages, "", settings.LLM_PLANNER_MODEL, err_text))
+                asyncio.create_task(_emit_langfuse("fin.chat", messages, "", self.model, err_text))
                 raise RuntimeError(f"LiteLLM failed [{resp.status_code}]: {err_text}")
             data = resp.json()
 
         message = data["choices"][0]["message"]
         content = message.get("content") or ""
         output_str = json.dumps(message.get("tool_calls")) if message.get("tool_calls") else content
-        asyncio.create_task(_emit_langfuse("fin.chat", messages, output_str, settings.LLM_PLANNER_MODEL))
+        asyncio.create_task(_emit_langfuse("fin.chat", messages, output_str, self.model))
 
         if message.get("tool_calls"):
             return message
@@ -207,7 +223,7 @@ class DirectLiteLLMClient:
         started = time.perf_counter()
         url = f"{self.base_url}/chat/completions"
         payload = {
-            "model": settings.LLM_PLANNER_MODEL,
+            "model": self.model,
             "messages": messages,
             "temperature": temperature if temperature is not None else settings.LLM_TEMPERATURE,
             "max_tokens": settings.LLM_MAX_TOKENS,
@@ -218,17 +234,17 @@ class DirectLiteLLMClient:
             resp = await client.post(url, headers=self._headers(), json=payload)
             if resp.status_code != 200:
                 err_text = resp.text[:500]
-                asyncio.create_task(_emit_langfuse(generation_name, messages, "", settings.LLM_PLANNER_MODEL, err_text))
+                asyncio.create_task(_emit_langfuse(generation_name, messages, "", self.model, err_text))
                 raise RuntimeError(f"LiteLLM failed [{resp.status_code}]: {err_text}")
             data = resp.json()
 
         content = data["choices"][0]["message"]["content"]
-        asyncio.create_task(_emit_langfuse(generation_name, messages, content, settings.LLM_PLANNER_MODEL))
+        asyncio.create_task(_emit_langfuse(generation_name, messages, content, self.model))
 
         usage_raw = data.get("usage") or {}
         return LlmCallResult(
             content=content,
-            model=str(data.get("model") or settings.LLM_PLANNER_MODEL),
+            model=str(data.get("model") or self.model),
             usage={
                 "prompt_tokens": int(usage_raw.get("prompt_tokens") or 0),
                 "completion_tokens": int(usage_raw.get("completion_tokens") or 0),
@@ -254,7 +270,7 @@ class DirectLiteLLMClient:
         ]
         url = f"{self.base_url}/chat/completions"
         payload = {
-            "model": settings.LLM_PLANNER_MODEL,
+            "model": self.model,
             "messages": messages,
             "temperature": temperature if temperature is not None else settings.LLM_TEMPERATURE,
             "max_tokens": settings.LLM_MAX_TOKENS,
@@ -265,12 +281,12 @@ class DirectLiteLLMClient:
         started = time.perf_counter()
         parts: list[str] = []
         usage_raw: dict[str, int] = {}
-        model = settings.LLM_PLANNER_MODEL
+        model = self.model
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             async with client.stream("POST", url, headers=self._headers(), json=payload) as resp:
                 if resp.status_code != 200:
                     err_text = f"LiteLLM stream status {resp.status_code}"
-                    asyncio.create_task(_emit_langfuse(generation_name, messages, "", settings.LLM_PLANNER_MODEL, err_text))
+                    asyncio.create_task(_emit_langfuse(generation_name, messages, "", self.model, err_text))
                     raise RuntimeError(f"LiteLLM stream failed [{resp.status_code}]")
                 async for line in resp.aiter_lines():
                     if not line or not line.startswith("data: "):
