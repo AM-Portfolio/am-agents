@@ -145,28 +145,34 @@ def build_incident_message(
     )
 
 
-def notify_incident_channels(
+def post_cliq_card(
     ports: Any,
     *,
     msg: IncidentMessage,
     channel_ref: str,
-    also_ticket_comment: bool = True,
 ) -> dict[str, str]:
-    """Send compact Cliq + optional HTML mail; soft-fail mail. Optionally comment OP."""
-    out: dict[str, str] = {"cliq": "", "mail": "", "ticket_comment": ""}
-
-    card = to_cliq_card(msg)
+    """Send Cliq card only. Returns status + ref for Temporal visibility."""
+    channel = (channel_ref or "cliq:lab").strip() or "cliq:lab"
     try:
-        out["cliq"] = ports.notifier.send_card(channel_ref=channel_ref, card=card)
+        ref = ports.notifier.send_card(channel_ref=channel, card=to_cliq_card(msg))
+        return {
+            "status": "ok",
+            "cliq_ref": str(ref or ""),
+            "channel_ref": channel,
+            "error": "",
+        }
     except Exception as exc:  # noqa: BLE001
         LOG.warning("cliq notify failed: %s", exc)
-        out["cliq"] = f"error:{exc}"[:120]
+        return {
+            "status": "error",
+            "cliq_ref": "",
+            "channel_ref": channel,
+            "error": str(exc)[:300],
+        }
 
-    if also_ticket_comment and msg.ticket_ref:
-        out["ticket_comment"] = comment_incident_phase(
-            ports, msg=msg, phase=msg.status
-        )
 
+def send_incident_mail_msg(ports: Any, *, msg: IncidentMessage) -> dict[str, str]:
+    """Send HTML mail only. Soft-fails; returns status + ref for Temporal visibility."""
     mail_enabled = os.getenv("INCIDENT_MAIL_ENABLED", "true").strip().lower() not in {
         "0",
         "false",
@@ -174,23 +180,65 @@ def notify_incident_channels(
         "off",
     }
     recipients = list(msg.extra.get("mail_to") or [])
-    if mail_enabled and recipients and getattr(ports, "mail", None):
-        try:
-            out["mail"] = ports.mail.send(
-                to=recipients,
-                subject=email_subject(msg),
-                body=render_incident_email_text(msg),
-                html_body=render_incident_email_html(msg),
-                refs={
-                    "tracking_id": msg.tracking_id,
-                    "ticket_ref": msg.ticket_ref,
-                    "status": msg.status,
-                },
-            )
-        except Exception as exc:  # noqa: BLE001
-            LOG.warning("mail notify failed (soft): %s", exc)
-            out["mail"] = f"error:{exc}"[:120]
-    else:
-        out["mail"] = "skipped"
+    if not mail_enabled:
+        return {"status": "skipped", "mail_ref": "disabled", "recipients": "", "error": ""}
+    if not recipients:
+        return {"status": "skipped", "mail_ref": "no_recipient", "recipients": "", "error": ""}
+    if not getattr(ports, "mail", None):
+        return {"status": "skipped", "mail_ref": "no_mail_port", "recipients": "", "error": ""}
+    try:
+        ref = ports.mail.send(
+            to=recipients,
+            subject=email_subject(msg),
+            body=render_incident_email_text(msg),
+            html_body=render_incident_email_html(msg),
+            refs={
+                "tracking_id": msg.tracking_id,
+                "ticket_ref": msg.ticket_ref,
+                "status": msg.status,
+            },
+        )
+        return {
+            "status": "ok",
+            "mail_ref": str(ref or ""),
+            "recipients": ",".join(recipients),
+            "error": "",
+        }
+    except Exception as exc:  # noqa: BLE001
+        LOG.warning("mail notify failed (soft): %s", exc)
+        return {
+            "status": "error",
+            "mail_ref": "",
+            "recipients": ",".join(recipients),
+            "error": str(exc)[:300],
+        }
 
+
+def notify_incident_channels(
+    ports: Any,
+    *,
+    msg: IncidentMessage,
+    channel_ref: str,
+    also_ticket_comment: bool = True,
+) -> dict[str, str]:
+    """Send compact Cliq + optional HTML mail; soft-fail each channel. Optionally comment OP."""
+    cliq = post_cliq_card(ports, msg=msg, channel_ref=channel_ref)
+    out: dict[str, str] = {
+        "cliq": cliq.get("cliq_ref") or (f"error:{cliq['error']}" if cliq.get("error") else ""),
+        "cliq_status": cliq.get("status") or "",
+        "mail": "",
+        "mail_status": "",
+        "ticket_comment": "",
+    }
+
+    if also_ticket_comment and msg.ticket_ref:
+        out["ticket_comment"] = comment_incident_phase(
+            ports, msg=msg, phase=msg.status
+        )
+
+    mail = send_incident_mail_msg(ports, msg=msg)
+    out["mail"] = mail.get("mail_ref") or (
+        f"error:{mail['error']}" if mail.get("error") else mail.get("status") or ""
+    )
+    out["mail_status"] = mail.get("status") or ""
     return out

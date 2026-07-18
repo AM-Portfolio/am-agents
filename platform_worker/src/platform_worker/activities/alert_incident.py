@@ -213,30 +213,44 @@ async def create_and_assign_ticket(payload: dict[str, Any]) -> dict[str, str]:
 
 @activity.defn
 async def notify_ticket_created(payload: dict[str, Any]) -> dict[str, str]:
-    from platform_worker.notify_incident import build_incident_message, notify_incident_channels
+    """Deprecated wrapper — prefer post_cliq_update + send_incident_mail activities.
 
-    ports = get_ports()
-    run_ref = payload["run_ref"]
-    env = str(payload.get("env") or "")
-    ports.runs.upsert_step(
-        UpsertStepRequest(
-            step_ref=f"{run_ref}:notify",
-            run_ref=run_ref,
-            name="notify",
-            status=StepStatus.RUNNING,
-            bump_attempts=True,
-        )
-    )
-    msg = build_incident_message(
-        status="INVESTIGATING",
+    Kept for older workflows; still dual-notifies so history shows one activity.
+    """
+    cliq = await post_cliq_update({**payload, "phase": payload.get("phase") or "INTAKE"})
+    mail = await send_incident_mail({**payload, "phase": payload.get("phase") or "INTAKE"})
+    return {
+        "notify_ref": cliq.get("cliq_ref") or "",
+        "mail_ref": mail.get("mail_ref") or "",
+        "cliq_status": cliq.get("status") or "",
+        "mail_status": mail.get("status") or "",
+        "phase": str(payload.get("phase") or "INTAKE"),
+    }
+
+
+def _incident_msg_from_notify_payload(payload: dict[str, Any]):
+    from platform_worker.notify_incident import build_incident_message
+
+    status = str(payload.get("status") or "INVESTIGATING")
+    if status not in {"INVESTIGATING", "AUTO_INFRA", "NEEDS_HUMAN", "RESOLVED", "FAILED"}:
+        status = "INVESTIGATING"
+    notes = payload.get("developer_notes")
+    developer_notes = None
+    if isinstance(notes, dict) and notes:
+        from am_platform_ports.schemas.incident_message import DeveloperNotes
+
+        developer_notes = DeveloperNotes.model_validate(notes)
+    return build_incident_message(
+        status=status,  # type: ignore[arg-type]
         tracking_id=str(payload.get("tracking_id") or payload.get("incident_ref") or ""),
         alert=payload.get("alert") or {},
-        ticket_ref=payload["ticket_ref"],
+        ticket_ref=str(payload.get("ticket_ref") or ""),
         ticket_url=payload.get("ticket_url"),
-        env=env,
-        reason="Ticket created and assigned — investigation started.",
-        decision="intake",
-        run_ref=run_ref,
+        env=str(payload.get("env") or ""),
+        reason=str(payload.get("reason") or payload.get("body") or ""),
+        success_summary=str(payload.get("success_summary") or ""),
+        decision=str(payload.get("decision") or ""),
+        run_ref=str(payload.get("run_ref") or ""),
         workflow_id=str(payload.get("workflow_id") or ""),
         run_id=str(payload.get("run_id") or ""),
         responsible=str(payload.get("assignee_name") or payload.get("assignee_ref") or ""),
@@ -244,25 +258,103 @@ async def notify_ticket_created(payload: dict[str, Any]) -> dict[str, str]:
         owner_source=str(payload.get("owner_source") or ""),
         assignee_email=str(payload.get("assignee_email") or ""),
         backup_email=str(payload.get("backup_email") or ""),
-        done_by="IT-Support-agent",
+        evidence_url=str(payload.get("evidence_url") or ""),
+        developer_notes=developer_notes,
+        done_by=str(payload.get("done_by") or "IT-Support-agent"),
+        ended=bool(payload.get("ended")),
     )
-    # Avoid duplicate OP comment — intake already commented
-    result = notify_incident_channels(
+
+
+@activity.defn
+async def post_cliq_update(payload: dict[str, Any]) -> dict[str, str]:
+    """Explicit Cliq post — visible as its own Temporal activity with ok/error status."""
+    from platform_worker.notify_incident import post_cliq_card
+
+    ports = get_ports()
+    phase = str(payload.get("phase") or payload.get("status") or "UPDATE").upper()
+    run_ref = str(payload.get("run_ref") or "")
+    step_ref = f"{run_ref}:notify.cliq:{phase.lower()}" if run_ref else f"notify.cliq:{phase.lower()}"
+    if run_ref:
+        ports.runs.upsert_step(
+            UpsertStepRequest(
+                step_ref=step_ref,
+                run_ref=run_ref,
+                name=f"notify.cliq.{phase.lower()}",
+                status=StepStatus.RUNNING,
+                bump_attempts=True,
+            )
+        )
+    msg = _incident_msg_from_notify_payload(payload)
+    result = post_cliq_card(
         ports,
         msg=msg,
-        channel_ref=payload["channel_ref"],
-        also_ticket_comment=False,
+        channel_ref=str(payload.get("channel_ref") or "cliq:lab"),
     )
-    ports.runs.upsert_step(
-        UpsertStepRequest(
-            step_ref=f"{run_ref}:notify",
-            run_ref=run_ref,
-            name="notify",
-            status=StepStatus.PASSED,
-            result_ref=result.get("cliq") or "ok",
+    step_status = StepStatus.PASSED if result.get("status") == "ok" else StepStatus.FAILED
+    if result.get("status") == "skipped":
+        step_status = StepStatus.PASSED
+    if run_ref:
+        ports.runs.upsert_step(
+            UpsertStepRequest(
+                step_ref=step_ref,
+                run_ref=run_ref,
+                name=f"notify.cliq.{phase.lower()}",
+                status=step_status,
+                result_ref=result.get("cliq_ref") or result.get("error") or result.get("status"),
+            )
         )
-    )
-    return {"notify_ref": result.get("cliq") or "", "mail_ref": result.get("mail") or ""}
+    return {
+        "status": result.get("status") or "error",
+        "cliq_ref": result.get("cliq_ref") or "",
+        "channel_ref": result.get("channel_ref") or "",
+        "error": result.get("error") or "",
+        "phase": phase,
+        "incident_status": msg.status,
+        "tracking_id": msg.tracking_id,
+    }
+
+
+@activity.defn
+async def send_incident_mail(payload: dict[str, Any]) -> dict[str, str]:
+    """Explicit HTML mail send — visible as its own Temporal activity with ok/error/skipped."""
+    from platform_worker.notify_incident import send_incident_mail_msg
+
+    ports = get_ports()
+    phase = str(payload.get("phase") or payload.get("status") or "UPDATE").upper()
+    run_ref = str(payload.get("run_ref") or "")
+    step_ref = f"{run_ref}:notify.mail:{phase.lower()}" if run_ref else f"notify.mail:{phase.lower()}"
+    if run_ref:
+        ports.runs.upsert_step(
+            UpsertStepRequest(
+                step_ref=step_ref,
+                run_ref=run_ref,
+                name=f"notify.mail.{phase.lower()}",
+                status=StepStatus.RUNNING,
+                bump_attempts=True,
+            )
+        )
+    msg = _incident_msg_from_notify_payload(payload)
+    result = send_incident_mail_msg(ports, msg=msg)
+    step_status = StepStatus.PASSED if result.get("status") in {"ok", "skipped"} else StepStatus.FAILED
+    if run_ref:
+        ports.runs.upsert_step(
+            UpsertStepRequest(
+                step_ref=step_ref,
+                run_ref=run_ref,
+                name=f"notify.mail.{phase.lower()}",
+                status=step_status,
+                result_ref=result.get("mail_ref") or result.get("error") or result.get("status"),
+            )
+        )
+    return {
+        "status": result.get("status") or "error",
+        "mail_ref": result.get("mail_ref") or "",
+        "recipients": result.get("recipients") or "",
+        "error": result.get("error") or "",
+        "phase": phase,
+        "incident_status": msg.status,
+        "tracking_id": msg.tracking_id,
+    }
 
 
 @activity.defn

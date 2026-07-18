@@ -249,3 +249,96 @@ async def test_create_infra_handoff_reuses_passed_step() -> None:
     assert second["reused"] is True
     assert second["handoff_ref"] == handoff_ref
     assert len(ports.handoff.handoffs) == handoff_count
+
+
+@pytest.mark.asyncio
+async def test_post_cliq_update_returns_status_and_run_step() -> None:
+    from am_platform_ports.fakes import FakeNotifier
+    from am_platform_ports.schemas.enums import StepStatus
+
+    notifier = FakeNotifier()
+    ports = _ports(notifier=notifier)
+    ticket_mod.get_ports = lambda: ports  # type: ignore[attr-defined]
+    run = ports.runs.create_run(
+        CreateRunRequest(kind=RunKind.ALERT_INCIDENT, status=RunStatus.RUNNING)
+    )
+    out = await ticket_mod.post_cliq_update(
+        {
+            "run_ref": run.run_ref,
+            "tracking_id": "AM-NOTIFY-1",
+            "phase": "INTAKE",
+            "status": "INVESTIGATING",
+            "channel_ref": "cliq:lab",
+            "ticket_ref": "jira:X-9",
+            "alert": {"summary": "disk full", "labels": {"env": "lab", "alertname": "Disk"}},
+            "reason": "Ticket created",
+            "env": "lab",
+        }
+    )
+    assert out["status"] == "ok"
+    assert out["cliq_ref"]
+    assert out["phase"] == "INTAKE"
+    assert len(notifier.sent) == 1
+    steps = [s for s in ports.runs.steps.values() if s.name == "notify.cliq.intake"]
+    assert len(steps) == 1
+    assert steps[0].status == StepStatus.PASSED
+
+
+@pytest.mark.asyncio
+async def test_send_incident_mail_returns_status_and_run_step() -> None:
+    from am_platform_ports.fakes import FakeMail
+    from am_platform_ports.schemas.enums import StepStatus
+
+    mail = FakeMail()
+    ports = _ports(mail=mail)
+    ticket_mod.get_ports = lambda: ports  # type: ignore[attr-defined]
+    run = ports.runs.create_run(
+        CreateRunRequest(kind=RunKind.ALERT_INCIDENT, status=RunStatus.RUNNING)
+    )
+    out = await ticket_mod.send_incident_mail(
+        {
+            "run_ref": run.run_ref,
+            "tracking_id": "AM-NOTIFY-2",
+            "phase": "CLOSE",
+            "status": "RESOLVED",
+            "ticket_ref": "jira:X-9",
+            "alert": {"summary": "disk full", "labels": {"env": "lab"}},
+            "assignee_email": "owner@example.com",
+            "reason": "Verify passed",
+            "env": "lab",
+            "ended": True,
+        }
+    )
+    assert out["status"] == "ok"
+    assert out["mail_ref"]
+    assert "owner@example.com" in out["recipients"]
+    assert len(mail.sent) == 1
+    steps = [s for s in ports.runs.steps.values() if s.name == "notify.mail.close"]
+    assert len(steps) == 1
+    assert steps[0].status == StepStatus.PASSED
+
+
+@pytest.mark.asyncio
+async def test_post_cliq_update_soft_fails_without_raising() -> None:
+    notifier = MagicMock()
+    notifier.send_card.side_effect = RuntimeError("cliq down")
+    ports = _ports(notifier=notifier)
+    ticket_mod.get_ports = lambda: ports  # type: ignore[attr-defined]
+    run = ports.runs.create_run(
+        CreateRunRequest(kind=RunKind.ALERT_INCIDENT, status=RunStatus.RUNNING)
+    )
+    out = await ticket_mod.post_cliq_update(
+        {
+            "run_ref": run.run_ref,
+            "tracking_id": "AM-NOTIFY-3",
+            "phase": "ESCALATE",
+            "status": "FAILED",
+            "channel_ref": "cliq:lab",
+            "alert": {"summary": "x", "labels": {"env": "lab"}},
+            "env": "lab",
+            "ended": True,
+        }
+    )
+    assert out["status"] == "error"
+    assert "cliq down" in out["error"]
+    assert out["cliq_ref"] == ""

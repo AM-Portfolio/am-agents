@@ -68,6 +68,8 @@ async def run_worker() -> None:
             acts.triage_alert,
             acts.create_and_assign_ticket,
             acts.notify_ticket_created,
+            acts.post_cliq_update,
+            acts.send_incident_mail,
             acts.post_incident_phase,
             acts.mark_run_status,
             aan.analyze_incident,

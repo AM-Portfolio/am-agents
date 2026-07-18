@@ -113,6 +113,57 @@ class AlertIncidentWorkflow:
             ctx.update(extra)
         return ctx
 
+    async def _notify_channels(
+        self,
+        *,
+        tracking_id: str,
+        env: str,
+        alert: dict[str, Any] | None,
+        phase: str,
+        status: str,
+        channel_ref: str,
+        reason: str = "",
+        success_summary: str = "",
+        decision: str = "",
+        ended: bool = False,
+        developer_notes: dict[str, Any] | None = None,
+        evidence_url: str = "",
+        verify_evidence: list[Any] | None = None,
+    ) -> dict[str, Any]:
+        """Post Cliq + mail as separate Temporal activities (visible in Event History)."""
+        base = self._notify_ctx(
+            tracking_id=tracking_id,
+            env=env,
+            alert=alert,
+            extra={
+                "channel_ref": channel_ref,
+                "phase": phase,
+                "status": status,
+                "reason": reason,
+                "success_summary": success_summary,
+                "decision": decision,
+                "ended": ended,
+                "evidence_url": evidence_url,
+            },
+        )
+        if developer_notes:
+            base["developer_notes"] = developer_notes
+        if verify_evidence:
+            base["verify_evidence"] = verify_evidence
+        cliq = await workflow.execute_activity(
+            acts.post_cliq_update,
+            base,
+            start_to_close_timeout=_SHORT,
+            retry_policy=_SIDE_EFFECT,
+        )
+        mail = await workflow.execute_activity(
+            acts.send_incident_mail,
+            base,
+            start_to_close_timeout=_SHORT,
+            retry_policy=_SIDE_EFFECT,
+        )
+        return {"cliq": cliq, "mail": mail}
+
     async def _run_infra_actions(
         self,
         *,
@@ -355,6 +406,18 @@ class AlertIncidentWorkflow:
                 start_to_close_timeout=_LLM_TIMEOUT,
                 retry_policy=_SIDE_EFFECT,
             )
+            await self._notify_channels(
+                tracking_id=tracking_id,
+                env=env,
+                alert=alert,
+                phase="ESCALATE",
+                status="FAILED",
+                channel_ref=channel_ref,
+                reason=self._verify_reason or "verify failed",
+                decision="unsolved",
+                ended=True,
+                verify_evidence=self._verify_evidence,
+            )
             await workflow.wait_condition(lambda: self._approved or self._resolved or self._closed)
             final_status = "passed"
             closer = f"{closer_prefix}.unsolved.human"
@@ -381,6 +444,19 @@ class AlertIncidentWorkflow:
                 ),
                 start_to_close_timeout=_SHORT,
                 retry_policy=_SIDE_EFFECT,
+            )
+            await self._notify_channels(
+                tracking_id=tracking_id,
+                env=env,
+                alert=alert,
+                phase="CLOSE",
+                status="RESOLVED",
+                channel_ref=channel_ref,
+                reason=self._verify_reason or "verify passed",
+                success_summary=self._verify_reason or "",
+                decision=(decision or {}).get("decision") or closer_prefix,
+                ended=True,
+                verify_evidence=self._verify_evidence,
             )
 
         await workflow.execute_activity(
@@ -478,23 +554,15 @@ class AlertIncidentWorkflow:
         env = str(ticket.get("env") or (alert.get("labels") or {}).get("env") or "")
         channel_ref = str(self._ticket_meta["channel_ref"])
 
-        await workflow.execute_activity(
-            acts.notify_ticket_created,
-            self._notify_ctx(
-                tracking_id=tracking_id,
-                env=env,
-                alert=alert,
-                extra={
-                    "channel_ref": channel_ref,
-                    "title": f"[{triage['priority']}] {triage.get('summary', 'Alert')}",
-                    "body": (
-                        f"Ticket {ticket['ticket_ref']} assigned to "
-                        f"{ticket.get('assignee_name') or ticket['assignee_ref']} env={env}"
-                    ),
-                },
-            ),
-            start_to_close_timeout=_SHORT,
-            retry_policy=_SIDE_EFFECT,
+        await self._notify_channels(
+            tracking_id=tracking_id,
+            env=env,
+            alert=alert,
+            phase="INTAKE",
+            status="INVESTIGATING",
+            channel_ref=channel_ref,
+            reason="Ticket created and assigned — investigation started.",
+            decision="intake",
         )
 
         if use_llm:
@@ -539,6 +607,17 @@ class AlertIncidentWorkflow:
                     start_to_close_timeout=_SHORT,
                     retry_policy=_SIDE_EFFECT,
                 )
+                await self._notify_channels(
+                    tracking_id=tracking_id,
+                    env=env,
+                    alert=alert,
+                    phase="CLOSE",
+                    status="RESOLVED",
+                    channel_ref=channel_ref,
+                    reason="Ignored as noise. Ticket closed by IT-Support-agent.",
+                    decision="ignore",
+                    ended=True,
+                )
                 self._closed = True
                 return {
                     "run_ref": self._run_ref,
@@ -551,6 +630,27 @@ class AlertIncidentWorkflow:
                 }
 
             if decision.get("decision") == "needs_human":
+                await self._notify_channels(
+                    tracking_id=tracking_id,
+                    env=env,
+                    alert=alert,
+                    phase="DECISION",
+                    status="NEEDS_HUMAN",
+                    channel_ref=channel_ref,
+                    reason=str(decision.get("rationale") or decision.get("ticket_update") or "needs_human"),
+                    decision="needs_human",
+                    developer_notes={
+                        "developer_summary": str(decision.get("rationale") or ""),
+                        "next_steps": [
+                            "Review ticket and alert context",
+                            "Confirm code vs infra change",
+                        ],
+                        "info_needed_to_close": "Owner confirmation of fix or escalate to development",
+                        "move_to_development": True,
+                        "move_to_development_why": "Decision routed to needs_human",
+                        "source": "template",
+                    },
+                )
                 await workflow.wait_condition(lambda: self._approved or self._resolved or self._closed)
                 await workflow.execute_activity(
                     acts.mark_run_status,
@@ -604,6 +704,17 @@ class AlertIncidentWorkflow:
                     ),
                     start_to_close_timeout=_LLM_TIMEOUT,
                     retry_policy=_SIDE_EFFECT,
+                )
+                await self._notify_channels(
+                    tracking_id=tracking_id,
+                    env=env,
+                    alert=alert,
+                    phase="ESCALATE",
+                    status="FAILED",
+                    channel_ref=channel_ref,
+                    reason=str(infra_out.get("failure_reason") or "auto_infra tools failed"),
+                    decision="unsolved",
+                    ended=True,
                 )
                 await workflow.wait_condition(lambda: self._approved or self._resolved or self._closed)
                 await workflow.execute_activity(

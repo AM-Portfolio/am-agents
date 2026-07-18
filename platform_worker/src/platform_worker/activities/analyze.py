@@ -112,14 +112,12 @@ async def apply_ticket_decision(payload: dict[str, Any]) -> dict[str, str]:
     from platform_worker.notify_incident import (
         build_incident_message,
         comment_incident_phase,
-        notify_incident_channels,
     )
 
     ports = get_ports()
     run_ref = payload["run_ref"]
     ticket_ref = payload["ticket_ref"]
     decision = IncidentDecision.model_validate(payload["decision"])
-    channel_ref = payload.get("channel_ref") or "cliq:lab"
     env = str(payload.get("env") or normalize_alert_env(labels={"env": payload.get("env") or ""}))
     if env == "unknown" and payload.get("decision", {}).get("env"):
         env = str(payload["decision"]["env"])
@@ -175,9 +173,7 @@ async def apply_ticket_decision(payload: dict[str, Any]) -> dict[str, str]:
     )
 
     if decision.decision == "needs_human":
-        notify_incident_channels(
-            ports, msg=msg, channel_ref=channel_ref, also_ticket_comment=False
-        )
+        # Cliq/mail posted by workflow activities post_cliq_update + send_incident_mail
         ports.runs.update_run_status(
             run_ref=run_ref,
             status=RunStatus.NEEDS_HUMAN,
@@ -538,18 +534,19 @@ async def handoff_infra_agent(payload: dict[str, Any]) -> dict[str, Any]:
 
 @activity.defn
 async def escalate_unsolved(payload: dict[str, Any]) -> dict[str, str]:
-    """Document attempts + why unsolved; ticket + Cliq/mail + RunStore → needs_human."""
+    """Document attempts + why unsolved; ticket comment + RunStore → needs_human.
+
+    Cliq/mail posted by workflow activities post_cliq_update + send_incident_mail.
+    """
     from am_platform_ports.schemas.incident_message import DeveloperNotes
     from platform_worker.notify_incident import (
         build_incident_message,
         comment_incident_phase,
-        notify_incident_channels,
     )
 
     ports = get_ports()
     run_ref = payload["run_ref"]
     ticket_ref = payload["ticket_ref"]
-    channel_ref = payload.get("channel_ref") or "cliq:lab"
     env = str(payload.get("env") or "")
     decision = IncidentDecision.model_validate(payload.get("decision") or {"decision": "auto_infra"})
     attempts = payload.get("attempts") or []
@@ -644,9 +641,7 @@ async def escalate_unsolved(payload: dict[str, Any]) -> dict[str, str]:
             f"Handoff note: {note}" if note else "",
         ],
     )
-    notify_incident_channels(
-        ports, msg=msg, channel_ref=channel_ref, also_ticket_comment=False
-    )
+    # Cliq/mail posted by workflow activities post_cliq_update + send_incident_mail
     ports.runs.update_run_status(
         run_ref=run_ref,
         status=RunStatus.NEEDS_HUMAN,
@@ -727,11 +722,10 @@ async def write_resolution_note(payload: dict[str, Any]) -> dict[str, str]:
 
 @activity.defn
 async def close_incident_ticket(payload: dict[str, Any]) -> dict[str, str]:
-    """Close ticket + compact Cliq + full HTML mail (not Grafana silence)."""
+    """Close ticket + phase comment. Cliq/mail posted by workflow notify activities."""
     from platform_worker.notify_incident import (
         build_incident_message,
         comment_incident_phase,
-        notify_incident_channels,
         soft_ticket_comment,
     )
 
@@ -794,7 +788,4 @@ async def close_incident_ticket(payload: dict[str, Any]) -> dict[str, str]:
             body=f"Could not set ticket status closed: {status}",
         )
 
-    notify_incident_channels(
-        ports, msg=msg, channel_ref=channel_ref, also_ticket_comment=False
-    )
-    return {"ticket_status": status, "closer": closer}
+    return {"ticket_status": status, "closer": closer, "channel_ref": str(channel_ref)}
