@@ -124,7 +124,10 @@ class DirectLiteLLMClient:
     routing: Literal["gateway", "direct"] = "direct"
 
     def __init__(self) -> None:
-        self.base_url = settings.LITELLM_BASE_URL.rstrip("/")
+        base_url = settings.LITELLM_BASE_URL.strip() if settings.LITELLM_BASE_URL else ""
+        if not base_url:
+            base_url = "https://api.together.ai/v1"
+        self.base_url = base_url.rstrip("/")
         self.api_key = settings.LITELLM_MASTER_KEY or settings.TOGETHER_API_KEY
         self.timeout = settings.LLM_TIMEOUT_SECONDS
 

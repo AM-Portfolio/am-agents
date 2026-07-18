@@ -14,7 +14,7 @@ class Config:
 
     # Unified LLM Configuration (matching tool-agent)
     LLM_ROUTING = os.getenv("LLM_ROUTING", "direct")
-    LITELLM_BASE_URL = os.getenv("LITELLM_BASE_URL", "http://localhost:4000")
+    LITELLM_BASE_URL = os.getenv("LITELLM_BASE_URL", "").strip() or os.getenv("LLM_BASE_URL", "").strip()
     LITELLM_MASTER_KEY = os.getenv("LITELLM_MASTER_KEY")
     MCP_GATEWAY_BASE_URL = os.getenv("MCP_GATEWAY_BASE_URL", "http://localhost:8120")
     MCP_GATEWAY_AUTH_DISABLED = os.getenv("MCP_GATEWAY_AUTH_DISABLED", "true").lower() == "true"
