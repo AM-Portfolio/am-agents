@@ -12,4 +12,3 @@ vault:
 env:
   DEPLOYMENT_ENVIRONMENT: "dev"
   SUPPORT_AGENT_RUNTIME_MODE: "dev"
-  TEMPORAL_TASK_QUEUE: "support-agent-v2"

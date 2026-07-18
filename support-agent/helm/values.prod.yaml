@@ -12,6 +12,3 @@ vault:
 env:
   DEPLOYMENT_ENVIRONMENT: "prod"
   SUPPORT_AGENT_RUNTIME_MODE: "prod"
-  TEMPORAL_TASK_QUEUE: "support-agent-v2-prod"
-  # Never use fake capabilities in production.
-  SUPPORT_AGENT_CAPABILITY_PROVIDER: ""

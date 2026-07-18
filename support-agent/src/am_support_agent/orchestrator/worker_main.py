@@ -6,7 +6,14 @@ import asyncio
 import logging
 import os
 
+from am_support_agent.orchestrator.queue import (
+    assert_safe_task_queue,
+    resolve_task_queue,
+)
+
 LOG = logging.getLogger("support_agent.worker")
+
+__all__ = ["assert_safe_task_queue", "resolve_task_queue", "run_worker", "main"]
 
 
 async def run_worker() -> None:
@@ -24,7 +31,6 @@ async def run_worker() -> None:
         bootstrap_spt,
         resolve_spt_catalog,
     )
-    from am_support_agent.orchestrator.queue import assert_safe_task_queue, resolve_task_queue
     from am_support_agent.orchestrator.workflows.a2a_run import SupportA2AWorkflow
     from am_support_agent.orchestrator.workflows.alert_incident import (
         AlertIncidentWorkflow,

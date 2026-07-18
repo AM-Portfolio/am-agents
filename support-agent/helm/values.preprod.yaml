@@ -12,4 +12,3 @@ vault:
 env:
   DEPLOYMENT_ENVIRONMENT: "preprod"
   SUPPORT_AGENT_RUNTIME_MODE: "prod"
-  TEMPORAL_TASK_QUEUE: "support-agent-v2-preprod"
