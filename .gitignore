@@ -2,6 +2,7 @@
 # Gitignore does NOT delete local files — your .env.preprod stays on disk.
 .env
 .env.*
+.env-vault
 !.env.example
 
 # Python

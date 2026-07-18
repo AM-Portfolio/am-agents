@@ -39,7 +39,7 @@ am-support-agent-gateway
   after ignored volatile keys — see [docs/parity.md](docs/parity.md)
 - Cancel/feedback: store records even when the target task is missing
   (`payload.target_task_id`); feedback appends without clobbering prior result
-- CI: `.github/workflows/support-agent.yml` — pytest, compileall, Helm
+- CI: `.github/workflows/am-support-agent.yml` — pytest, compileall, Helm + `central-build-publish`
   lint/render (worker + PVC), Docker build
 
 ## Observability

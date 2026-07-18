@@ -12,4 +12,4 @@ docker build -t am-support-agent:local .
 - Runs as UID 10001 (non-root)
 - Installs `[temporal]` extra for optional worker workflows
 
-CI builds this context via `.github/workflows/support-agent.yml` (push disabled).
+CI builds this context via `.github/workflows/am-support-agent.yml`.

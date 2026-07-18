@@ -1,21 +1,14 @@
 # Prod values — durable Postgres memory (deploy still gated off in CI).
-# Do not enable traffic until migration, restore drill, parity, and rollback gates pass.
+# Vault folder: apps/data/prod/services/am-agents-ops
+environment: prod
+
 vault:
   enabled: true
   secretPaths:
-    growthbook:
-      path: "apps/data/prod/services/am-support-agent"
-    postgres:
-      path: "apps/data/prod/services/am-support-agent"
+    am-agents-ops:
+      path: "apps/data/prod/services/am-agents-ops"
 
+# Profile-specific settings stay in the environment overlay.
 env:
   DEPLOYMENT_ENVIRONMENT: "prod"
-  SUPPORT_AGENT_CANARY_MODE: "off"
-  SUPPORT_AGENT_CANARY_PERCENT: "0"
-  GROWTHBOOK_ENABLED: "true"
   SUPPORT_AGENT_RUNTIME_MODE: "prod"
-  SUPPORT_AGENT_REQUIRE_LIVE_ADAPTERS: "true"
-  SUPPORT_AGENT_RUNSTORE: "postgres"
-  SUPPORT_AGENT_WORKFLOW_STORE: "postgres"
-  SUPPORT_AGENT_EPISODE_STORE: "postgres"
-  SUPPORT_AGENT_FEEDBACK_STORE: "postgres"

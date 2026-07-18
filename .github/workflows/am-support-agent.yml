@@ -1,16 +1,18 @@
-name: Support Agent CI
+name: AM Support Agent Publish
 
 on:
   push:
     branches: ["main", "develop", "test/**", "feature/**", "hotfix/**", "fix/**"]
     paths:
       - "support-agent/**"
-      - ".github/workflows/support-agent.yml"
+      - ".dockerignore"
+      - ".github/workflows/am-support-agent.yml"
   pull_request:
-    branches: ["main", "develop"]
+    branches: ["main", "develop", "test/**", "feature/**", "hotfix/**", "fix/**"]
     paths:
       - "support-agent/**"
-      - ".github/workflows/support-agent.yml"
+      - ".dockerignore"
+      - ".github/workflows/am-support-agent.yml"
   workflow_dispatch:
 
 jobs:
@@ -55,16 +57,38 @@ jobs:
         run: |
           test -f support-agent/helm/values.yaml
           test -f support-agent/helm/vault-mappings.yaml
+          test -f support-agent/helm/values.dev.yaml
           test -f support-agent/helm/values.preprod.yaml
           test -f support-agent/helm/values.prod.yaml
           grep -q 'companionWorker:' support-agent/helm/values.yaml
           grep -q 'am-support-agent-worker\|exec am-support-agent-worker' support-agent/helm/values.yaml
-          grep -q 'support-agent-v2' support-agent/helm/values.yaml
-          grep -q 'SUPPORT_AGENT_CANARY_MODE' support-agent/helm/values.yaml
-          grep -q 'SUPPORT_AGENT_EPISODE_STORE' support-agent/helm/values.yaml
           grep -q 'SUPPORT_AGENT_DATABASE_URL' support-agent/helm/vault-mappings.yaml
-          grep -q 'SUPPORT_AGENT_EPISODE_STORE: "postgres"' support-agent/helm/values.preprod.yaml
-          grep -q 'SUPPORT_AGENT_EPISODE_STORE: "postgres"' support-agent/helm/values.prod.yaml
+          grep -q 'SUPPORT_AGENT_CANARY_MODE: "SUPPORT_AGENT_CANARY_MODE"' support-agent/helm/vault-mappings.yaml
+          grep -q 'SUPPORT_AGENT_EPISODE_STORE: "SUPPORT_AGENT_EPISODE_STORE"' support-agent/helm/vault-mappings.yaml
+          grep -q 'GROWTHBOOK_CLIENT_KEY' support-agent/helm/vault-mappings.yaml
+          grep -q 'GROWTHBOOK_API_HOST' support-agent/helm/vault-mappings.yaml
+          grep -q 'GROWTHBOOK_ROUTE_FEATURE_KEY' support-agent/helm/vault-mappings.yaml
+          grep -q 'TEMPORAL_TASK_QUEUE' support-agent/helm/vault-mappings.yaml
+          grep -q 'TEMPORAL_TASK_QUEUE: "TEMPORAL_TASK_QUEUE"' support-agent/helm/vault-mappings.yaml
+          grep -q 'ZOHO_REFRESH_TOKEN' support-agent/helm/vault-mappings.yaml
+          grep -q 'SUPPORT_AGENT_DATABASE_URL: "url"' support-agent/helm/vault-mappings.yaml
+          grep -q 'am-agents-ops:' support-agent/helm/vault-mappings.yaml
+          # Shared runtime env comes from Vault; profile identity stays in overlays.
+          grep -q '^env: {}' support-agent/helm/values.yaml
+          grep -q 'DEPLOYMENT_ENVIRONMENT: "dev"' support-agent/helm/values.dev.yaml
+          grep -q 'SUPPORT_AGENT_RUNTIME_MODE: "dev"' support-agent/helm/values.dev.yaml
+          grep -q 'DEPLOYMENT_ENVIRONMENT: "preprod"' support-agent/helm/values.preprod.yaml
+          grep -q 'SUPPORT_AGENT_RUNTIME_MODE: "prod"' support-agent/helm/values.preprod.yaml
+          grep -q 'DEPLOYMENT_ENVIRONMENT: "prod"' support-agent/helm/values.prod.yaml
+          grep -q 'SUPPORT_AGENT_RUNTIME_MODE: "prod"' support-agent/helm/values.prod.yaml
+          ! grep -q 'GROWTHBOOK_API_HOST:' support-agent/helm/values.yaml
+          ! grep -q 'TEMPORAL_HOST:' support-agent/helm/values.yaml
+          ! grep -q 'TEMPORAL_TASK_QUEUE:' support-agent/helm/values.yaml
+          grep -q 'apps/data/dev/services/am-agents-ops' support-agent/helm/values.dev.yaml
+          grep -q 'apps/data/preprod/services/am-agents-ops' support-agent/helm/values.preprod.yaml
+          grep -q 'apps/data/prod/services/am-agents-ops' support-agent/helm/values.prod.yaml
+          ! grep -E 'services/am-agents"' support-agent/helm/values.dev.yaml support-agent/helm/values.preprod.yaml support-agent/helm/values.prod.yaml
+          ! grep -q 'apps/data/.*/infra/postgres' support-agent/helm/values.dev.yaml support-agent/helm/values.preprod.yaml support-agent/helm/values.prod.yaml
           ! grep -q 'agent-platform' support-agent/helm/values.yaml
           ! grep -E 'postgresql://[^:]+:[^@]+@' support-agent/helm/values*.yaml
           ! grep -E '(password|api_key|token):' support-agent/helm/values*.yaml
@@ -84,5 +108,5 @@ jobs:
       preprod_namespace: "am-apps-preprod"
       prod_namespace: "am-apps-prod"
       deploy_dev: true
-      deploy_prod: false
+      deploy_prod: true
     secrets: inherit

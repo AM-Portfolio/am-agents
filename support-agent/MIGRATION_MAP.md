@@ -71,7 +71,7 @@ Last audited: 2026-07-18
 | Gateway / worker Docker+Helm | Central + local | `support-agent/helm/` (universal-chart + companion worker) · `deploy/helm/` (local PVC scaffold) | ✅ |
 | Dockerfile | — | `support-agent/Dockerfile` (+ `deploy/docker/README.md`) | ✅ |
 | Helm | — | Central values under `helm/`; standalone under `deploy/helm/` | ✅ |
-| CI | — | `.github/workflows/support-agent.yml` → test + helm + `central-build-publish` | ✅ |
+| CI | — | `.github/workflows/am-support-agent.yml` → test + helm + `central-build-publish` | ✅ |
 | Specialist Helm | Exists under each agent | Unchanged | ⛔ |
 
 ## Data stores

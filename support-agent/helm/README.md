@@ -16,23 +16,28 @@ Companion worker:
 |-----|---------|
 | `companionWorker.enabled` | Deploy `{{release}}-worker` |
 | `companionWorker.entrypoint` | `exec am-support-agent-worker` |
-| `TEMPORAL_TASK_QUEUE` | Must stay `support-agent-v2` (never `agent-platform`) |
+| `TEMPORAL_TASK_QUEUE` | From Vault (`am-agents-ops`); must be `support-agent-v2` |
+
+Shared application runtime env—including non-secret toggles—is injected from
+Vault `apps/data/{env}/services/am-agents-ops` (see `vault-mappings.yaml`).
+Profile identity (`DEPLOYMENT_ENVIRONMENT`, `SUPPORT_AGENT_RUNTIME_MODE`) stays
+in `values.<env>.yaml`; Helm also keeps chart settings such as image and resources.
 
 Canary / rollback env:
 
-| Env | Meaning |
-|-----|---------|
-| `GROWTHBOOK_ENABLED` | Use GrowthBook as runtime routing source |
-| `GROWTHBOOK_API_HOST` | Self-hosted GrowthBook API |
-| `GROWTHBOOK_CLIENT_KEY` | SDK Connection key, injected from Vault |
-| `GROWTHBOOK_ROUTE_FEATURE_KEY` | Route flag (default `support-agent-route`) |
-| `SUPPORT_AGENT_CANARY_MODE` | `off` \| `shadow` \| `canary` |
-| `SUPPORT_AGENT_CANARY_PERCENT` | 0–100 sticky hash share |
-| `SUPPORT_AGENT_CANARY_ALLOWLIST` | comma-separated tracking/demand ids |
-| `SUPPORT_AGENT_FORCE_LEGACY` | instant rollback to legacy route |
+| Env | Meaning | Source |
+|-----|---------|--------|
+| `GROWTHBOOK_ENABLED` | Use GrowthBook as runtime routing source | Vault |
+| `GROWTHBOOK_API_HOST` | Self-hosted GrowthBook API | Vault |
+| `GROWTHBOOK_CLIENT_KEY` | SDK Connection key | Vault |
+| `GROWTHBOOK_ROUTE_FEATURE_KEY` | Route flag (default `support-agent-route`) | Vault |
+| `SUPPORT_AGENT_CANARY_MODE` | `off` \| `shadow` \| `canary` | Vault |
+| `SUPPORT_AGENT_CANARY_PERCENT` | 0–100 sticky hash share | Vault |
+| `SUPPORT_AGENT_CANARY_ALLOWLIST` | comma-separated tracking/demand ids | Vault (optional) |
+| `SUPPORT_AGENT_FORCE_LEGACY` | instant rollback to legacy route | Vault (optional) |
 
-Preprod reads `GROWTHBOOK_CLIENT_KEY` from
-`apps/data/preprod/services/am-support-agent`. GrowthBook values `new` and
+Preprod/prod read GrowthBook + Temporal from
+`apps/data/{env}/services/am-agents-ops`. GrowthBook values `new` and
 `legacy` select the new or legacy path; unavailable GrowthBook fails closed to
 legacy.
 

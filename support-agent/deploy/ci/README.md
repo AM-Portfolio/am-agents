@@ -1,6 +1,6 @@
 # CI
 
-Canonical workflow: [`.github/workflows/support-agent.yml`](../../../.github/workflows/support-agent.yml)
+Canonical workflow: [`.github/workflows/am-support-agent.yml`](../../../.github/workflows/am-support-agent.yml)
 
 Jobs:
 
