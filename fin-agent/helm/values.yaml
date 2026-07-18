@@ -1,0 +1,61 @@
+replicaCount: 1
+service:
+  port: 8080
+language: python
+entrypoint: "exec python api.py"
+
+probes:
+  liveness:
+    path: /health
+  readiness:
+    path: /ready
+
+global:
+  image:
+    registry: ghcr.io/am-portfolio
+    pullPolicy: IfNotPresent
+  vault:
+    enabled: true
+    role: "am-backend-role"
+    authPath: "auth/kubernetes"
+    serviceAccountName: "am-backend-sa"
+
+image:
+  repository: am-fin-agent
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+security:
+  automountServiceAccountToken: true
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+vault:
+  enabled: true
+  secretPaths:
+    together:
+      path: "apps/data/preprod/infra/shared-api"
+      template: |
+        {{- with secret "apps/data/preprod/infra/shared-api" -}}
+        {{- range $sk, $sv := .Data.data }}
+        export {{ $sk | toUpper }}="{{ $sv }}"
+        {{- end }}
+        {{- end }}
+    mongodb:
+      path: "apps/data/preprod/infra/mongodb"
+      template: |
+        {{- with secret "apps/data/preprod/infra/mongodb" -}}
+        export MONGODB_URI="mongodb://{{ .Data.data.username }}:{{ .Data.data.password }}@mongodb.infra.svc.cluster.local:27017/fin_agent?authSource=admin"
+        export DB_NAME="fin_agent"
+        {{- end }}
+
+env:
+  AM_AUTH_URL: "http://am-auth.am-apps-preprod.svc.cluster.local:8001"
+  AM_PORTFOLIO_URL: "http://am-portfolio.am-apps-preprod.svc.cluster.local:8060"
+  AM_MARKET_URL: "http://am-market-data.am-apps-preprod.svc.cluster.local:8092"

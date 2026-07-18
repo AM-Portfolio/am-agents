@@ -1,0 +1,9 @@
+{
+  "name": "@am/fin-agent",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "python api.py",
+    "test": "PYTHONPATH=shared:am_fin_portfolio_analysis python -m pytest tests -q"
+  }
+}

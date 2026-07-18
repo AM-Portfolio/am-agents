@@ -2,8 +2,10 @@
   "name": "am-agents",
   "version": "0.1.0",
   "private": true,
+  "description": "AM AI agents monorepo (db-agent, ui-test, fin, dev)",
   "workspaces": [
     "db-agent",
+    "fin-agent",
     "tool-agent",
     "ui-test-agent"
   ],
@@ -15,6 +17,8 @@
     "tool-agent:dev": "npm run dev -w @am/tool-agent",
     "tool-agent:preprod": "npm run preprod -w @am/tool-agent",
     "tool-agent:test": "npm run test -w @am/tool-agent",
+    "fin-agent:dev": "npm run dev -w @am/fin-agent",
+    "fin-agent:test": "npm run test -w @am/fin-agent",
     "ui-test:dev": "npm run preprod -w @am/ui-test-agent",
     "ui-test:test": "npm run test -w @am/ui-test-agent",
     "ui-test:e2e:preprod": "npm run test:e2e:preprod -w @am/ui-test-agent",
@@ -22,7 +26,7 @@
     "preprod": "npm run db-agent:preprod",
     "start": "npm run dev",
     "start:preprod": "npm run preprod",
-    "test": "npm run db-agent:test && npm run tool-agent:test && npm run ui-test:test",
+    "test": "npm run db-agent:test && npm run tool-agent:test && npm run fin-agent:test && npm run ui-test:test",
     "logs:clean": "npm run db-agent:logs:clean"
   }
 }

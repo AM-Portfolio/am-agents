@@ -1,0 +1,30 @@
+name: AM Finance Agent Publish
+
+on:
+  push:
+    branches: ["main", "develop", "feature/**", "hotfix/**", "fix/**"]
+    paths:
+      - "**"
+      - "Dockerfile"
+      - "requirements.txt"
+      - "am_fin_api_testing/am-api-testing-ui/**"
+  pull_request:
+    branches: ["main", "develop", "feature/**", "hotfix/**", "fix/**"]
+  workflow_dispatch:
+
+jobs:
+  publish-fin-agent:
+    name: Publish Finance Agent
+    permissions:
+      contents: read
+      packages: write
+    uses: AM-Portfolio/am-pipelines/.github/workflows/central-build-publish.yml@main
+    with:
+      language: "python"
+      working_directory: "."
+      image_name: "am-fin-agent"
+      build_context: "."
+      preprod_namespace: "am-apps-preprod"
+      prod_namespace: "am-apps-prod"
+      deploy_prod: false
+    secrets: inherit
