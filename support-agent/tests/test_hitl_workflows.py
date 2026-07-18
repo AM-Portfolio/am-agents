@@ -69,3 +69,44 @@ def test_worker_registers_parity_workflows():
     assert SupportA2AWorkflow.__name__
     assert AlertIncidentWorkflow.__name__
     assert SptRunWorkflow.__name__
+
+
+@pytest.mark.asyncio
+async def test_worker_sandbox_accepts_registered_workflows():
+    """Fail loud if a workflow pulls sandbox-restricted imports (e.g. httpx)."""
+    pytest.importorskip("temporalio")
+    from temporalio.testing import WorkflowEnvironment
+    from temporalio.worker import Worker
+
+    from am_support_agent.orchestrator.activities.a2a import execute_plan
+    from am_support_agent.orchestrator.activities.incident import (
+        bootstrap_incident,
+        finalize_incident,
+        record_hitl,
+    )
+    from am_support_agent.orchestrator.activities.spt import (
+        bootstrap_spt,
+        resolve_spt_catalog,
+    )
+    from am_support_agent.orchestrator.workflows import (
+        AlertIncidentWorkflow,
+        SptRunWorkflow,
+        SupportA2AWorkflow,
+    )
+
+    async with await WorkflowEnvironment.start_time_skipping() as env:
+        # Construction validates each workflow in the sandbox; this is the
+        # failure mode that CrashLoop'd the prod worker (SupportA2AWorkflow).
+        Worker(
+            env.client,
+            task_queue="support-agent-v2-test",
+            workflows=[SupportA2AWorkflow, AlertIncidentWorkflow, SptRunWorkflow],
+            activities=[
+                execute_plan,
+                bootstrap_incident,
+                finalize_incident,
+                record_hitl,
+                bootstrap_spt,
+                resolve_spt_catalog,
+            ],
+        )

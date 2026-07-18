@@ -97,7 +97,14 @@ def worker_main_help() -> str:
     )
 
 
-from am_support_agent.orchestrator.runner import PlanRunner  # noqa: E402
+def __getattr__(name: str) -> Any:
+    # Lazy: importing this package must stay sandbox-safe for Temporal workflows.
+    if name == "PlanRunner":
+        from am_support_agent.orchestrator.runner import PlanRunner
+
+        return PlanRunner
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "TEMPORAL_TASK_QUEUE",
