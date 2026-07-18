@@ -1,0 +1,9 @@
+{
+  "name": "@am/fin-api-testing-agent",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "python am_fin_api_testing/api.py",
+    "test": "PYTHONPATH=shared:am_fin_api_testing python -m pytest tests -q"
+  }
+}
