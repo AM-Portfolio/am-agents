@@ -10,6 +10,9 @@ __pycache__/
 .pytest_cache/
 .venv/
 *.egg-info/
+*.db
+*.db-shm
+*.db-wal
 
 # Node
 node_modules/

@@ -1,0 +1,19 @@
+name: mail
+display_name: Mail
+enabled: false
+version: "0.1.0"
+
+infer_keywords: ['mail', 'email', 'zoho']
+
+env_prefix: MAIL_
+
+supports_mcp: false
+has_entities: false
+health_check: skip
+
+prompts:
+  intent:
+    source: file
+    name: tool-agent/intent/mail
+    label: "{{APP_ENV}}"
+    fallback: prompts/intent.yaml

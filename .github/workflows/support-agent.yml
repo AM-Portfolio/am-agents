@@ -1,0 +1,79 @@
+name: Support Agent CI
+
+on:
+  push:
+    branches: ["main", "develop", "test/**", "feature/**", "hotfix/**", "fix/**"]
+    paths:
+      - "support-agent/**"
+      - ".github/workflows/support-agent.yml"
+  pull_request:
+    branches: ["main", "develop"]
+    paths:
+      - "support-agent/**"
+      - ".github/workflows/support-agent.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test support-agent
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: support-agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: support-agent/pyproject.toml
+      - run: pip install -e ".[dev,temporal]"
+      - run: pytest -q
+      - run: python -m compileall -q src
+
+  helm:
+    name: Validate support-agent Helm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Lint standalone chart (local / PVC)
+        run: helm lint support-agent/deploy/helm
+      - name: Render standalone worker + sqlite
+        run: >
+          helm template support-agent support-agent/deploy/helm
+          --set worker.enabled=true
+          --set persistence.enabled=true
+          --set persistence.storageClassName=standard
+          > /tmp/support-agent-worker.yaml
+      - name: Assert standalone markers
+        run: |
+          grep -q 'support-agent-v2' /tmp/support-agent-worker.yaml
+          grep -q 'support-agent-gateway-data' /tmp/support-agent-worker.yaml
+          ! grep -q 'agent-platform' /tmp/support-agent-worker.yaml
+      - name: Assert central helm values (universal-chart)
+        run: |
+          test -f support-agent/helm/values.yaml
+          grep -q 'companionWorker:' support-agent/helm/values.yaml
+          grep -q 'am-support-agent-worker\|exec am-support-agent-worker' support-agent/helm/values.yaml
+          grep -q 'support-agent-v2' support-agent/helm/values.yaml
+          grep -q 'SUPPORT_AGENT_CANARY_MODE' support-agent/helm/values.yaml
+          ! grep -q 'agent-platform' support-agent/helm/values.yaml
+
+  publish:
+    name: Publish AM Support Agent
+    needs: [test, helm]
+    permissions:
+      contents: read
+      packages: write
+    uses: AM-Portfolio/am-pipelines/.github/workflows/central-build-publish.yml@main
+    with:
+      language: "python"
+      working_directory: "support-agent"
+      image_name: "am-support-agent"
+      build_context: "."
+      preprod_namespace: "am-apps-preprod"
+      prod_namespace: "am-apps-prod"
+      deploy_dev: true
+      deploy_prod: false
+    secrets: inherit

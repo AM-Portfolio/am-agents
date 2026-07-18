@@ -1,0 +1,104 @@
+fullnameOverride: am-support-agent
+
+global:
+  image:
+    registry: ghcr.io/am-portfolio
+    pullPolicy: Always
+    imagePullSecrets:
+      - name: regcred
+  vault:
+    enabled: true
+    role: "am-backend-role"
+    authPath: "auth/kubernetes"
+    serviceAccountName: "am-backend-sa"
+
+image:
+  repository: am-support-agent
+
+replicaCount: 1
+language: python
+port: 8091
+
+service:
+  port: 8091
+
+entrypoint: "exec am-support-agent-gateway"
+
+security:
+  automountServiceAccountToken: true
+  readOnlyRootFilesystem: true
+
+env:
+  SUPPORT_AGENT_GATEWAY_PORT: "8091"
+  SUPPORT_AGENT_RUNSTORE: "memory"
+  SUPPORT_AGENT_TRACING_ENABLED: "true"
+  SUPPORT_AGENT_CANARY_MODE: "off"
+  SUPPORT_AGENT_CANARY_PERCENT: "0"
+  GROWTHBOOK_ENABLED: "false"
+  GROWTHBOOK_API_HOST: "https://api.growthbook.asrax.in"
+  GROWTHBOOK_ROUTE_FEATURE_KEY: "support-agent-route"
+  GROWTHBOOK_CACHE_TTL_SECONDS: "60"
+  GROWTHBOOK_RETRY_SECONDS: "30"
+  SUPPORT_AGENT_INCIDENT_PARITY: "false"
+  SUPPORT_AGENT_SPT_PARITY: "false"
+  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: "http://otel-collector.monitoring.svc.cluster.local:4318/v1/traces"
+  OTEL_SERVICE_NAME: "support-agent"
+  OTEL_SERVICE_NAMESPACE: "am-agents"
+  OTEL_TRACES_SAMPLER: "parentbased_traceidratio"
+  OTEL_TRACES_SAMPLER_ARG: "1.0"
+  DEPLOYMENT_ENVIRONMENT: "unknown"
+  PYTHONDONTWRITEBYTECODE: "1"
+  TOOL_AGENT_BASE_URL: "http://am-tool-agent.am-ai.svc.cluster.local:8141"
+  DB_AGENT_BASE_URL: "http://am-db-agent.am-ai.svc.cluster.local:8140"
+  UI_TEST_AGENT_BASE_URL: "http://am-ui-test-agent.am-ai.svc.cluster.local:8130"
+
+companionWorker:
+  enabled: true
+  replicaCount: 1
+  nameSuffix: worker
+  entrypoint: "exec am-support-agent-worker"
+  port: 0
+  httpProbes: false
+  env:
+    TEMPORAL_HOST: "temporal-frontend.temporal.svc.cluster.local:7233"
+    TEMPORAL_NAMESPACE: "default"
+    TEMPORAL_TASK_QUEUE: "support-agent-v2"
+    SUPPORT_AGENT_TEMPORAL_ENABLED: "true"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+probes:
+  port: 8091
+  startup:
+    path: /healthz
+    failureThreshold: 30
+    periodSeconds: 10
+  liveness:
+    path: /healthz
+  readiness:
+    path: /readyz
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 50m
+    memory: 128Mi
+
+ingress:
+  enabled: true
+  className: "traefik"
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8091"
+  prometheus.io/path: "/metrics"

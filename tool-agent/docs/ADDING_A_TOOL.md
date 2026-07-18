@@ -10,4 +10,6 @@
 8. `python scripts/validate_tool.py <name>`
 9. PR — only touch `tools/<name>/`, config, helm values
 
+For **generic capability plugins** used by support-agent (work-item, chat, mail, document, directory, observe, spt), see [CAPABILITY_PLUGINS.md](CAPABILITY_PLUGINS.md). Those use `common/` + `adapters/<vendor>/` and stay disabled until `TOOL_AGENT_CAPABILITY_PLUGINS` enables them.
+
 Core files (`app/graph.py`, `tools/_loader.py`) should not need changes.

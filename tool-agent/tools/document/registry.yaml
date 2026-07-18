@@ -1,0 +1,18 @@
+adapter: document
+operations:
+  put:
+    adapter_method: put
+    read_only: false
+    approval_risk: create
+  get:
+    adapter_method: get
+    read_only: true
+    approval_risk: read
+  exists:
+    adapter_method: exists
+    read_only: true
+    approval_risk: read
+  signed-url.create:
+    adapter_method: signed_url_create
+    read_only: true
+    approval_risk: read

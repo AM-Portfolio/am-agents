@@ -1,0 +1,15 @@
+# Preprod: shadow-ready; canary still default-off until Gate B/C.
+vault:
+  enabled: true
+  secretPaths:
+    growthbook:
+      # Store key GROWTHBOOK_CLIENT_KEY at this path.
+      path: "apps/data/preprod/services/am-support-agent"
+
+env:
+  DEPLOYMENT_ENVIRONMENT: "preprod"
+  SUPPORT_AGENT_CANARY_MODE: "shadow"
+  SUPPORT_AGENT_CANARY_PERCENT: "0"
+  GROWTHBOOK_ENABLED: "true"
+  SUPPORT_AGENT_RUNTIME_MODE: "prod"
+  SUPPORT_AGENT_REQUIRE_LIVE_ADAPTERS: "false"

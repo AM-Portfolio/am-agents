@@ -1,25 +1,36 @@
 # am-agents
 
-Unified home for AM AI agents.
+Unified home for AM AI agents and the Agent Platform.
 
-| Agent | Location | Port / entry | Status |
-|-------|----------|--------------|--------|
-| **ui-test-agent** | [`ui-test-agent/`](ui-test-agent/) | HTTP `:8130` | **Implemented** |
-| **db-agent** | [`db-agent/`](db-agent/) | HTTP `:8140` | **Implemented** |
-| UI test (legacy) | [`../am-ui-test-agent/`](../am-ui-test-agent/) | HTTP `:8130` | Frozen — use `ui-test-agent/` |
+| Component | Location | Port / entry | Status |
+|-----------|----------|--------------|--------|
+| **tool-agent** | [`tool-agent/`](tool-agent/) | HTTP `:8141` | **Active** — preferred data/tool executor |
+| **db-agent** | [`db-agent/`](db-agent/) | HTTP `:8140` | **Legacy** — compatibility; prefer tool-agent |
+| **ui-test-agent** | [`ui-test-agent/`](ui-test-agent/) | HTTP `:8130` | **Active** — Playwright / UI testing |
+| **Agent Platform (legacy path)** | [`gateway/`](gateway/) + [`platform_worker/`](platform_worker/) | Gateway `:8090` · Temporal queue `agent-platform` | **Keep until replacement proven** |
+| **support-agent** | [`support-agent/`](support-agent/) | Gateway v2 `:8091` · queue `support-agent-v2` | **Parallel replacement** — delete legacy only after prod gates |
+| UI test (repo-root legacy) | [`../am-ui-test-agent/`](../am-ui-test-agent/) | HTTP `:8130` | Frozen — use `ui-test-agent/` |
 | Finance | [`../am-fin-agent/`](../am-fin-agent/) | HTTP `:8100` | Legacy |
 | Dev CLI | [`../am-dev-agent/`](../am-dev-agent/) | `am-dev` CLI | Legacy |
 
 ## Documentation
 
-- **[Agent platform (Temporal)](docs/agent-platform/)** — Design SoT, phases, RunStore, ports SDK
-- **[Enterprise agent ecosystem](docs/ENTERPRISE_AGENT_ECOSYSTEM.md)** — Gap analysis, components, anti-duplication rules, phase plan
-- **[Deploy guide](docs/DEPLOY.md)** — Docker, Helm 3-env, Vault, CI/CD
-- **[Monorepo implementation plan](docs/MONOREPO_PLAN.md)** — Phase 1: full copy into `am-agents/`, npm workspaces
-- **[Universal DB agents plan](docs/UNIVERSAL_DB_AGENTS_PLAN.md)** — MCP catalog, phases
-- **[db-agent design spec](docs/DB_AGENT_DESIGN.md)** — API, LangGraph, registry, safety
+- **[Architecture (A2A + parallel replacement)](docs/architecture/)** — terminology, A2A protocol, execution flow, production/decommission gates
+- **[support-agent/ module](support-agent/)** — A2A replacement tree, migration map, adapters, memory, learning, decommission checklist
+- **[Agent platform Temporal design SoT](docs/agent-platform/)** — ports, RunStore, AlertIncident phases (historical + current legacy path)
+- **[Enterprise agent ecosystem](docs/ENTERPRISE_AGENT_ECOSYSTEM.md)** — gap analysis, anti-duplication
+- **[Deploy guide](docs/DEPLOY.md)** — Docker, Helm, Vault, CI/CD
+- **[Monorepo plan](docs/MONOREPO_PLAN.md)** — historical copy-in plan (superseded for inventory by this README + architecture docs)
+- **[db-agent design](docs/DB_AGENT_DESIGN.md)** · **[Universal DB agents plan](docs/UNIVERSAL_DB_AGENTS_PLAN.md)**
 
-## Platform ports (Phase 0b)
+## Parallel replacement rule
+
+1. **Markdown / design first** for the new module (current).
+2. Build **complete** `support-agent/` **alongside** existing gateway/worker — do not edit specialist agents.
+3. Shadow → canary → soak in production with rollback to legacy.
+4. **Delete** legacy platform code only after [production gates](docs/architecture/production-gates.md) + explicit approvals. Never delete Tool / DB / UI Test agents.
+
+## Platform ports (legacy SDK)
 
 ```bash
 cd libs/platform-ports
@@ -29,9 +40,17 @@ pytest
 
 Package: `am_platform_ports` — Protocols + schemas + fakes (no Temporal / no vendors).
 
-## db-agent quick start
+## Quick starts
 
-From **`am-agents/`** (monorepo root):
+### tool-agent (preferred)
+
+```bash
+cd tool-agent
+pip install -r requirements.txt
+# see tool-agent/README.md for env + npm scripts
+```
+
+### db-agent (legacy)
 
 ```bash
 cd am-agents
@@ -39,10 +58,9 @@ pip install -r db-agent/requirements.txt
 npm run start:preprod
 ```
 
-Or from **`am-agents/db-agent/`**:
+### ui-test-agent
 
 ```bash
-npm run preprod
+cd ui-test-agent
+# see ui-test-agent/README.md
 ```
-
-Logs: `db-agent/logs/db-agent/<timestamp>_preprod.log` — clean with `npm run logs:clean`

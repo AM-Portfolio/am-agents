@@ -1,0 +1,1 @@
+"""Generic spt capability plugin."""

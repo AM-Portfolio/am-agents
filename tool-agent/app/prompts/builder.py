@@ -52,16 +52,45 @@ def build_intent_prompt(
     catalog: SchemaCatalog | None = None,
     god_mode: bool = False,
 ) -> str:
+    return preview_intent_prompt(query, backend_hint, catalog=catalog, god_mode=god_mode)["prompt"]
+
+
+def preview_intent_prompt(
+    query: str,
+    backend_hint: str | None,
+    *,
+    catalog: SchemaCatalog | None = None,
+    god_mode: bool = False,
+) -> dict:
+    """Build the intent prompt and return content plus per-snippet provenance."""
+    import time
+
     provider = get_prompt_provider()
     catalog = catalog or SchemaCatalog()
     candidates = [backend_hint] if backend_hint else infer_backends_from_query(query)
     candidates = [c for c in candidates if c][:2]
+    now = time.time()
+    parts: list[dict] = []
+
+    def _meta(template) -> dict:
+        age = None
+        if template.cached_at is not None:
+            age = round(now - template.cached_at, 3)
+        return {
+            "name": template.name,
+            "label": template.label,
+            "source": template.source,
+            "version": template.version,
+            "age_seconds": age,
+            "chars": len(template.content or ""),
+        }
 
     base = provider.get(
         "tool-agent/intent/base",
         label=settings.langfuse_prompt_label(),
         fallback_path=Path(__file__).resolve().parent / "base.yaml",
     )
+    parts.append(_meta(base))
     snippets: list[str] = []
     enabled = {t.name: t for t in get_enabled_tools()}
     for backend in candidates:
@@ -72,7 +101,12 @@ def build_intent_prompt(
         if not ref:
             continue
         fallback = tool.tool_dir / ref.fallback
-        snippet = provider.get(ref.name or f"tool-agent/intent/{backend}", label=_resolve_label(ref.label), fallback_path=fallback)
+        snippet = provider.get(
+            ref.name or f"tool-agent/intent/{backend}",
+            label=_resolve_label(ref.label),
+            fallback_path=fallback,
+        )
+        parts.append(_meta(snippet))
         if snippet.content:
             snippets.append(snippet.content)
         examples_ref = tool.manifest.prompts.get("examples")
@@ -82,6 +116,7 @@ def build_intent_prompt(
                 label=_resolve_label(examples_ref.label),
                 fallback_path=tool.tool_dir / examples_ref.fallback,
             )
+            parts.append(_meta(ex))
             if ex.content:
                 snippets.append(ex.content)
         if god_mode:
@@ -92,6 +127,7 @@ def build_intent_prompt(
                     label=_resolve_label(god_ref.label),
                     fallback_path=tool.tool_dir / god_ref.fallback,
                 )
+                parts.append(_meta(god))
                 if god.content:
                     snippets.append(god.content)
 
@@ -105,7 +141,14 @@ def build_intent_prompt(
         body = body + "\n\n" + "\n\n".join(snippets)
     if god_mode:
         body = body + "\n\nGOD MODE is ON — prioritize observability LogQL and high-confidence params."
-    return body
+    return {
+        "prompt": body,
+        "candidates": candidates,
+        "snippets": parts,
+        "prompt_source": settings.PROMPT_SOURCE,
+        "langfuse_enabled": settings.LANGFUSE_ENABLED,
+        "label": settings.langfuse_prompt_label(),
+    }
 
 
 def build_summary_prompt(

@@ -1,0 +1,6 @@
+# Dev: companion worker on; canary off (legacy remains default).
+env:
+  DEPLOYMENT_ENVIRONMENT: "dev"
+  SUPPORT_AGENT_CANARY_MODE: "off"
+  SUPPORT_AGENT_CANARY_PERCENT: "0"
+  SUPPORT_AGENT_RUNTIME_MODE: "dev"

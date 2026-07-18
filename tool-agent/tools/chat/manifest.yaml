@@ -1,0 +1,19 @@
+name: chat
+display_name: Chat
+enabled: false
+version: "0.1.0"
+
+infer_keywords: ['chat', 'cliq', 'notify', 'message']
+
+env_prefix: CHAT_
+
+supports_mcp: false
+has_entities: false
+health_check: skip
+
+prompts:
+  intent:
+    source: file
+    name: tool-agent/intent/chat
+    label: "{{APP_ENV}}"
+    fallback: prompts/intent.yaml

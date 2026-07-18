@@ -15,6 +15,7 @@ from fastapi import FastAPI, Request, Response
 logger = logging.getLogger(__name__)
 
 _EXCLUDED_PATHS = {"/metrics", "/health", "/router/health", "/ready", "/health/live", "/health/ready", "/api/v1/health"}
+_instrumented_dependencies: set[str] = set()
 
 
 def setup_plane_a(app: FastAPI, *, application: str) -> None:
@@ -104,9 +105,51 @@ def _setup_tracing(app: FastAPI, service_name: str) -> None:
         app,
         excluded_urls="metrics,health,ready,router/health,health/live,health/ready,api/v1/health",
     )
+    _instrument_dependencies()
     logger.info(
         "OTEL tracing enabled service=%s sample=%s endpoint=%s",
         service_name,
         sample,
         endpoint,
     )
+
+
+def _instrument_dependencies() -> tuple[str, ...]:
+    """Continue incoming trace context through tool and backend I/O."""
+    instrumentors = (
+        (
+            "httpx",
+            "opentelemetry.instrumentation.httpx",
+            "HTTPXClientInstrumentor",
+        ),
+        (
+            "asyncpg",
+            "opentelemetry.instrumentation.asyncpg",
+            "AsyncPGInstrumentor",
+        ),
+        (
+            "pymongo",
+            "opentelemetry.instrumentation.pymongo",
+            "PymongoInstrumentor",
+        ),
+        (
+            "redis",
+            "opentelemetry.instrumentation.redis",
+            "RedisInstrumentor",
+        ),
+    )
+    for name, module_name, class_name in instrumentors:
+        if name in _instrumented_dependencies:
+            continue
+        try:
+            module = __import__(module_name, fromlist=[class_name])
+            getattr(module, class_name)().instrument()
+        except ImportError:
+            logger.info("%s OTEL instrumentation unavailable", name)
+            continue
+        except Exception:  # noqa: BLE001 — tracing must not stop tool execution
+            logger.exception("failed to enable %s OTEL instrumentation", name)
+            continue
+        _instrumented_dependencies.add(name)
+        logger.info("%s OTEL instrumentation enabled", name)
+    return tuple(sorted(_instrumented_dependencies))

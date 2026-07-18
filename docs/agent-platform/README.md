@@ -1,6 +1,12 @@
 # Agent platform (Temporal) — design package
 
-**One folder.** No parallel `docs/design/` vs `docs/diagrams/` for this topic.
+**One folder** for the Temporal ports / RunStore / AlertIncident design SoT.  
+For the **parallel A2A replacement module** (build alongside, delete legacy only after prod gates), see:
+
+- [`../architecture/`](../architecture/) — A2A protocol, execution flow, production gates  
+- [`../../support-agent/`](../../support-agent/) — support-agent module outline, migration map, decommission checklist  
+
+**One folder.** No parallel `docs/design/` vs `docs/diagrams/` for this Temporal topic.
 
 | File | Role |
 |------|------|

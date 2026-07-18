@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.query import router as query_router
+from app.api.prompts import router as prompts_router
 from app.config import settings
 from app.llm_client import get_llm_client
 from app.observability.tracer import start_worker, stop_worker
@@ -60,6 +61,7 @@ app.add_middleware(
 )
 
 app.include_router(query_router, prefix="/api/v1/tools")
+app.include_router(prompts_router, prefix="/api/v1/prompts")
 
 
 @app.get("/health")

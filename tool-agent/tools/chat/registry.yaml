@@ -1,0 +1,10 @@
+adapter: chat
+operations:
+  message.send:
+    adapter_method: message_send
+    read_only: false
+    approval_risk: send
+  card.send:
+    adapter_method: card_send
+    read_only: false
+    approval_risk: send
