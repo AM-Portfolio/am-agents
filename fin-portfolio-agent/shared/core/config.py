@@ -1,8 +1,17 @@
 import os
 from dotenv import load_dotenv
 
-# Load .env file
-load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"), override=True)
+# Find and load .env file by searching upwards
+def _load_env():
+    curr = os.path.dirname(os.path.abspath(__file__))
+    for _ in range(5):
+        env_path = os.path.join(curr, ".env")
+        if os.path.exists(env_path):
+            load_dotenv(env_path, override=True)
+            return
+        curr = os.path.dirname(curr)
+
+_load_env()
 
 class Config:
     ENABLE_PORTFOLIO_ANALYSIS = os.getenv("ENABLE_PORTFOLIO_ANALYSIS", "true").lower() == "true"
