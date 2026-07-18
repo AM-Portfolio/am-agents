@@ -12,7 +12,7 @@ vault:
     identity-oidc:
       path: "apps/data/preprod/services/am-identity"
     observability:
-      path: "apps/data/preprod/services/am-mcp-gateway"
+      path: "apps/data/preprod/services/am-agents-mcp-gateway"
 
 ingress:
   annotations:

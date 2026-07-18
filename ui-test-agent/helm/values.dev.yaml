@@ -20,7 +20,7 @@ vault:
     identity-oidc:
       path: "apps/data/dev/services/am-identity"
     observability:
-      path: "apps/data/dev/services/am-mcp-gateway"
+      path: "apps/data/dev/services/am-agents-mcp-gateway"
 
 ingress:
   annotations:
