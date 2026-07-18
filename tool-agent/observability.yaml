@@ -1,0 +1,12 @@
+apiVersion: am.obs/v1
+kind: ServiceObservability
+service: am-tool-agent
+tier: B
+runtime: python
+k8s_app_label: am-tool-agent
+metrics_application: am-tool-agent
+namespace: am-apps-preprod
+owners: [platform]
+signals:
+  bundle: tier-b-python
+  domain: []

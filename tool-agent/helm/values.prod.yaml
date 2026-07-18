@@ -4,6 +4,8 @@ replicaCount: 1
 vault:
   enabled: true
   secretPaths:
+    otel:
+      path: "apps/data/prod/infra/observability"
     postgres:
       path: "apps/data/prod/infra/postgres"
     mongodb:

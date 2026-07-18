@@ -1,0 +1,8 @@
+id: tgt-c
+kind: service
+enabled: true
+tags: [lab, worker, tier-2]
+# no prep_ref — load only
+scenario_ref: scenario.smoke-get
+query_ref: grafana.prom.error_rate
+base_url_secret_ref: secret.lab.tgt-c.base_url

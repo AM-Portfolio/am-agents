@@ -1,6 +1,7 @@
-# db-agent
+# db-agent (Baseline)
 
-Natural-language interface to AM infrastructure databases (Postgres, Mongo, Redis, Qdrant, Kafka, Grafana/Influx/Loki).
+> [!WARNING]
+> This service is the legacy baseline NLP agent. It has been succeeded by the new, plugin-based **[tool-agent](file:///Users/munishm/Desktop/AM/am-agents/tool-agent)** which supports dynamic satellite MCPs and decentralized adapters. Refer to `tool-agent` for the active production deployment configurations.
 
 ## Quick start
 

@@ -13,6 +13,8 @@ resources:
 vault:
   enabled: true
   secretPaths:
+    otel:
+      path: "apps/data/dev/infra/observability"
     postgres:
       path: "apps/data/dev/infra/postgres"
     mongodb:
@@ -24,9 +26,9 @@ vault:
     identity-oidc:
       path: "apps/data/dev/services/am-identity"
     observability:
-      path: "apps/data/dev/services/am-mcp-gateway"
+      path: "apps/data/dev/services/am-agents-mcp-gateway"
     llm-api-keys:
-      path: "apps/data/dev/services/am-mcp-gateway"
+      path: "apps/data/dev/services/am-agents-mcp-gateway"
 
 ingress:
   annotations:

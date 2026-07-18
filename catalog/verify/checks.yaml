@@ -1,0 +1,15 @@
+# Gate A verify checks — executed via ObservabilityPort (Prometheus when OBSERVE_PROVIDER=prometheus)
+# Incident is only closed when these pass against live metrics (never VERIFY_FORCE on the live path).
+#
+# Semantic notes:
+# - k8s.endpoints.ready → Prometheus (redis_up / cAdvisor). Not tool-agent redis.info.
+# - redis.service.alive → tool-agent redis.info when TOOL_AGENT_URL is set; else Prometheus redis_up.
+checks:
+  - check_ref: verify.k8s.endpoints.ready
+    kind: metrics
+    query_ref: k8s.endpoints.ready
+    pass_when: "value > 0"
+  - check_ref: verify.service.alive
+    kind: metrics
+    query_ref: redis.service.alive
+    pass_when: "value == 1"

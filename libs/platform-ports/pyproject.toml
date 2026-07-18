@@ -1,0 +1,30 @@
+[project]
+name = "am-platform-ports"
+version = "0.1.0"
+description = "Extractable agent platform ports, schemas, and fakes (ADR-003)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.6,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-asyncio>=0.23",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/am_platform_ports"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/am_platform_ports" = "am_platform_ports"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src"]

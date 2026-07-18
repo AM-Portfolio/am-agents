@@ -5,12 +5,14 @@ replicaCount: 1
 vault:
   enabled: true
   secretPaths:
+    otel:
+      path: "apps/data/preprod/infra/observability"
     mongodb:
       path: "apps/data/preprod/infra/mongodb"
     identity-oidc:
       path: "apps/data/preprod/services/am-identity"
     observability:
-      path: "apps/data/preprod/services/am-mcp-gateway"
+      path: "apps/data/preprod/services/am-agents-mcp-gateway"
 
 ingress:
   annotations:

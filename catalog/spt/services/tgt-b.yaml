@@ -1,0 +1,8 @@
+id: tgt-b
+kind: service
+enabled: true
+tags: [lab, api, tier-1]
+prep_ref: prep.shared-lab
+scenario_ref: scenario.smoke-get
+query_ref: grafana.prom.error_rate
+base_url_secret_ref: secret.lab.tgt-b.base_url

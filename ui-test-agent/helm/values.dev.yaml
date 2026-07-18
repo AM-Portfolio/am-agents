@@ -13,12 +13,14 @@ resources:
 vault:
   enabled: true
   secretPaths:
+    otel:
+      path: "apps/data/dev/infra/observability"
     mongodb:
       path: "apps/data/dev/infra/mongodb"
     identity-oidc:
       path: "apps/data/dev/services/am-identity"
     observability:
-      path: "apps/data/dev/services/am-mcp-gateway"
+      path: "apps/data/dev/services/am-agents-mcp-gateway"
 
 ingress:
   annotations:
