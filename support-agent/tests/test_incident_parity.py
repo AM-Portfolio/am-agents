@@ -425,3 +425,52 @@ async def test_spt_parity_bootstrap(monkeypatch, tmp_path):
     out = await bootstrap_spt({"demand": {"demand_ref": "demo", "sandbox": True}})
     assert out["gated"] is False
     assert out["execute"]["ok"] is True
+
+
+def test_coerce_observation_evidence_to_evidence_item():
+    from am_support_agent.orchestrator.activities.incident import _coerce_evidence_items
+
+    raw = [
+        {
+            "kind": "metrics",
+            "healthy": True,
+            "transport_ok": True,
+            "query_ref": "service_health",
+            "data": {"health": "healthy"},
+        },
+        {"kind": "work_item", "ref": "fake:wi:1", "provenance": "fake"},
+    ]
+    items = _coerce_evidence_items(raw, tracking_id="SMOKE-1")
+    assert items[0] == {
+        "kind": "metrics",
+        "ref": "service_health",
+        "provenance": "observe",
+    }
+    assert items[1]["ref"] == "fake:wi:1"
+
+
+@pytest.mark.asyncio
+async def test_record_outcome_feedback_accepts_observations(monkeypatch):
+    monkeypatch.setenv("SUPPORT_AGENT_INCIDENT_PARITY", "true")
+    monkeypatch.setenv("SUPPORT_AGENT_RUNTIME_MODE", "test")
+    monkeypatch.setenv("SUPPORT_AGENT_CAPABILITY_PROVIDER", "fake")
+    from am_support_agent.orchestrator.activities import incident as incident_mod
+
+    out = await incident_mod.record_outcome_feedback(
+        {
+            "tracking_id": "trk-obs-1",
+            "episode_id": "missing-ep",
+            "outcome": "recovered",
+            "recovered": True,
+            "evidence": [
+                {
+                    "kind": "metrics",
+                    "healthy": True,
+                    "transport_ok": True,
+                    "data": {"health": "healthy"},
+                }
+            ],
+        }
+    )
+    assert out["phase"] == "record_outcome_feedback"
+    assert out["outcome"] == "recovered"

@@ -764,6 +764,9 @@ async def record_outcome_feedback(payload: dict[str, Any]) -> dict[str, Any]:
     tracking_id = str(payload.get("tracking_id") or "")
     episode_id = str(payload.get("episode_id") or "")
     outcome = str(payload.get("outcome") or "confirmed")
+    evidence_items = _coerce_evidence_items(
+        list(payload.get("evidence") or []), tracking_id=tracking_id
+    )
     fb = ingest_feedback_event(
         {
             "episode_id": episode_id,
@@ -774,7 +777,7 @@ async def record_outcome_feedback(payload: dict[str, Any]) -> dict[str, Any]:
             "outcome": outcome,
             "idempotency_key": f"{tracking_id}:outcome:{episode_id}:{outcome}",
             "payload": {
-                "evidence": payload.get("evidence") or [],
+                "evidence": evidence_items,
                 "recovered": bool(payload.get("recovered")),
             },
         }
@@ -785,7 +788,7 @@ async def record_outcome_feedback(payload: dict[str, Any]) -> dict[str, Any]:
                 episode_id,
                 outcome=outcome,
                 verify_status="passed" if payload.get("recovered") else "failed",
-                evidence=list(payload.get("evidence") or []),
+                evidence=evidence_items,
             )
         except KeyError:
             pass
@@ -796,6 +799,34 @@ async def record_outcome_feedback(payload: dict[str, Any]) -> dict[str, Any]:
         "feedback": fb,
         "outcome": outcome,
     }
+
+
+def _coerce_evidence_items(
+    raw: list[Any], *, tracking_id: str
+) -> list[dict[str, Any]]:
+    """Map EvidenceObservation-like dicts to EvidenceItem {kind, ref, provenance}."""
+    items: list[dict[str, Any]] = []
+    for i, item in enumerate(raw or []):
+        if not isinstance(item, dict):
+            continue
+        kind = str(item.get("kind") or "observe")
+        # Already EvidenceItem-shaped (has ref, no observation payload fields).
+        if item.get("ref") and "healthy" not in item and "transport_ok" not in item:
+            items.append(
+                {
+                    "kind": kind,
+                    "ref": str(item["ref"]),
+                    "provenance": str(item.get("provenance") or "observe"),
+                }
+            )
+            continue
+        ref = str(
+            item.get("query_ref")
+            or item.get("ref")
+            or f"{tracking_id}:{kind}:{i}"
+        )
+        items.append({"kind": kind, "ref": ref, "provenance": "observe"})
+    return items
 
 
 @activity.defn(name="support_agent.incident.extract_remediation_candidate")

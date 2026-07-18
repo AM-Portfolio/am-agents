@@ -1,0 +1,10 @@
+# amctl local/remote deploy config for support-agent.
+# Secrets stay in Vault (helm/vault-mappings.yaml); do not put credentials here.
+
+name: am-support-agent
+release: am-support-agent
+runtime: python
+language: python
+dockerfile: Dockerfile
+context: .
+image: ghcr.io/am-portfolio/am-support-agent
