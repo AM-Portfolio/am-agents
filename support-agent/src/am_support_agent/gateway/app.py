@@ -172,7 +172,14 @@ def create_app(
     adapters = adapters or build_adapters(registry.list_cards())
     store = store or build_task_run_store()
     workflow_ledger = workflow_ledger or build_workflow_ledger()
-    metrics = metrics or Metrics()
+    if metrics is None:
+        from am_support_agent.observability.metrics import get_shared_metrics
+
+        metrics = get_shared_metrics()
+    else:
+        from am_support_agent.observability.metrics import set_shared_metrics
+
+        set_shared_metrics(metrics)
     runtime = runtime or build_runtime(workflow_ledger=workflow_ledger)
     configure_learning(
         episodes=runtime.episodes,
@@ -549,6 +556,34 @@ def create_app(
             summary={"alert_keys": sorted((body.alert or {}).keys())},
         )
         try:
+            from am_support_agent.observability.agent_work import build_event
+            from am_support_agent.stores.telemetry_outbox import build_telemetry_outbox
+
+            build_telemetry_outbox().append(
+                build_event(
+                    event_name="agent.work.accepted",
+                    status="accepted",
+                    outcome="unknown",
+                    workflow_id=workflow_id,
+                    run_ref=run.run_ref,
+                    tracking_id=tracking_id,
+                    sequence=0,
+                    environment=str(
+                        (body.alert or {}).get("env")
+                        or (body.alert or {}).get("environment")
+                        or ""
+                    ),
+                )
+            )
+            metrics.observe_agent_work(
+                work_kind="alert_incident",
+                status="accepted",
+                outcome="unknown",
+                event_name="agent.work.accepted",
+            )
+        except Exception:  # noqa: BLE001
+            pass
+        try:
             result = await tapi.start_alert_incident(
                 workflow_id=workflow_id,
                 tracking_id=tracking_id,
@@ -561,7 +596,20 @@ def create_app(
                 status=WorkflowRunStatus.FAILED,
                 summary={"error": str(exc)[:200]},
             )
-            raise HTTPException(status_code=502, detail=str(exc)[:400]) from exc
+            # Phase 2 stub: if Temporal rejects duplicate on a terminal workflow,
+            # surface dropped_refire so ops can see received ≠ processed.
+            detail = str(exc)[:400]
+            if "already" in detail.lower() or "duplicate" in detail.lower():
+                try:
+                    metrics.observe_agent_work(
+                        work_kind="alert_incident",
+                        status="failed",
+                        outcome="failed",
+                        event_name="incident.refired",
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+            raise HTTPException(status_code=502, detail=detail) from exc
         workflow_ledger.update_run(
             run.run_ref,
             status=WorkflowRunStatus.RUNNING,

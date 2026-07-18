@@ -37,6 +37,10 @@ with workflow.unsafe.imports_passed_through():
         verify_logs,
         verify_metrics,
     )
+    from am_support_agent.orchestrator.activities.telemetry import (
+        finalize_run,
+        record_event,
+    )
     from am_support_agent.orchestrator.hitl import (
         SIGNAL_ALERT_REFIRED,
         SIGNAL_ALERT_RESOLVED,
@@ -73,6 +77,7 @@ class AlertIncidentWorkflow:
         self._state: dict[str, Any] = {}
         self._refire_count: int = 0
         self._verify_rounds: int = 0
+        self._event_seq: int = 0
 
     @workflow.signal(name=SIGNAL_ALERT_RESOLVED)
     async def alert_resolved(self) -> None:
@@ -134,6 +139,67 @@ class AlertIncidentWorkflow:
             start_to_close_timeout=timedelta(seconds=timeout_s),
             retry_policy=_ACTIVITY_RETRY,
         )
+
+    async def _emit(self, event_name: str, **fields: Any) -> None:
+        """Best-effort durable telemetry; failures must not block incident handling."""
+        self._event_seq += 1
+        work_item = self._state.get("work_item") or {}
+        ticket_ref = ""
+        if isinstance(work_item, dict):
+            ticket_ref = str(
+                work_item.get("work_item_ref") or work_item.get("id") or ""
+            )
+        payload = {
+            "event_name": event_name,
+            "phase": self._phase,
+            "workflow_id": f"alert-incident-{self._tracking_id}",
+            "run_ref": str(self._state.get("run_ref") or ""),
+            "tracking_id": self._tracking_id,
+            "episode_id": str(self._state.get("episode_id") or ""),
+            "ticket_ref": ticket_ref,
+            "sequence": self._event_seq,
+            "environment": str(
+                (self._state.get("alert") or {}).get("env")
+                or (self._state.get("alert") or {}).get("environment")
+                or ""
+            ),
+            **fields,
+        }
+        try:
+            await self._act(record_event, payload, timeout_s=30)
+        except Exception:  # noqa: BLE001 — telemetry must not fail the incident
+            pass
+
+    async def _finalize(self, domain_status: str, **extra: Any) -> None:
+        work_item = self._state.get("work_item") or {}
+        ticket_ref = ""
+        if isinstance(work_item, dict):
+            ticket_ref = str(
+                work_item.get("work_item_ref") or work_item.get("id") or ""
+            )
+        try:
+            await self._act(
+                finalize_run,
+                {
+                    "run_ref": str(self._state.get("run_ref") or ""),
+                    "domain_status": domain_status,
+                    "phase": self._phase,
+                    "workflow_id": f"alert-incident-{self._tracking_id}",
+                    "tracking_id": self._tracking_id,
+                    "episode_id": str(self._state.get("episode_id") or ""),
+                    "ticket_ref": ticket_ref,
+                    "approval_purpose": str(
+                        (self._state.get("human_required") or {}).get("approval_purpose")
+                        or ""
+                    ),
+                    "side_effects": self._state.get("side_effects") or {},
+                    "sequence": self._event_seq + 1,
+                    **extra,
+                },
+                timeout_s=30,
+            )
+        except Exception:  # noqa: BLE001
+            pass
 
     async def _handle_pending_feedback(self) -> None:
         fb = self._hitl.consume_feedback()
@@ -217,9 +283,22 @@ class AlertIncidentWorkflow:
         self._state["owner"] = owner.get("owner")
 
         created = await self._act(
-            create_ticket, {"tracking_id": self._tracking_id, "alert": alert}
+            create_ticket,
+            {"tracking_id": self._tracking_id, "alert": alert},
         )
         self._steps["create_ticket"] = created
+        create_ok = bool(created.get("ok", True)) and not created.get("error")
+        await self._emit(
+            "incident.ticket.created" if create_ok else "incident.ticket.create.failed",
+            status="running" if create_ok else "partial",
+            outcome="unknown" if create_ok else "partial",
+            ticket_operation="create",
+            labels={
+                "ticket_operation": "create",
+                "result": "success" if create_ok else "failure",
+            },
+            attributes={"error": str(created.get("error") or "")[:200]},
+        )
 
         assigned = await self._act(
             assign_ticket,
@@ -295,6 +374,15 @@ class AlertIncidentWorkflow:
         )
         self._steps["record_hitl"] = recorded
         self._phase = "human_handoff_complete"
+        await self._emit(
+            "incident.hitl.required",
+            status="needs_human",
+            outcome="human_handoff",
+            terminal=True,
+            labels={"approval_purpose": approval_purpose, "result": "success"},
+            attributes={"reason": reason[:200]},
+        )
+        await self._finalize("human_required")
         return {
             "status": "human_required",
             "tracking_id": self._tracking_id,
@@ -359,6 +447,22 @@ class AlertIncidentWorkflow:
         self._steps["close_ticket"] = closed
         if closed.get("work_item"):
             self._state["work_item"] = closed["work_item"]
+        close_ok = bool(closed.get("ok", True)) and not closed.get("error")
+        if not close_ok:
+            await self._emit(
+                "incident.ticket.close.failed",
+                status="partial",
+                outcome="partial",
+                ticket_operation="close",
+                labels={"ticket_operation": "close", "result": "failure"},
+                attributes={"error": str(closed.get("error") or "close_failed")[:200]},
+            )
+            self._state["side_effects"] = {
+                **(self._state.get("side_effects") or {}),
+                "ticket_close": "failed",
+            }
+            # Soft-failure honesty: do not claim recovered if close failed.
+            return False
 
         resolved_notify = await self._act(
             notify_resolved,
@@ -369,6 +473,14 @@ class AlertIncidentWorkflow:
             },
         )
         self._steps["notify_resolved"] = resolved_notify
+        notify_ok = bool(resolved_notify.get("ok", True)) and not resolved_notify.get(
+            "error"
+        )
+        self._state["side_effects"] = {
+            **(self._state.get("side_effects") or {}),
+            "ticket_close": "ok",
+            "notify_resolved": "ok" if notify_ok else "failed",
+        }
 
         feedback = await self._act(
             record_outcome_feedback,
@@ -408,6 +520,14 @@ class AlertIncidentWorkflow:
             timeout_s=30,
         )
         self._steps["evaluate_learning"] = learning
+        await self._emit(
+            "incident.ticket.closed",
+            status="passed",
+            outcome="recovered",
+            ticket_operation="close",
+            labels={"ticket_operation": "close", "result": "success"},
+            terminal=False,
+        )
         return True
 
     @workflow.run
@@ -422,6 +542,15 @@ class AlertIncidentWorkflow:
         self._verify_rounds = int(prior.get("verify_rounds") or 0)
         self._state = dict(prior.get("state") or {})
         self._steps = dict(prior.get("steps") or {})
+        if payload.get("run_ref") and not self._state.get("run_ref"):
+            self._state["run_ref"] = payload.get("run_ref")
+
+        await self._emit(
+            "agent.work.started",
+            status="running",
+            outcome="unknown",
+            attributes={"continued": bool(prior)},
+        )
 
         self._phase = "check_parity"
         parity = await self._act(
@@ -430,6 +559,7 @@ class AlertIncidentWorkflow:
         self._steps["check_parity"] = parity
         if parity.get("gated"):
             self._phase = "gated"
+            await self._finalize("gated")
             return {
                 "status": "gated",
                 "tracking_id": self._tracking_id,
@@ -491,6 +621,13 @@ class AlertIncidentWorkflow:
             if gate.get("stop"):
                 await self._persist(outcome="not_confirmed", actions=[])
                 self._phase = "not_confirmed"
+                await self._emit(
+                    "incident.not_confirmed",
+                    status="passed",
+                    outcome="not_confirmed",
+                    terminal=True,
+                )
+                await self._finalize("not_confirmed")
                 return {
                     "status": "not_confirmed",
                     "tracking_id": self._tracking_id,
@@ -623,6 +760,13 @@ class AlertIncidentWorkflow:
                 if await self._close_if_recovered(sample_batches):
                     self._hitl.closed = True
                     self._phase = "recovered"
+                    await self._emit(
+                        "incident.recovered",
+                        status="passed",
+                        outcome="recovered",
+                        terminal=True,
+                    )
+                    await self._finalize("recovered")
                     return {
                         "status": "recovered",
                         "tracking_id": self._tracking_id,
@@ -670,6 +814,7 @@ class AlertIncidentWorkflow:
 
             if self._hitl.closed:
                 self._phase = "closed"
+                await self._finalize("closed")
                 return {
                     "status": "closed",
                     "tracking_id": self._tracking_id,

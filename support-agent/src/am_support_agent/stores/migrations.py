@@ -160,9 +160,44 @@ CREATE TABLE IF NOT EXISTS support_agent.promotion_decisions (
 );
 """
 
+# Migration 3: durable agent-work event outbox for enterprise dashboards
+MIGRATION_003_AGENT_WORK_OUTBOX = """
+CREATE TABLE IF NOT EXISTS support_agent.agent_work_event_outbox (
+    event_id TEXT PRIMARY KEY,
+    dedupe_key TEXT NOT NULL UNIQUE,
+    event_name TEXT NOT NULL,
+    workflow_id TEXT NOT NULL DEFAULT '',
+    workflow_run_id TEXT NOT NULL DEFAULT '',
+    run_ref TEXT NOT NULL DEFAULT '',
+    tracking_id TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT '',
+    phase TEXT NOT NULL DEFAULT '',
+    event_json JSONB NOT NULL,
+    occurred_at TIMESTAMPTZ NOT NULL,
+    recorded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    available_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    attempts INTEGER NOT NULL DEFAULT 0,
+    locked_by TEXT,
+    locked_until TIMESTAMPTZ,
+    delivered_at TIMESTAMPTZ,
+    last_error TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS agent_work_outbox_undelivered
+    ON support_agent.agent_work_event_outbox (available_at)
+    WHERE delivered_at IS NULL;
+CREATE INDEX IF NOT EXISTS agent_work_outbox_workflow
+    ON support_agent.agent_work_event_outbox (workflow_id, occurred_at);
+CREATE INDEX IF NOT EXISTS agent_work_outbox_tracking
+    ON support_agent.agent_work_event_outbox (tracking_id, occurred_at);
+CREATE INDEX IF NOT EXISTS agent_work_outbox_run_ref
+    ON support_agent.agent_work_event_outbox (run_ref, occurred_at);
+"""
+
 MIGRATIONS: Sequence[tuple[int, str, str]] = (
     (1, "task_runs", MIGRATION_001_TASK_RUNS),
     (2, "incident_memory", MIGRATION_002_INCIDENT_MEMORY),
+    (3, "agent_work_outbox", MIGRATION_003_AGENT_WORK_OUTBOX),
 )
 
 # Advisory lock key unique to support-agent migrations
@@ -214,4 +249,10 @@ def apply_migrations(conn) -> list[int]:
 
 
 # Backward-compatible alias used by PostgresTaskRunStore
-SUPPORT_AGENT_SCHEMA_SQL = MIGRATION_001_TASK_RUNS + "\n" + MIGRATION_002_INCIDENT_MEMORY
+SUPPORT_AGENT_SCHEMA_SQL = (
+    MIGRATION_001_TASK_RUNS
+    + "\n"
+    + MIGRATION_002_INCIDENT_MEMORY
+    + "\n"
+    + MIGRATION_003_AGENT_WORK_OUTBOX
+)

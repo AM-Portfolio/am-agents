@@ -1,4 +1,4 @@
-"""Shared helpers — OTel/HTTP stubs (Phase 0b)."""
+"""Shared helpers for AM agents — dotenv, header redaction, agent-work telemetry."""
 
 __version__ = "0.1.0"
 

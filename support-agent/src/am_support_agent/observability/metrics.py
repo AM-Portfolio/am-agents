@@ -59,6 +59,10 @@ class Metrics:
         self._memory: Counter[tuple[str, str]] = Counter()
         self._learning: Counter[str] = Counter()
         self._in_flight: Counter[tuple[str, str]] = Counter()
+        self._agent_work: Counter[tuple[str, str, str, str]] = Counter()
+        self._agent_work_hitl: Counter[tuple[str, str]] = Counter()
+        self._agent_work_tickets: Counter[tuple[str, str]] = Counter()
+        self._outbox_pending = 0
         self._run_store_healthy = 0
         self._episode_store_healthy = 0
         self._feedback_store_healthy = 0
@@ -149,6 +153,31 @@ class Metrics:
     def set_feedback_store_health(self, healthy: bool) -> None:
         with self._lock:
             self._feedback_store_healthy = int(healthy)
+
+    def observe_agent_work(
+        self,
+        *,
+        work_kind: str,
+        status: str,
+        outcome: str,
+        event_name: str = "",
+    ) -> None:
+        with self._lock:
+            self._agent_work[
+                (work_kind or "alert_incident", status or "unknown", outcome or "unknown", event_name or "event")
+            ] += 1
+
+    def observe_agent_hitl(self, *, purpose: str, result: str) -> None:
+        with self._lock:
+            self._agent_work_hitl[(purpose or "unknown", result or "requested")] += 1
+
+    def observe_agent_ticket(self, *, operation: str, result: str) -> None:
+        with self._lock:
+            self._agent_work_tickets[(operation or "unknown", result or "unknown")] += 1
+
+    def set_outbox_pending(self, count: int) -> None:
+        with self._lock:
+            self._outbox_pending = max(0, int(count))
 
     def render(self) -> str:
         application = f'application="{_escape(self.application)}"'
@@ -307,6 +336,48 @@ class Metrics:
                     "# TYPE support_agent_feedback_store_healthy gauge",
                     "support_agent_feedback_store_healthy"
                     f"{{{application}}} {self._feedback_store_healthy}",
+                    "# HELP agent_work_events_total Agent work lifecycle events.",
+                    "# TYPE agent_work_events_total counter",
+                ]
+            )
+            for (work_kind, status, outcome, event_name), count in sorted(
+                self._agent_work.items()
+            ):
+                lines.append(
+                    "agent_work_events_total"
+                    f'{{{application},work_kind="{_escape(work_kind)}",'
+                    f'status="{_escape(status)}",outcome="{_escape(outcome)}",'
+                    f'event_name="{_escape(event_name)}"}} {count}'
+                )
+            lines.extend(
+                [
+                    "# HELP agent_incident_hitl_total Incident human-loop events.",
+                    "# TYPE agent_incident_hitl_total counter",
+                ]
+            )
+            for (purpose, result), count in sorted(self._agent_work_hitl.items()):
+                lines.append(
+                    "agent_incident_hitl_total"
+                    f'{{{application},approval_purpose="{_escape(purpose)}",'
+                    f'result="{_escape(result)}"}} {count}'
+                )
+            lines.extend(
+                [
+                    "# HELP agent_incident_ticket_operations_total Ticket side-effect results.",
+                    "# TYPE agent_incident_ticket_operations_total counter",
+                ]
+            )
+            for (operation, result), count in sorted(self._agent_work_tickets.items()):
+                lines.append(
+                    "agent_incident_ticket_operations_total"
+                    f'{{{application},ticket_operation="{_escape(operation)}",'
+                    f'result="{_escape(result)}"}} {count}'
+                )
+            lines.extend(
+                [
+                    "# HELP agent_telemetry_outbox_pending Undelivered agent-work events.",
+                    "# TYPE agent_telemetry_outbox_pending gauge",
+                    f"agent_telemetry_outbox_pending{{{application}}} {self._outbox_pending}",
                 ]
             )
         return "\n".join(lines) + "\n"
@@ -344,3 +415,23 @@ def _resolution_outcome(status: TaskStatus) -> str:
     if status in {TaskStatus.ACCEPTED, TaskStatus.RUNNING}:
         return "pending"
     return "failed"
+
+
+_SHARED: Metrics | None = None
+_SHARED_LOCK = threading.Lock()
+
+
+def get_shared_metrics(*, application: str = "support-agent") -> Metrics:
+    """Process-wide Metrics registry (gateway + Temporal worker scrape the same object)."""
+    global _SHARED
+    with _SHARED_LOCK:
+        if _SHARED is None:
+            _SHARED = Metrics(application=application)
+        return _SHARED
+
+
+def set_shared_metrics(metrics: Metrics | None) -> None:
+    """Override the process-wide registry (tests)."""
+    global _SHARED
+    with _SHARED_LOCK:
+        _SHARED = metrics

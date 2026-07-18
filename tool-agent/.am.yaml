@@ -1,0 +1,10 @@
+# amctl deploy config for tool-agent.
+# Secrets stay in Vault (helm/vault-mappings.yaml); do not put credentials here.
+
+name: am-tool-agent
+release: am-tool-agent
+runtime: python
+language: python
+dockerfile: Dockerfile
+context: .
+image: ghcr.io/am-portfolio/am-tool-agent

@@ -83,6 +83,12 @@ def _gate_payload(phase: str, tracking_id: str) -> dict[str, Any]:
 
 
 def _work_item_from_data(data: dict[str, Any], *, provider: str = "") -> WorkItemRef:
+    # tool-agent may nest domain fields under data={ok, provider, data:{...}}
+    inner = data.get("data")
+    if isinstance(inner, dict) and (
+        inner.get("work_item_ref") or inner.get("id") or inner.get("url")
+    ):
+        data = inner
     return WorkItemRef(
         work_item_ref=str(data.get("work_item_ref") or data.get("id") or ""),
         url=str(data.get("url") or ""),

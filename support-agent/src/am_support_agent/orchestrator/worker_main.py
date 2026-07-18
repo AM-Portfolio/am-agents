@@ -27,6 +27,7 @@ async def run_worker() -> None:
 
     from am_support_agent.orchestrator.activities.a2a import execute_plan
     from am_support_agent.orchestrator.activities.incident import INCIDENT_ACTIVITIES
+    from am_support_agent.orchestrator.activities.telemetry import TELEMETRY_ACTIVITIES
     from am_support_agent.orchestrator.activities.spt import (
         bootstrap_spt,
         resolve_spt_catalog,
@@ -53,6 +54,15 @@ async def run_worker() -> None:
         queue,
     )
     configure_tracing(service_name="support-agent")
+
+    # Alert fanout starts Temporal workflows directly (bypasses gateway), so
+    # lifecycle counters live on the worker and must be scrapable here.
+    from am_support_agent.observability.metrics_server import start_metrics_server
+    from am_support_agent.stores.telemetry_outbox import ensure_telemetry_schema
+
+    ensure_telemetry_schema()
+    start_metrics_server()
+
     client = await Client.connect(
         host,
         namespace=ns,
@@ -65,6 +75,7 @@ async def run_worker() -> None:
         activities=[
             execute_plan,
             *INCIDENT_ACTIVITIES,
+            *TELEMETRY_ACTIVITIES,
             bootstrap_spt,
             resolve_spt_catalog,
         ],

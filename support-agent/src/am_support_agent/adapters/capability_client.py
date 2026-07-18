@@ -106,7 +106,12 @@ class ToolAgentCapabilityClient:
             plan_resp = await client.post(
                 f"{self.base_url}/api/v1/tools/plan",
                 headers=headers,
-                json={"query": f"execute {backend}.{operation}", "backend": backend, "read_only": False},
+                json={
+                    "query": f"execute {backend}.{operation}",
+                    "backend": backend,
+                    "read_only": False,
+                    "intent": intent,
+                },
             )
             plan_data = _json_or_text(plan_resp)
             if plan_resp.status_code >= 400:
@@ -120,7 +125,11 @@ class ToolAgentCapabilityClient:
             if isinstance(plan_data, dict):
                 plan_hash = str(plan_data.get("plan_hash") or plan_hash)
                 execute_body["plan_hash"] = plan_hash
-                execute_body["intent"] = plan_data.get("intent") or intent
+                planned_intent = plan_data.get("intent")
+                if isinstance(planned_intent, dict):
+                    # Structured plan echoes the same intent we sent (plus any
+                    # server-side param resolution). Use it so plan_hash matches.
+                    execute_body["intent"] = planned_intent
                 if plan_data.get("requires_write_confirmation"):
                     execute_body["write_confirmation"] = {
                         "confirmation_token": plan_data.get("confirmation_token"),
@@ -136,13 +145,31 @@ class ToolAgentCapabilityClient:
         ok = resp.status_code < 400
         payload = data if isinstance(data, dict) else {"body": data}
         nested = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+        provider = ""
+        if isinstance(nested, dict):
+            provider = str(nested.get("provider") or "")
+            # tool-agent capability envelope: {ok, provider, data: {...domain...}}
+            inner = nested.get("data")
+            if isinstance(inner, dict) and (
+                "work_item_ref" in inner
+                or "silence_id" in inner
+                or "assignee_ref" in inner
+                or nested.get("ok") is True
+            ):
+                if nested.get("ok") is False:
+                    ok = False
+                nested = inner
+                provider = provider or str(nested.get("provider") or "")
         return CapabilityResult(
             ok=ok,
             capability=call.capability,
             data=nested if isinstance(nested, dict) else {"value": nested},
-            error=None if ok else f"execute failed HTTP {resp.status_code}",
+            error=None if ok else (
+                str((payload.get("data") or {}).get("error") if isinstance(payload.get("data"), dict) else None)
+                or f"execute failed HTTP {resp.status_code}"
+            ),
             plan_hash=plan_hash,
-            provider=str((nested or {}).get("provider") or "") if isinstance(nested, dict) else "",
+            provider=provider,
             raw=payload,
         )
 
