@@ -207,6 +207,7 @@ SELECT
     COALESCE(r.summary->>'agent_status', '') AS agent_status,
     COALESCE(r.summary->>'final_status', 'open') AS final_status,
     COALESCE(r.summary->>'ticket_ref', '') AS ticket_ref,
+    COALESCE(r.summary->>'ticket_url', '') AS ticket_url,
     COALESCE(r.summary->>'ticket_status', 'none') AS ticket_status,
     COALESCE(r.summary->>'assignee_ref', '') AS assignee_ref,
     COALESCE(r.summary->>'assignee_name', '') AS assignee_name,
@@ -219,6 +220,18 @@ SELECT
     COALESCE(r.summary->>'approval_purpose', '') AS approval_purpose,
     COALESCE(r.summary->>'known_fix', '') AS known_fix,
     COALESCE((r.summary->>'solved')::boolean, FALSE) AS solved,
+    COALESCE(r.summary->>'temporal_run_id', '') AS temporal_run_id,
+    COALESCE(r.summary->>'temporal_url', '') AS temporal_url,
+    COALESCE(r.summary->>'alert_url', '') AS alert_url,
+    COALESCE(r.summary->>'langfuse_url', '') AS langfuse_url,
+    COALESCE(r.summary->>'trace_id', '') AS trace_id,
+    COALESCE(r.summary->>'langfuse_trace_id', '') AS langfuse_trace_id,
+    COALESCE(
+        NULLIF(r.summary->>'generator_url', ''),
+        e.body_json#>>'{context,alert,generator_url}',
+        e.body_json#>>'{context,alert,generatorURL}',
+        ''
+    ) AS generator_url,
     COALESCE(r.summary->'activities', '{}'::jsonb) AS activities,
     COALESCE(r.summary->'side_effects', '{}'::jsonb) AS side_effects,
     -- Flat incident details for Grafana tables
@@ -390,12 +403,16 @@ GRANT SELECT ON support_agent.v_unsolved_incidents TO alert_ops_ro;
 GRANT SELECT ON support_agent.v_familiar_type_summary TO alert_ops_ro;
 """
 
+# Migration 6: link deep-link columns (temporal/alert/langfuse) on lifecycle views.
+MIGRATION_006_LINK_VIEWS = MIGRATION_005_ASSIGNEE_VIEWS
+
 MIGRATIONS: Sequence[tuple[int, str, str]] = (
     (1, "task_runs", MIGRATION_001_TASK_RUNS),
     (2, "incident_memory", MIGRATION_002_INCIDENT_MEMORY),
     (3, "agent_work_outbox", MIGRATION_003_AGENT_WORK_OUTBOX),
     (4, "lifecycle_views", MIGRATION_004_LIFECYCLE_VIEWS),
     (5, "assignee_views", MIGRATION_005_ASSIGNEE_VIEWS),
+    (6, "link_views", MIGRATION_006_LINK_VIEWS),
 )
 
 # Advisory lock key unique to support-agent migrations

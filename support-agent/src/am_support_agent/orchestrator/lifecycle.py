@@ -112,6 +112,7 @@ def build_lifecycle_summary(
 ) -> dict[str, Any]:
     st = dict(state or {})
     alert = st.get("alert") if isinstance(st.get("alert"), dict) else {}
+    labels = dict(alert.get("labels") or {})
     familiar, fingerprint = familiar_type_from_alert(alert)
     work_item = st.get("work_item") if isinstance(st.get("work_item"), dict) else {}
     owner = st.get("owner") if isinstance(st.get("owner"), dict) else {}
@@ -131,11 +132,61 @@ def build_lifecycle_summary(
     if isinstance(known, dict):
         known_id = str(known.get("candidate_id") or known.get("id") or "")[:120]
     fs = final_status or final_status_for_domain(domain_status)
+
+    tracking_id = str(st.get("tracking_id") or "").strip()
+    workflow_id = str(
+        st.get("workflow_id") or (f"alert-incident-{tracking_id}" if tracking_id else "")
+    ).strip()
+    temporal_run_id = str(
+        st.get("temporal_run_id") or st.get("run_id") or ""
+    ).strip()
+    trace_id = str(
+        alert.get("trace_id") or labels.get("trace_id") or st.get("trace_id") or ""
+    ).strip()
+    langfuse_trace_id = str(
+        st.get("langfuse_trace_id") or alert.get("langfuse_trace_id") or ""
+    ).strip()
+    generator_url = str(
+        alert.get("generator_url")
+        or alert.get("generatorURL")
+        or labels.get("generatorURL")
+        or ""
+    ).strip()
+    alertname = str(
+        labels.get("alertname") or alert.get("alertname") or alert.get("name") or ""
+    ).strip()
+    ticket_url = str(work_item.get("url") or st.get("ticket_url") or "").strip()
+
+    links: dict[str, Any] = {}
+    try:
+        from am_platform_adapters.links import (
+            build_developer_links,
+            ticket_browser_url,
+        )
+
+        links = build_developer_links(
+            ticket_ref=ticket_ref,
+            ticket_url=ticket_url or None,
+            generator_url=generator_url or None,
+            alertname=alertname or None,
+            trace_id=trace_id or None,
+            tracking_id=tracking_id or None,
+            workflow_id=workflow_id or None,
+            run_id=temporal_run_id or None,
+            env=str(alert.get("env") or labels.get("env") or ""),
+            langfuse_trace_id=langfuse_trace_id or None,
+        )
+        if not ticket_url:
+            ticket_url = str(links.get("ticket_url") or ticket_browser_url(ticket_ref) or "")
+    except Exception:  # noqa: BLE001 — links must not break lifecycle persist
+        links = {}
+
     return {
         "phase": phase or "",
         "agent_status": agent_status_for_phase(phase),
         "final_status": fs,
         "ticket_ref": ticket_ref,
+        "ticket_url": ticket_url,
         "ticket_status": str(side.get("ticket_status") or ("created" if ticket_ref else "none")),
         "assignee_ref": assignee_ref,
         "assignee_name": assignee_name,
@@ -146,6 +197,17 @@ def build_lifecycle_summary(
         "activities": condense_activities(steps),
         "familiar_type": familiar,
         "alert_fingerprint": fingerprint,
+        "alertname": alertname,
+        "generator_url": generator_url,
+        "trace_id": trace_id,
+        "langfuse_trace_id": langfuse_trace_id,
+        "tracking_id": tracking_id,
+        "workflow_id": workflow_id,
+        "temporal_run_id": temporal_run_id,
+        "temporal_url": str(links.get("temporal_url") or ""),
+        "alert_url": str(links.get("alert_url") or ""),
+        "langfuse_url": str(links.get("langfuse_url") or ""),
+        "grafana_trace_url": str(links.get("grafana_trace_url") or ""),
         "similar_incident_ids": list(st.get("similar_incident_ids") or [])[:10],
         "known_fix": known_id,
         "hitl_state": (

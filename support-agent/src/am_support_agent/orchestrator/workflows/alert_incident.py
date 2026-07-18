@@ -73,6 +73,7 @@ class AlertIncidentWorkflow:
     def __init__(self) -> None:
         self._hitl = HitlState()
         self._tracking_id: str = ""
+        self._temporal_run_id: str = ""
         self._phase: str = "init"
         self._steps: dict[str, Any] = {}
         self._state: dict[str, Any] = {}
@@ -154,6 +155,7 @@ class AlertIncidentWorkflow:
             "event_name": event_name,
             "phase": self._phase,
             "workflow_id": f"alert-incident-{self._tracking_id}",
+            "workflow_run_id": self._temporal_run_id,
             "run_ref": str(self._state.get("run_ref") or ""),
             "tracking_id": self._tracking_id,
             "episode_id": str(self._state.get("episode_id") or ""),
@@ -238,6 +240,10 @@ class AlertIncidentWorkflow:
                         "known_fix": self._state.get("known_fix")
                         or self._state.get("proposed_known_fix")
                         or {},
+                        "tracking_id": self._tracking_id,
+                        "workflow_id": f"alert-incident-{self._tracking_id}",
+                        "temporal_run_id": self._temporal_run_id,
+                        "run_id": self._temporal_run_id,
                     },
                 },
                 timeout_s=30,
@@ -600,10 +606,20 @@ class AlertIncidentWorkflow:
         self._tracking_id = str(
             payload.get("tracking_id") or prior.get("tracking_id") or workflow.info().workflow_id
         )
+        try:
+            self._temporal_run_id = str(workflow.info().run_id or "")
+        except Exception:  # noqa: BLE001
+            self._temporal_run_id = str(prior.get("temporal_run_id") or "")
         self._refire_count = int(prior.get("refire_count") or 0)
         self._verify_rounds = int(prior.get("verify_rounds") or 0)
+        # Restore prior state first, then stamp ids so continue-as-new cannot wipe run_id.
         self._state = dict(prior.get("state") or {})
         self._steps = dict(prior.get("steps") or {})
+        self._state["tracking_id"] = self._tracking_id
+        self._state["workflow_id"] = f"alert-incident-{self._tracking_id}"
+        if self._temporal_run_id:
+            self._state["temporal_run_id"] = self._temporal_run_id
+            self._state["run_id"] = self._temporal_run_id
         if payload.get("run_ref") and not self._state.get("run_ref"):
             self._state["run_ref"] = payload.get("run_ref")
 

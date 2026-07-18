@@ -211,14 +211,53 @@ def test_phase_comments_accumulate_on_fake_ticket() -> None:
 
 
 def test_link_helpers(monkeypatch) -> None:
+    from am_platform_adapters.links import (
+        grafana_alert_url,
+        langfuse_trace_url,
+        normalize_grafana_url,
+    )
+
     monkeypatch.setenv("OPENPROJECT_PUBLIC_URL", "https://openproject.asrax.in")
-    monkeypatch.setenv("GRAFANA_EXTERNAL_URL", "https://grafana.munish.org")
-    monkeypatch.setenv("TEMPORAL_UI_EXTERNAL_URL", "http://127.0.0.1:8080")
-    monkeypatch.setenv("LINK_ALLOWED_HOSTS", "grafana.munish.org,grafana.asrax.in,openproject.asrax.in,127.0.0.1")
+    monkeypatch.setenv("GRAFANA_EXTERNAL_URL", "https://grafana.asrax.in")
+    monkeypatch.setenv("TEMPORAL_UI_EXTERNAL_URL", "https://temporal.asrax.in")
+    monkeypatch.setenv("LANGFUSE_PUBLIC_URL", "https://langfuse.munish.org")
+    monkeypatch.setenv("LANGFUSE_PROJECT_ID", "cmsupportagent0001wx0dsa001")
+    monkeypatch.setenv(
+        "LINK_ALLOWED_HOSTS",
+        "grafana.munish.org,grafana.asrax.in,openproject.asrax.in,temporal.asrax.in,langfuse.munish.org,127.0.0.1",
+    )
     assert ticket_number("op:wp:386") == "386"
     assert "386" in ticket_browser_url("op:wp:386")
     assert "explore" in grafana_tempo_trace_url("abc123")
     assert "workflows" in temporal_workflow_url("wf-1", env="lab")
+    hist = temporal_workflow_url(
+        "alert-incident-AM-20260718-5511ED",
+        run_id="019f7773-7e1c-7994-9df4-190dc6445b0a",
+        env="lab",
+    )
+    assert hist.endswith(
+        "/workflows/alert-incident-AM-20260718-5511ED/"
+        "019f7773-7e1c-7994-9df4-190dc6445b0a/history"
+    )
+    assert "/alerting/list" not in grafana_alert_url(
+        "https://grafana./alerting/list?search=DatasourceError",
+        alertname="DatasourceError",
+    )
+    assert "alerting/groups" in grafana_alert_url(
+        "https://grafana./alerting/list?search=DatasourceError",
+        alertname="DatasourceError",
+    )
+    assert normalize_grafana_url(
+        "https://grafana./alerting/grafana/abc/view"
+    ).startswith("https://grafana.asrax.in/")
+    lf = langfuse_trace_url("731e0f90-8972-4d64-a3b3-45874709042b")
+    assert lf == (
+        "https://langfuse.munish.org/project/cmsupportagent0001wx0dsa001/"
+        "traces/731e0f90-8972-4d64-a3b3-45874709042b"
+    )
+    assert "project/cmsupportagent0001wx0dsa001/traces?search=" in langfuse_trace_url(
+        tracking_id="AM-20260718-5511ED"
+    )
 
 
 def test_build_incident_message_resolved() -> None:
