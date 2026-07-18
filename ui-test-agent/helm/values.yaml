@@ -76,7 +76,7 @@ ingress:
     kubernetes.io/ingress.class: "traefik"
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
 
-# Plane A — Prometheus scrape
+# Plane A â€” Prometheus scrape
 podAnnotations:
   prometheus.io/scrape: "true"
   prometheus.io/port: "8130"
