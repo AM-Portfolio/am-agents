@@ -14,43 +14,46 @@ def test_webhook_lab_uses_lab_env(monkeypatch) -> None:
     assert _webhook_for_channel("cliq:lab") == "https://example.test/lab"
 
 
-def test_card_payload_channel_webhook_schema() -> None:
-    """Channel zapikey webhooks reject buttons/bot — only text+card+slides."""
+def test_card_payload_view_more_preview() -> None:
+    """Single View more button → preview.url (popup panel) with details page URL."""
     card = NotifyCard(
-        event="incident.investigating",
-        title="[AM-1] INVESTIGATING",
-        body="Reason: Ticket created and assigned — investigation started.",
-        refs={"ticket": "390", "status": "INVESTIGATING", "env": "lab", "done_by": "IT-Support-agent"},
+        event="incident.resolved",
+        title="✅ RESOLVED · WARNING · KubeServiceDown",
+        body="KubeServiceDown: redis in infra",
+        refs={"ticket": "391", "status": "RESOLVED", "env": "lab"},
         meta={
             "theme": "modern-inline",
+            "mention": "\u200b",
+            "table_rows": [
+                {"Field": "Summary", "Value": "KubeServiceDown: redis in infra"},
+                {"Field": "Update", "Value": "Verification passed"},
+                {"Field": "Where", "Value": "env=lab · ns=infra · app=redis"},
+            ],
             "buttons": [
-                {"label": "Temporal", "url": "http://127.0.0.1:8080/wf"},
-                {"label": "OpenProject", "url": "https://openproject.asrax.in/work_packages/390"},
+                {
+                    "label": "View more",
+                    "url": "https://example.test/incident-cliq/details.html",
+                    "action": "preview.url",
+                },
             ],
         },
     )
     payload = _card_to_cliq_payload(card)
-    assert set(payload.keys()) - {"_plain"} <= {"text", "card", "slides"}
-    assert "buttons" not in payload
-    assert "bot" not in payload
-    assert payload["card"]["theme"] == "modern-inline"
-    assert payload["card"]["title"] == "[AM-1] INVESTIGATING"
-    assert payload["slides"][0]["type"] == "label"
-    link_slide = [s for s in payload["slides"] if s.get("type") == "list"][0]
-    assert any("OpenProject" in x for x in link_slide["data"])
-    plain = payload["_plain"]
-    assert "grafana_trace=unavailable" not in plain
-    assert "alert_id=" not in plain
+    assert set(payload.keys()) - {"_plain"} == {"text", "card", "slides", "buttons"}
+    assert len(payload["buttons"]) == 1
+    assert payload["buttons"][0]["label"] == "View more"
+    assert payload["buttons"][0]["action"]["type"] == "preview.url"
+    assert payload["buttons"][0]["action"]["data"]["web"].endswith("details.html")
 
 
 def test_plain_fallback_is_human() -> None:
     card = NotifyCard(
         event="incident.resolved",
-        title="[AM-2] RESOLVED",
-        body="Reason: verify passed",
+        title="✅ RESOLVED · WARNING · KubeServiceDown",
+        body="redis down",
         refs={"ticket": "390", "env": "lab", "status": "RESOLVED"},
-        meta={"buttons": [{"label": "OpenProject", "url": "https://openproject.asrax.in/work_packages/390"}]},
+        meta={"buttons": [{"label": "View more", "url": "https://openproject.asrax.in/work_packages/390"}]},
     )
     plain = _plain_fallback(card)
     assert "Ticket: 390" in plain
-    assert "OpenProject:" in plain
+    assert "View more:" in plain

@@ -80,20 +80,44 @@ def _failed_msg() -> IncidentMessage:
     return m
 
 
-def test_cliq_card_is_compact() -> None:
-    card = to_cliq_card(_resolved_msg())
+def test_cliq_card_is_compact(monkeypatch) -> None:
+    """Compact card with a single View more button (details page has all links)."""
+    monkeypatch.setenv("LANGFUSE_HOST", "https://langfuse.munish.org")
+    details = "https://example.test/incident-cliq/view-more.html"
+    card = to_cliq_card(_resolved_msg(), view_more_url=details)
     assert "RESOLVED" in card.title
-    assert "AM-20260717-6AB6D2" in card.title
+    assert "KubeServiceDown" in card.title or "WARNING" in card.title
     assert "Evidence dump" not in card.body
-    assert "Prometheus" in card.body or "Reason" in card.body
-    assert len(card.meta.get("buttons") or []) >= 2
-    assert "openproject.asrax.in" not in card.body  # URLs in buttons, not body dump
-    assert "grafana_trace" not in (card.refs or {})
+    assert len(card.body or "") <= 200
+    rows = card.meta.get("table_rows") or []
+    assert any(r.get("Field") == "Summary" for r in rows)
+    assert any(r.get("Field") == "IDs" and "AM-20260717-6AB6D2" in r.get("Value", "") for r in rows)
+    update = next((r.get("Value", "") for r in rows if r.get("Field") == "Update"), "")
+    assert "cAdvisor" not in update
+    assert len(update) <= 90
+    buttons = card.meta.get("buttons") or []
+    assert len(buttons) == 1
+    assert buttons[0]["label"] == "View more"
+    assert buttons[0]["url"] == details
+    assert buttons[0]["action"] == "preview.url"
+    assert card.meta["detail_links"]["langfuse"] == "https://langfuse.munish.org"
+    assert "openproject.asrax.in" not in card.body
     payload = _card_to_cliq_payload(card)
-    assert "slides" in payload
-    assert payload["card"]["title"]
-    assert "buttons" not in payload
-    assert any(s.get("title") == "Links" for s in payload["slides"])
+    assert payload["slides"][0]["type"] == "table"
+    assert len(payload["buttons"]) == 1
+    assert payload["buttons"][0]["label"] == "View more"
+    assert payload["buttons"][0]["action"]["type"] == "preview.url"
+
+
+def test_cliq_timing_fields() -> None:
+    msg = _resolved_msg()
+    msg.started_at = "2026-07-17 20:45:00 UTC"
+    msg.ended_at = "2026-07-17 21:02:00 UTC"
+    rows = {r["Field"]: r["Value"] for r in (to_cliq_card(msg).meta.get("table_rows") or [])}
+    assert rows.get("Received") == "2026-07-17 20:45:00 UTC"
+    assert rows.get("Resolution") == "2026-07-17 21:02:00 UTC"
+    assert rows.get("Time spent") == "17m 0s"
+    assert "When" not in rows
 
 
 def test_email_html_has_modern_sections() -> None:
@@ -113,8 +137,10 @@ def test_failed_email_has_for_developers() -> None:
     text = render_incident_email_text(_failed_msg())
     assert "For developers" in text
     card = to_cliq_card(_failed_msg())
-    assert "Full developer notes in email" in card.body
-    assert "Gaps" not in card.body  # full notes stay in email
+    assert "Gaps" not in card.body
+    rows = card.meta.get("table_rows") or []
+    blob = " ".join(str(r.get("Value", "")) for r in rows)
+    assert "crashloop" not in blob  # full notes stay in email/ticket
 
 
 def test_op_comment_mid_detail() -> None:

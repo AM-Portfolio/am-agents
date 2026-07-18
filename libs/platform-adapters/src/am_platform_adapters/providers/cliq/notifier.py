@@ -1,4 +1,4 @@
-"""Zoho Cliq Notifier adapter — compact modern-inline cards for channel webhooks."""
+"""Zoho Cliq Notifier — obs-platform style cards (table + open.url buttons)."""
 
 from __future__ import annotations
 
@@ -34,6 +34,22 @@ def _webhook_for_channel(channel_ref: str) -> str:
     return os.environ.get("ZOHO_CLIQ_WEBHOOK_URL", "").strip()
 
 
+def _cliq_button(label: str, url: str, tone: str = "+", *, action: str = "open.url") -> dict[str, Any]:
+    """Zoho button — open.url (new tab) or preview.url (in-chat panel ≈ popup)."""
+    action_type = (action or "open.url").strip() or "open.url"
+    if action_type == "preview.url":
+        # v3 docs use data.web; older docs use data.url — include web (primary)
+        data: dict[str, str] = {"web": url, "url": url}
+    else:
+        data = {"web": url}
+    return {
+        "label": (label or "Open")[:30],
+        "type": tone,
+        "action": {"type": action_type, "data": data},
+    }
+
+
+
 def _plain_fallback(card: NotifyCard) -> str:
     """Last-resort plain text — keep human, never key=value dumps."""
     refs = card.refs or {}
@@ -57,61 +73,60 @@ def _plain_fallback(card: NotifyCard) -> str:
 
 def _card_to_cliq_payload(card: NotifyCard) -> dict[str, Any]:
     """
-    Channel incoming webhooks (zapikey) accept only: text, card, slides.
-    They reject top-level `buttons` and often `bot` with extra_key_found.
-    Put links in a list slide instead of buttons.
+    Match am-obs-platform alert cards:
+      text + card(modern-inline) + one table slide + top-level buttons(open.url).
+
+    Full detail lives behind a single View more button (preview panel / new tab).
     """
-    from am_platform_ports.agent_identity import agent_display_name
-
-    refs = {k: str(v) for k, v in (card.refs or {}).items() if v and str(v) != "unavailable"}
     meta = card.meta or {}
-    buttons = meta.get("buttons") if isinstance(meta.get("buttons"), list) else []
     title = (card.title or "Incident").strip()[:100]
-    status = refs.get("status") or ""
-    headline = f"{status} · {title}"[:120] if status and status not in title else title
+    mention = str(meta.get("mention") or "\u200b")
 
-    label_data: dict[str, str] = {}
-    for key, label in (
-        ("status", "Status"),
-        ("ticket", "Ticket"),
-        ("env", "Env"),
-        ("done_by", "Done by"),
-        ("responsible", "Responsible"),
-        ("alert_id", "Alert ID"),
-    ):
-        if refs.get(key):
-            label_data[label] = refs[key][:120]
-    if "Done by" not in label_data:
-        label_data["Done by"] = agent_display_name()
+    table_rows = meta.get("table_rows") if isinstance(meta.get("table_rows"), list) else []
+    if not table_rows:
+        # Backward-compatible fallback from body/refs
+        refs = {k: str(v) for k, v in (card.refs or {}).items() if v}
+        body = (card.body or "").strip()
+        for field, value in (
+            ("Summary", body[:120] if body else ""),
+            ("Where", f"env={refs['env']}" if refs.get("env") else ""),
+            ("IDs", refs.get("alert_id") or ""),
+        ):
+            if value:
+                table_rows.append({"Field": field, "Value": value})
 
     slides: list[dict[str, Any]] = []
-    if label_data:
-        slides.append({"type": "label", "data": [label_data]})
-    body = (card.body or "").strip()
-    if body:
-        slides.append({"type": "text", "title": "Update", "data": body[:1500]})
+    if table_rows:
+        slides.append(
+            {
+                "type": "table",
+                "data": {"headers": ["Field", "Value"], "rows": table_rows[:10]},
+            }
+        )
 
-    link_lines: list[str] = []
-    for b in buttons[:4]:
+    raw_buttons = meta.get("buttons") if isinstance(meta.get("buttons"), list) else []
+    buttons: list[dict[str, Any]] = []
+    for b in raw_buttons[:4]:
         if not isinstance(b, dict):
             continue
         label = str(b.get("label") or "").strip()
         url = str(b.get("url") or "").strip()
+        action = str(b.get("action") or "open.url").strip() or "open.url"
         if label and url.startswith("http"):
-            link_lines.append(f"{label}: {url}")
-    if link_lines:
-        slides.append({"type": "list", "title": "Links", "data": link_lines})
+            buttons.append(_cliq_button(label, url, action=action))
 
-    # Channel webhook schema: text + card + slides only (no buttons / bot)
+    # Same shape as obs-platform _to_cliq_message
     payload: dict[str, Any] = {
-        "text": headline,
+        "text": mention[:1500],
         "card": {
-            "title": title,
             "theme": str(meta.get("theme") or "modern-inline"),
+            "title": title[:200],
         },
     }
     if slides:
         payload["slides"] = slides
+    if buttons:
+        payload["buttons"] = buttons
     payload["_plain"] = _plain_fallback(card)
     return payload
 
@@ -146,6 +161,55 @@ class CliqNotifier:
             detail = exc.read().decode("utf-8", errors="replace")
             LOG.warning("cliq rich card rejected code=%s detail=%s", exc.code, detail[:200])
             if exc.code >= 400:
+                # preview.url may be rejected on channel webhooks — retry as open.url
+                if "buttons" in payload and any(
+                    isinstance(b, dict) and (b.get("action") or {}).get("type") == "preview.url"
+                    for b in payload.get("buttons") or []
+                ):
+                    open_payload = dict(payload)
+                    open_buttons = []
+                    for b in payload.get("buttons") or []:
+                        if not isinstance(b, dict):
+                            continue
+                        web = ((b.get("action") or {}).get("data") or {}).get("web") or ""
+                        if web:
+                            open_buttons.append(_cliq_button(str(b.get("label") or "View more"), web))
+                    open_payload["buttons"] = open_buttons
+                    try:
+                        req_o = urllib.request.Request(
+                            url,
+                            data=json.dumps(open_payload).encode("utf-8"),
+                            headers={
+                                "Content-Type": "application/json",
+                                "User-Agent": "am-platform-adapters/0.1 (CliqNotifier)",
+                            },
+                            method="POST",
+                        )
+                        with urllib.request.urlopen(req_o, timeout=15) as resp_o:
+                            resp_o.read()
+                        return f"cliq-{uuid.uuid4().hex[:12]}"
+                    except urllib.error.HTTPError as exc_o:
+                        detail = exc_o.read().decode("utf-8", errors="replace")
+                        LOG.warning("cliq open.url retry rejected code=%s detail=%s", exc_o.code, detail[:200])
+
+                # Retry without buttons if channel rejects them; keep table card
+                if "buttons" in payload:
+                    slim = {k: v for k, v in payload.items() if k != "buttons"}
+                    try:
+                        req_s = urllib.request.Request(
+                            url,
+                            data=json.dumps(slim).encode("utf-8"),
+                            headers={
+                                "Content-Type": "application/json",
+                                "User-Agent": "am-platform-adapters/0.1 (CliqNotifier)",
+                            },
+                            method="POST",
+                        )
+                        with urllib.request.urlopen(req_s, timeout=15) as resp_s:
+                            resp_s.read()
+                        return f"cliq-{uuid.uuid4().hex[:12]}"
+                    except urllib.error.HTTPError:
+                        pass
                 body2 = json.dumps({"text": plain}).encode("utf-8")
                 req2 = urllib.request.Request(
                     url,

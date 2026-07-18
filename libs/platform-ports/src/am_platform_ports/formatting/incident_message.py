@@ -1,10 +1,31 @@
-"""Render IncidentMessage for Cliq (compact) and OpenProject (mid-detail)."""
+"""Render IncidentMessage for Cliq (obs-platform style) and OpenProject (mid-detail)."""
 
 from __future__ import annotations
 
 from am_platform_ports.agent_identity import agent_display_name
 from am_platform_ports.schemas.core import NotifyCard
 from am_platform_ports.schemas.incident_message import DeveloperLinks, IncidentMessage
+
+_STATUS_EMOJI = {
+    "RESOLVED": "✅",
+    "FAILED": "❌",
+    "NEEDS_HUMAN": "🟠",
+    "INVESTIGATING": "🔵",
+    "AUTO_INFRA": "🔵",
+}
+
+_SEVERITY_UI = {
+    "critical": {"emoji": "🔴", "label": "CRITICAL"},
+    "error": {"emoji": "🔴", "label": "ERROR"},
+    "high": {"emoji": "🟠", "label": "HIGH"},
+    "warning": {"emoji": "🟡", "label": "WARNING"},
+    "info": {"emoji": "🔵", "label": "INFO"},
+    "unknown": {"emoji": "⚪", "label": "UNKNOWN"},
+}
+
+
+def _join(*parts: str, sep: str = " · ") -> str:
+    return sep.join(p for p in parts if p and str(p).strip())
 
 
 def _link_line(label: str, url: str, *, missing: str = "unavailable") -> str:
@@ -31,55 +52,123 @@ def developer_links_text(links: DeveloperLinks) -> str:
     return "\n".join(lines)
 
 
-def to_cliq_card(msg: IncidentMessage) -> NotifyCard:
-    """Important-only chat card — short title, clean body; links via meta for Cliq list slide."""
-    aid = msg.tracking_id or msg.alert_id or "AM"
-    status = msg.status or "INVESTIGATING"
-    problem = (msg.problem or "incident").strip()
-    # Card title stays short so Cliq header does not truncate into garbage
-    title = f"[{aid}] {status}"
-    reason = (msg.success_summary or msg.reason or "").strip()
-    body_parts = [
-        problem[:180],
-        f"Reason: {reason[:220]}" if reason else "",
-    ]
-    if msg.developer_notes and msg.status in {"FAILED", "NEEDS_HUMAN"}:
-        teaser = (msg.developer_notes.developer_summary or "").strip()
-        if teaser:
-            body_parts.append(f"For developers: {teaser[:160]}")
-        body_parts.append("Full developer notes in email.")
-    if msg.mail_teaser:
-        body_parts.append(msg.mail_teaser[:120])
-    body = "\n".join(p for p in body_parts if p)
+def to_cliq_card(msg: IncidentMessage, *, view_more_url: str | None = None) -> NotifyCard:
+    """
+    Compact Cliq card matching am-obs-platform alert format:
+      text     — mention / thin placeholder (no duplicate title)
+      card     — emoji · status · severity · alertname
+      slides   — short Field|Value table (no long dumps)
+      buttons  — single View more → details page (links + summary/update)
 
-    refs: dict[str, str] = {
-        "alert_id": aid,
-        "ticket": msg.ticket_number or msg.ticket_ref,
-        "status": status,
-        "env": msg.env,
-        "done_by": msg.done_by or agent_display_name(),
-    }
-    if msg.responsible:
-        refs["responsible"] = msg.responsible
+    Full Summary/Update + Temporal/Langfuse/OpenProject/Alert live on View more page.
+    """
+    from am_platform_ports.formatting.cliq_details import incident_timing, langfuse_public_url
+
+    aid = (msg.tracking_id or msg.alert_id or "AM").strip()
+    status = (msg.status or "INVESTIGATING").strip().upper()
+    alert_name = (msg.alert_id or msg.problem or "Incident").strip()
+    # Prefer short alertname for title (not the full problem sentence)
+    if ":" in alert_name and len(alert_name) > 40:
+        alert_name = alert_name.split(":", 1)[0].strip() or alert_name
+    alert_name = alert_name[:40]
+
+    sev_raw = (msg.severity or "unknown").strip().lower()
+    sev = _SEVERITY_UI.get(sev_raw, _SEVERITY_UI["unknown"])
+    emoji = _STATUS_EMOJI.get(status, sev["emoji"])
+    title = f"{emoji} {status} · {sev['label']} · {alert_name}"
+    if len(title) > 80:
+        title = title[:77] + "…"
+
+    summary = (msg.problem or alert_name).strip()
+    summary = " ".join(summary.split())
+    if len(summary) > 120:
+        summary = summary[:117] + "…"
+
+    # One short action line — full text on View more page
+    update = (msg.success_summary or msg.reason or "").strip()
+    if not update:
+        update = {
+            "INVESTIGATING": "Investigation started",
+            "AUTO_INFRA": "Automated infrastructure remediation in progress",
+            "NEEDS_HUMAN": "Human review required",
+            "RESOLVED": "Incident resolved and verification passed",
+            "FAILED": "Incident handling or verification failed",
+        }.get(status, "Incident updated")
+    update = " ".join(update.split())
+    update_teaser = update[:90] + ("…" if len(update) > 90 else "")
+
+    where = _join(
+        f"env={msg.env}" if msg.env else "",
+        f"ns={msg.namespace}" if msg.namespace else "",
+        f"app={msg.app}" if msg.app else "",
+        f"team={msg.team}" if msg.team else "",
+    )
+    who = _join(
+        msg.responsible or "",
+        f"backup={msg.backup}" if msg.backup else "",
+    )
+    timing = incident_timing(msg)
+    ids = _join(aid, f"ticket={msg.ticket_number}" if msg.ticket_number else "")
+
+    # Keep card short — Summary/Update teasers only; full text in View more
+    table_rows: list[dict[str, str]] = []
+    for field, value in (
+        ("Summary", summary),
+        ("Update", update_teaser),
+        ("Where", where),
+        ("Owners", who),
+        ("Received", timing.get("received", "")),
+        ("Resolution", timing.get("resolved", "")),
+        ("Time spent", timing.get("time_spent", "")),
+        ("IDs", ids),
+        ("Done by", msg.done_by or agent_display_name()),
+    ):
+        if value:
+            table_rows.append({"Field": field, "Value": value})
 
     links = msg.links
+    more_url = (view_more_url or "").strip()
+    if not more_url.startswith("http"):
+        # Prefer ticket, then alert — still one View more entry point
+        more_url = links.ticket_url or links.alert_url or links.temporal_url or langfuse_public_url()
+
     buttons: list[dict[str, str]] = []
-    for label, url in (
-        ("Temporal", links.temporal_url),
-        (links.ticket_label or "Ticket", links.ticket_url),
-        ("Alert", links.alert_url),
-        ("Grafana trace", links.grafana_trace_url),
-    ):
-        # Only real URLs become buttons — never "unavailable" noise in chat
-        if url and str(url).startswith("http"):
-            buttons.append({"label": label, "url": url})
+    if more_url.startswith("http"):
+        buttons.append(
+            {
+                "label": "View more",
+                "url": more_url,
+                # Cliq preview panel ≈ popup; open.url fallback handled by notifier
+                "action": "preview.url",
+            }
+        )
 
     return NotifyCard(
         event=f"incident.{status.lower()}",
         title=title[:100],
-        body=body[:900],
-        refs={k: v for k, v in refs.items() if v},
-        meta={"buttons": buttons[:4], "theme": "modern-inline"},
+        body=summary[:200],  # plain-fallback only; payload uses table
+        refs={
+            k: v
+            for k, v in {
+                "status": status,
+                "env": msg.env,
+                "ticket": msg.ticket_number or msg.ticket_ref,
+                "alert_id": aid,
+            }.items()
+            if v
+        },
+        meta={
+            "theme": "modern-inline",
+            "mention": "\u200b",  # avoid duplicating title in chat (obs-platform style)
+            "table_rows": table_rows,
+            "buttons": buttons,
+            "detail_links": {
+                "openproject": links.ticket_url,
+                "alert": links.alert_url,
+                "temporal": links.temporal_url,
+                "langfuse": langfuse_public_url(),
+            },
+        },
     )
 
 

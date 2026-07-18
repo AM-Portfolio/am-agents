@@ -9,6 +9,7 @@ from typing import Any
 
 from am_platform_adapters.links import build_developer_links, ticket_number
 from am_platform_ports.agent_identity import agent_display_name
+from am_platform_ports.formatting.cliq_details import publish_cliq_view_more
 from am_platform_ports.formatting.incident_email import (
     email_subject,
     render_incident_email_html,
@@ -131,7 +132,7 @@ def build_incident_message(
         team=str(labels.get("team") or ""),
         app=str(labels.get("application") or labels.get("app") or labels.get("service") or ""),
         namespace=str(labels.get("namespace") or ""),
-        started_at=str(alert.get("starts_at") or "")[:32],
+        started_at=str(alert.get("starts_at") or "")[:64],
         notified_at=_now_iso(),
         ended_at=_now_iso() if ended else "",
         decision=decision,
@@ -153,9 +154,11 @@ def notify_incident_channels(
     also_ticket_comment: bool = True,
 ) -> dict[str, str]:
     """Send compact Cliq + optional HTML mail; soft-fail mail. Optionally comment OP."""
-    out: dict[str, str] = {"cliq": "", "mail": "", "ticket_comment": ""}
+    out: dict[str, str] = {"cliq": "", "mail": "", "ticket_comment": "", "view_more": ""}
 
-    card = to_cliq_card(msg)
+    view_more_url = publish_cliq_view_more(msg, docs=getattr(ports, "docs", None))
+    out["view_more"] = view_more_url or (msg.links.ticket_url or "")
+    card = to_cliq_card(msg, view_more_url=out["view_more"] or None)
     try:
         out["cliq"] = ports.notifier.send_card(channel_ref=channel_ref, card=card)
     except Exception as exc:  # noqa: BLE001
