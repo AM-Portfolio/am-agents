@@ -9,14 +9,6 @@ import os
 LOG = logging.getLogger("support_agent.worker")
 
 
-def assert_safe_task_queue(queue: str) -> None:
-    if queue == "agent-platform":
-        raise SystemExit(
-            "Refusing to bind support-agent worker to legacy queue 'agent-platform'. "
-            "Use TEMPORAL_TASK_QUEUE=support-agent-v2"
-        )
-
-
 async def run_worker() -> None:
     try:
         from temporalio.client import Client
@@ -27,15 +19,12 @@ async def run_worker() -> None:
         ) from exc
 
     from am_support_agent.orchestrator.activities.a2a import execute_plan
-    from am_support_agent.orchestrator.activities.incident import (
-        bootstrap_incident,
-        finalize_incident,
-        record_hitl,
-    )
+    from am_support_agent.orchestrator.activities.incident import INCIDENT_ACTIVITIES
     from am_support_agent.orchestrator.activities.spt import (
         bootstrap_spt,
         resolve_spt_catalog,
     )
+    from am_support_agent.orchestrator.queue import assert_safe_task_queue, resolve_task_queue
     from am_support_agent.orchestrator.workflows.a2a_run import SupportA2AWorkflow
     from am_support_agent.orchestrator.workflows.alert_incident import (
         AlertIncidentWorkflow,
@@ -49,7 +38,7 @@ async def run_worker() -> None:
     )
     host = os.getenv("TEMPORAL_HOST", "localhost:7233")
     ns = os.getenv("TEMPORAL_NAMESPACE", "default")
-    queue = os.getenv("TEMPORAL_TASK_QUEUE", "support-agent-v2")
+    queue = resolve_task_queue()
     assert_safe_task_queue(queue)
     LOG.info(
         "support-agent worker connecting Temporal %s ns=%s queue=%s",
@@ -69,9 +58,7 @@ async def run_worker() -> None:
         workflows=[SupportA2AWorkflow, AlertIncidentWorkflow, SptRunWorkflow],
         activities=[
             execute_plan,
-            bootstrap_incident,
-            finalize_incident,
-            record_hitl,
+            *INCIDENT_ACTIVITIES,
             bootstrap_spt,
             resolve_spt_catalog,
         ],

@@ -2,8 +2,8 @@
 #
 # Mapping: pod env-var -> Vault key (tool-agent style).
 # Path (per env in values.{env}.yaml):
-#   apps/data/{env}/services/am-agents-ops
-#   (UI: apps/{env}/services/am-agents-ops)
+#   apps/data/{env}/services/am-agents
+#   (UI: apps/{env}/services/am-agents)
 #
 # Keys on that secret include DB url, GrowthBook, Zoho, Cliq, OpenProject,
 # Langfuse, MinIO, Grafana, LiteLLM, Temporal, MCP.

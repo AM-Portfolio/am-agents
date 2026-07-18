@@ -82,8 +82,20 @@ class CapabilityId(str, Enum):
     OBSERVE_METRICS_QUERY = "observe.metrics.query"
     OBSERVE_LOGS_QUERY = "observe.logs.query"
     OBSERVE_TIMESERIES_QUERY = "observe.timeseries.query"
+    ALERT_SILENCE_CREATE = "alert.silence.create"
+    ALERT_SILENCE_GET = "alert.silence.get"
+    ALERT_SILENCE_EXPIRE = "alert.silence.expire"
     SPT_TEST_DATA_PREPARE = "spt.test-data.prepare"
     SPT_EXECUTE = "spt.execute"
     SPT_STATUS = "spt.status"
     SPT_CANCEL = "spt.cancel"
     SECRET_INJECT = "secret.inject"
+
+
+class CapabilityEffect(str, Enum):
+    """Classifies whether a capability is a real remediation vs admin/notify."""
+
+    REMEDIATION = "remediation"
+    ADMIN = "admin"
+    NOTIFY = "notify"
+    OBSERVE = "observe"

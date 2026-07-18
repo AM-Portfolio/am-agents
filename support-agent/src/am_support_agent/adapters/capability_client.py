@@ -210,11 +210,83 @@ class FakeCapabilityClient:
             )
         if cap.startswith("observe."):
             kind = cap.split(".", 1)[1].split(".", 1)[0]
+            recovery = bool(args.get("recovery"))
+            if kind == "metrics":
+                if recovery:
+                    data = {
+                        "kind": kind,
+                        "status": "ok",
+                        "health": "healthy",
+                        "summary": "fake metrics healthy",
+                        "points": [[0, 0.0]],
+                        "value": 0,
+                    }
+                else:
+                    data = {
+                        "kind": kind,
+                        "status": "firing",
+                        "health": "unhealthy",
+                        "summary": "fake metrics unhealthy",
+                        "points": [[0, 1.0]],
+                        "value": 1,
+                    }
+            else:
+                data = {
+                    "kind": kind,
+                    "status": "ok" if recovery else "firing",
+                    "error_count": 0 if recovery else 1,
+                    "summary": f"fake {cap}",
+                }
             return CapabilityResult(
                 ok=True,
                 capability=cap,
                 provider="fake",
-                data={"kind": kind, "status": "ok", "summary": f"fake {cap}", "points": []},
+                data=data,
+            )
+        if cap == "work-item.transition":
+            ref = str(args.get("work_item_ref") or "")
+            item = self._items.setdefault(ref, {"work_item_ref": ref})
+            item["status"] = str(args.get("status") or "closed")
+            return CapabilityResult(ok=True, capability=cap, provider="fake", data=dict(item))
+        if cap == "alert.silence.create":
+            env = str(args.get("env") or "").strip()
+            service = str(args.get("service") or "").strip()
+            minutes = int(args.get("minutes") or 60)
+            if not env or not service:
+                return CapabilityResult(
+                    ok=False,
+                    capability=cap,
+                    error="env and service required",
+                    provider="fake",
+                )
+            if minutes < 5 or minutes > 60 * 24 * 14:
+                return CapabilityResult(
+                    ok=False,
+                    capability=cap,
+                    error="duration must be between 5 minutes and 14 days",
+                    provider="fake",
+                )
+            self._counter += 1
+            silence_id = f"fake:silence:{self._counter}"
+            return CapabilityResult(
+                ok=True,
+                capability=cap,
+                provider="fake",
+                data={
+                    "silence_id": silence_id,
+                    "starts_at": "2026-01-01T00:00:00Z",
+                    "ends_at": "2026-01-01T01:00:00Z",
+                    "env": env,
+                    "service": service,
+                    "minutes": minutes,
+                },
+            )
+        if cap in {"alert.silence.get", "alert.silence.expire"}:
+            return CapabilityResult(
+                ok=True,
+                capability=cap,
+                provider="fake",
+                data={"silence_id": args.get("silence_id") or "", "ok": True},
             )
         if cap.startswith("chat.") or cap.startswith("mail."):
             return CapabilityResult(

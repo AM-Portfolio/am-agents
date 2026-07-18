@@ -1,0 +1,19 @@
+name: alert
+display_name: Alert
+enabled: false
+version: "0.1.0"
+
+infer_keywords: ['alert', 'silence', 'alertmanager']
+
+env_prefix: ALERT_
+
+supports_mcp: false
+has_entities: false
+health_check: skip
+
+prompts:
+  intent:
+    source: file
+    name: tool-agent/intent/alert
+    label: "{{APP_ENV}}"
+    fallback: prompts/intent.yaml

@@ -1,5 +1,5 @@
 # Dev: companion worker on; canary off (legacy remains default).
-# Vault folder: apps/data/dev/services/am-agents-ops
+# Vault folder: apps/data/dev/services/am-agents
 environment: dev
 
 vault:
@@ -12,3 +12,4 @@ vault:
 env:
   DEPLOYMENT_ENVIRONMENT: "dev"
   SUPPORT_AGENT_RUNTIME_MODE: "dev"
+  TEMPORAL_TASK_QUEUE: "support-agent-v2"

@@ -8,6 +8,13 @@ from am_support_agent.intelligence.context import (
     IncidentValidator,
     OutcomeEvaluator,
 )
+from am_support_agent.intelligence.evidence_policy import (
+    DEFAULT_POLICY,
+    classify_from_evidence,
+    evaluate_observation,
+    evaluate_recovery,
+    select_policy,
+)
 
 __all__ = [
     "ActionPlanner",
@@ -16,5 +23,10 @@ __all__ = [
     "EpisodeRetriever",
     "IncidentValidator",
     "OutcomeEvaluator",
+    "DEFAULT_POLICY",
+    "classify_from_evidence",
+    "evaluate_observation",
+    "evaluate_recovery",
+    "select_policy",
     "default_catalog_root",
 ]

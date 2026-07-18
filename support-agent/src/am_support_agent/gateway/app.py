@@ -122,6 +122,26 @@ class CanaryDecideBody(BaseModel):
     key: str = ""
 
 
+class WorkflowFeedbackBody(BaseModel):
+    kind: str = "silence"
+    requester: str = ""
+    reason: str = ""
+    notes: str = ""
+    duration_minutes: int = 60
+    env: str = ""
+    service: str = ""
+    request_id: str = ""
+    matchers: dict[str, str] = Field(default_factory=dict)
+
+
+class WorkflowApprovalBody(BaseModel):
+    request_id: str = ""
+    actor: str = ""
+    scope_hash: str = ""
+    notes: str = ""
+    timestamp: str = ""
+
+
 def create_app(
     *,
     registry: AgentRegistry | None = None,
@@ -613,7 +633,10 @@ def create_app(
 
     @app.post("/v2/workflows/{workflow_id}/signals/{signal_name}")
     async def signal_workflow(
-        workflow_id: str, signal_name: str, _: str = Depends(_auth)
+        workflow_id: str,
+        signal_name: str,
+        body: dict[str, Any] | None = None,
+        _: str = Depends(_auth),
     ) -> dict[str, Any]:
         if signal_name not in HITL_SIGNAL_NAMES:
             raise HTTPException(
@@ -626,7 +649,9 @@ def create_app(
             )
         try:
             result = await tapi.signal_workflow(
-                workflow_id=workflow_id, signal_name=signal_name
+                workflow_id=workflow_id,
+                signal_name=signal_name,
+                payload=dict(body or {}) or None,
             )
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=502, detail=str(exc)[:400]) from exc
@@ -637,9 +662,90 @@ def create_app(
                 name=f"signal.{signal_name}",
                 status=WorkflowStepStatus.PASSED,
                 bump_attempts=True,
-                detail={"signal": signal_name},
+                detail={"signal": signal_name, "payload_keys": sorted((body or {}).keys())},
             )
         return {**result, "module": "support-agent"}
+
+    @app.post("/v2/workflows/{workflow_id}/feedback")
+    async def workflow_feedback(
+        workflow_id: str,
+        body: WorkflowFeedbackBody,
+        _: str = Depends(_auth),
+    ) -> dict[str, Any]:
+        """Canonical authenticated feedback intake (silence / disable candidate / note)."""
+        if not tapi.temporal_enabled():
+            raise HTTPException(
+                status_code=503,
+                detail="Temporal disabled; set SUPPORT_AGENT_TEMPORAL_ENABLED=true",
+            )
+        payload = body.model_dump()
+        payload["workflow_id"] = workflow_id
+        try:
+            result = await tapi.signal_workflow(
+                workflow_id=workflow_id,
+                signal_name="alert.feedback",
+                payload=payload,
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail=str(exc)[:400]) from exc
+        ledger_run = workflow_ledger.get_by_workflow_id(workflow_id)
+        if ledger_run is not None:
+            workflow_ledger.upsert_step(
+                run_ref=ledger_run.run_ref,
+                name="signal.alert.feedback",
+                status=WorkflowStepStatus.PASSED,
+                bump_attempts=True,
+                detail={"kind": body.kind, "requester": body.requester},
+            )
+        return {**result, "feedback": payload, "module": "support-agent"}
+
+    @app.post("/v2/workflows/{workflow_id}/approvals/{purpose}")
+    async def workflow_approval(
+        workflow_id: str,
+        purpose: str,
+        body: WorkflowApprovalBody,
+        _: str = Depends(_auth),
+    ) -> dict[str, Any]:
+        """Purpose-specific approval: investigation | known_fix | silence."""
+        from am_support_agent.orchestrator.hitl import APPROVAL_PURPOSES
+
+        if purpose not in APPROVAL_PURPOSES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"approval purpose not allowed: {purpose}",
+            )
+        signal_name = f"approve.{purpose}"
+        if signal_name not in HITL_SIGNAL_NAMES:
+            raise HTTPException(
+                status_code=400, detail=f"signal not allowed: {signal_name}"
+            )
+        if not tapi.temporal_enabled():
+            raise HTTPException(
+                status_code=503,
+                detail="Temporal disabled; set SUPPORT_AGENT_TEMPORAL_ENABLED=true",
+            )
+        payload = {
+            "purpose": purpose,
+            **body.model_dump(),
+        }
+        try:
+            result = await tapi.signal_workflow(
+                workflow_id=workflow_id,
+                signal_name=signal_name,
+                payload=payload,
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail=str(exc)[:400]) from exc
+        ledger_run = workflow_ledger.get_by_workflow_id(workflow_id)
+        if ledger_run is not None:
+            workflow_ledger.upsert_step(
+                run_ref=ledger_run.run_ref,
+                name=f"signal.{signal_name}",
+                status=WorkflowStepStatus.PASSED,
+                bump_attempts=True,
+                detail=payload,
+            )
+        return {**result, "approval": payload, "module": "support-agent"}
 
     @app.get("/v2/workflows/{workflow_id}/status")
     async def workflow_status(

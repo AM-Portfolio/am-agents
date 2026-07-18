@@ -1,0 +1,14 @@
+adapter: alert
+operations:
+  silence.create:
+    adapter_method: silence_create
+    read_only: false
+    approval_risk: create
+  silence.get:
+    adapter_method: silence_get
+    read_only: true
+    approval_risk: read
+  silence.expire:
+    adapter_method: silence_expire
+    read_only: false
+    approval_risk: delete

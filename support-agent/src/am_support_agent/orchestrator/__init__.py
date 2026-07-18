@@ -7,11 +7,17 @@ from typing import Any
 
 from am_support_agent.contracts.enums import A2AOp, SupportDomain
 from am_support_agent.contracts.schemas import TaskBudget, TaskRequest
+from am_support_agent.orchestrator.queue import (
+    SHARED_QUEUE,
+    default_queue_for_env,
+    resolve_task_queue,
+)
 from am_support_agent.orchestrator.router import Router
 from am_support_agent.registry import AgentRegistry
 from am_support_agent.runtime import new_task_id, validate_fanout
 
-TEMPORAL_TASK_QUEUE = "support-agent-v2"
+# Default unsuffixed name — runtime code must call resolve_task_queue().
+TEMPORAL_TASK_QUEUE = SHARED_QUEUE
 
 
 @dataclass
@@ -108,6 +114,9 @@ def __getattr__(name: str) -> Any:
 
 __all__ = [
     "TEMPORAL_TASK_QUEUE",
+    "SHARED_QUEUE",
+    "default_queue_for_env",
+    "resolve_task_queue",
     "PlannedTask",
     "ExecutionPlan",
     "Planner",
