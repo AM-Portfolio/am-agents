@@ -203,7 +203,12 @@ class AlertIncidentWorkflow:
         self._steps[f"{key}_logs"] = logs
         return [metrics.get("observation") or {}, logs.get("observation") or {}]
 
-    async def _ticket_and_notify(self, actions: list[dict[str, Any]]) -> None:
+    async def _ticket_and_notify(
+        self,
+        actions: list[dict[str, Any]],
+        *,
+        comment_body: str | None = None,
+    ) -> None:
         alert = dict(self._state.get("alert") or {})
         owner = await self._act(
             resolve_owner, {"tracking_id": self._tracking_id, "alert": alert}
@@ -249,11 +254,59 @@ class AlertIncidentWorkflow:
             {
                 "tracking_id": self._tracking_id,
                 "work_item": self._state.get("work_item"),
-                "body": f"Investigation started for {self._tracking_id}",
+                "body": comment_body or f"Investigation started for {self._tracking_id}",
                 "idempotency_key": f"{self._tracking_id}:wi-comment-start",
             },
         )
         self._steps["comment_ticket"] = comment
+
+    async def _handoff_to_human(
+        self,
+        *,
+        reason: str,
+        approval_purpose: str,
+    ) -> dict[str, Any]:
+        """Assign an open ticket to a human and complete this workflow run."""
+        self._state["human_required"] = {
+            "reason": reason,
+            "approval_purpose": approval_purpose,
+        }
+        await self._ticket_and_notify(
+            [],
+            comment_body=(
+                f"Human action required for {self._tracking_id}. "
+                f"Purpose: {approval_purpose}. Reason: {reason}"
+            ),
+        )
+        await self._persist(outcome="human_required", actions=[])
+        recorded = await self._act(
+            record_hitl,
+            {
+                "tracking_id": self._tracking_id,
+                "episode_id": self._state.get("episode_id"),
+                "hitl": {
+                    **self._hitl.as_dict(),
+                    "required": True,
+                    "reason": reason,
+                    "approval_purpose": approval_purpose,
+                },
+            },
+            timeout_s=30,
+        )
+        self._steps["record_hitl"] = recorded
+        self._phase = "human_handoff_complete"
+        return {
+            "status": "human_required",
+            "tracking_id": self._tracking_id,
+            "phase": self._phase,
+            "steps": self._steps,
+            "owner": self._state.get("owner"),
+            "work_item": self._state.get("work_item"),
+            "episode_id": self._state.get("episode_id"),
+            "approval_purpose": approval_purpose,
+            "reason": reason,
+            "hitl": self._hitl.as_dict(),
+        }
 
     async def _persist(self, *, outcome: str, actions: list[dict[str, Any]] | None = None) -> None:
         ep = await self._act(
@@ -447,32 +500,17 @@ class AlertIncidentWorkflow:
 
             actions: list[dict[str, Any]] = []
             if gate.get("needs_hitl"):
-                self._phase = "awaiting_hitl"
-                await workflow.wait_condition(lambda: self._hitl.waiting_satisfied())
-                recorded = await self._act(
-                    record_hitl,
-                    {
-                        "tracking_id": self._tracking_id,
-                        "episode_id": self._state.get("episode_id"),
-                        "hitl": self._hitl.as_dict(),
-                    },
-                    timeout_s=30,
+                decision = dict(gate.get("decision") or {})
+                reasons = [
+                    str(reason)
+                    for reason in decision.get("reasons") or []
+                    if str(reason).strip()
+                ]
+                reason = "; ".join(reasons) or "intelligence gate requires human review"
+                return await self._handoff_to_human(
+                    reason=reason,
+                    approval_purpose="investigation",
                 )
-                self._steps["record_hitl"] = recorded
-                if not self._hitl.investigation_approved and not self._hitl.approved:
-                    if self._hitl.resolved:
-                        # Resolved during HITL wait — still require recovery evidence later.
-                        pass
-                    else:
-                        self._hitl.closed = True
-                        self._phase = "inconclusive_closed"
-                        await self._persist(outcome="inconclusive_closed", actions=[])
-                        return {
-                            "status": "inconclusive_closed",
-                            "tracking_id": self._tracking_id,
-                            "steps": self._steps,
-                            "hitl": self._hitl.as_dict(),
-                        }
 
             # Known-fix vs investigation plan
             proposed = await self._act(
@@ -485,25 +523,11 @@ class AlertIncidentWorkflow:
             )
             self._steps["propose_known_fix"] = proposed
             if proposed.get("matched"):
-                self._phase = "awaiting_known_fix_approval"
-                self._hitl.known_fix_approved = False
-                await workflow.wait_condition(lambda: self._hitl.known_fix_waiting_satisfied())
-                if self._hitl.known_fix_approved:
-                    last = self._hitl.last_approval
-                    expected = str(proposed.get("step_hash") or "")
-                    if last and expected and last.scope_hash and last.scope_hash != expected:
-                        # Hash mismatch — fall back to empty investigation plan.
-                        actions = []
-                    else:
-                        actions = list(proposed.get("actions") or [])
-                await self._act(
-                    record_hitl,
-                    {
-                        "tracking_id": self._tracking_id,
-                        "episode_id": self._state.get("episode_id"),
-                        "hitl": self._hitl.as_dict(),
-                    },
-                    timeout_s=30,
+                self._state["proposed_known_fix"] = proposed
+                candidate = str(proposed.get("candidate_id") or "matched remediation")
+                return await self._handoff_to_human(
+                    reason=f"Known fix {candidate} requires approval before execution",
+                    approval_purpose="known_fix",
                 )
             else:
                 planned = await self._act(

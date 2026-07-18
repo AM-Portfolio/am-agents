@@ -52,6 +52,52 @@ def test_hitl_state_waiting():
 
 
 @pytest.mark.asyncio
+async def test_human_handoff_assigns_ticket_and_completes(monkeypatch):
+    from am_support_agent.orchestrator.workflows.alert_incident import (
+        AlertIncidentWorkflow,
+    )
+
+    incident = AlertIncidentWorkflow()
+    incident._tracking_id = "AM-HITL-1"
+    incident._state = {
+        "owner": {"assignee_ref": "user:ops"},
+        "work_item": {"id": "INC-1"},
+    }
+    calls: list[str] = []
+
+    async def ticket_and_notify(actions, *, comment_body=None):
+        assert actions == []
+        assert "Human action required" in comment_body
+        calls.append("ticket_and_notify")
+
+    async def persist(*, outcome, actions=None):
+        assert outcome == "human_required"
+        assert actions == []
+        incident._state["episode_id"] = "episode-1"
+        calls.append("persist")
+
+    async def act(fn, payload, *, timeout_s=120):
+        assert payload["episode_id"] == "episode-1"
+        assert payload["hitl"]["required"] is True
+        calls.append("record_hitl")
+        return {"phase": "record_hitl"}
+
+    monkeypatch.setattr(incident, "_ticket_and_notify", ticket_and_notify)
+    monkeypatch.setattr(incident, "_persist", persist)
+    monkeypatch.setattr(incident, "_act", act)
+
+    result = await incident._handoff_to_human(
+        reason="missing evidence",
+        approval_purpose="investigation",
+    )
+
+    assert calls == ["ticket_and_notify", "persist", "record_hitl"]
+    assert result["status"] == "human_required"
+    assert result["phase"] == "human_handoff_complete"
+    assert result["work_item"]["id"] == "INC-1"
+
+
+@pytest.mark.asyncio
 async def test_incident_bootstrap_gated(monkeypatch):
     monkeypatch.delenv("SUPPORT_AGENT_INCIDENT_PARITY", raising=False)
     from am_support_agent.orchestrator.activities.incident import bootstrap_incident
