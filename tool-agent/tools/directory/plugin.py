@@ -13,10 +13,10 @@ class DirectoryTool(CapabilityTool):
 
     def build_adapter(self, provider: str) -> Any:
         if provider == 'openproject':
-            from .adapters.openproject.adapter import Adapter
+            from tools.directory.adapters.openproject.adapter import Adapter
             return Adapter()
         if provider == 'memory':
-            from .adapters.memory import MemoryAdapter
+            from tools.directory.adapters.memory import MemoryAdapter
             return MemoryAdapter()
         raise ValueError(f'unknown provider {provider!r}')
 
