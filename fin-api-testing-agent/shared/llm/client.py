@@ -198,7 +198,7 @@ class DirectLiteLLMClient:
             data = resp.json()
 
         message = data["choices"][0]["message"]
-        content = message.get("content") or ""
+        content = message.get("content") or message.get("reasoning_content") or ""
         output_str = json.dumps(message.get("tool_calls")) if message.get("tool_calls") else content
         asyncio.create_task(_emit_langfuse("fin.chat", messages, output_str, self.model))
 
@@ -238,7 +238,7 @@ class DirectLiteLLMClient:
                 raise RuntimeError(f"LiteLLM failed [{resp.status_code}]: {err_text}")
             data = resp.json()
 
-        content = data["choices"][0]["message"]["content"]
+        content = data["choices"][0]["message"].get("content") or data["choices"][0]["message"].get("reasoning_content") or ""
         asyncio.create_task(_emit_langfuse(generation_name, messages, content, self.model))
 
         usage_raw = data.get("usage") or {}
@@ -308,7 +308,7 @@ class DirectLiteLLMClient:
                             "total_tokens": int(u.get("total_tokens") or 0),
                         }
                     delta = (data.get("choices") or [{}])[0].get("delta") or {}
-                    token = delta.get("content")
+                    token = delta.get("content") or delta.get("reasoning_content")
                     if token:
                         parts.append(token)
                         if on_token:
