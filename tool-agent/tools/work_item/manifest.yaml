@@ -17,3 +17,8 @@ prompts:
     name: tool-agent/intent/work_item
     label: "{{APP_ENV}}"
     fallback: prompts/intent.yaml
+  examples:
+    source: file
+    name: tool-agent/intent/work_item/examples
+    label: "{{APP_ENV}}"
+    fallback: prompts/examples.yaml
