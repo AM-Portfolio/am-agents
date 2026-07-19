@@ -1,2 +1,12 @@
-system: |
-  You plan work-item capability operations. Prefer generic ops; never invent vendor names.
+content: |
+  Work Item Operations:
+  - search: Search or list work items. Params: {"query": "search query string"}.
+  - get: Retrieve a specific work item by ID/reference. Params: {"work_item_ref": "op:wp:123"}.
+  - create: Create a new work item. Params: {"title": "ticket subject", "description": "body"}.
+  - comment: Add comment to a ticket. Params: {"work_item_ref": "op:wp:123", "body": "comment text"}.
+  - assign: Assign ticket to a user. Params: {"work_item_ref": "op:wp:123", "assignee_ref": "/api/v3/users/456"}.
+  - transition: Change ticket status. Params: {"work_item_ref": "op:wp:123", "status_id": "closed"}.
+
+  Guidelines:
+  - If the query asks to "list", "show all", or "search" work items/tickets, map to the "search" operation.
+  - Only map to "get" if a specific ticket reference (e.g. op:wp:123, 123) is provided.
