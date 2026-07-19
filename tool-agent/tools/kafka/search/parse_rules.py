@@ -7,9 +7,9 @@ from app.models.intent import IntentDocument
 from tools.kafka.search.convention import extract_topic
 
 
-def parse_rules(query: str, *, tool_name: str) -> IntentDocument | None:
+def parse_rules(query: str, *, tool_name: str, backend_hint: str | None = None) -> IntentDocument | None:
     q = query.lower()
-    if not (tool_name == "kafka" or "kafka" in q):
+    if not (tool_name == "kafka" or backend_hint == "kafka" or "kafka" in q):
         return None
 
     topic = extract_topic(query)
