@@ -1,0 +1,6 @@
+adapter: mail
+operations:
+  message.send:
+    adapter_method: message_send
+    read_only: false
+    approval_risk: send

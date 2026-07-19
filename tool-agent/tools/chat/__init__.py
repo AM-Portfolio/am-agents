@@ -1,0 +1,1 @@
+"""Generic chat capability plugin."""

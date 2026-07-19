@@ -106,10 +106,15 @@ async def run_tools_query(request: ToolsQueryRequest, *, agent_caller: str | Non
 
 
 async def run_tools_plan(request: ToolsPlanRequest, *, agent_caller: str | None = None) -> dict[str, Any]:
+    query = request.query or (
+        f"execute {request.intent.backend}.{request.intent.operation}"
+        if request.intent
+        else ""
+    )
     query_request = ToolsQueryRequest(
-        query=request.query,
-        backend=request.backend,
-        read_only=request.read_only,
+        query=query,
+        backend=request.backend or (request.intent.backend if request.intent else None),
+        read_only=request.read_only if request.intent is None else request.intent.read_only,
         include_summary=False,
     )
     agent_err = check_agent_requirements(query_request, agent_caller=agent_caller)
@@ -118,13 +123,18 @@ async def run_tools_plan(request: ToolsPlanRequest, *, agent_caller: str | None 
 
     request_id = str(uuid.uuid4())
     state = _base_state(request_id=request_id, request=query_request, agent_caller=agent_caller)
+    state["is_plan_path"] = True
 
-    await tracer.start_trace(request_id, query=request.query, metadata=trace_metadata(backend_hint=request.backend))
+    await tracer.start_trace(request_id, query=query, metadata=trace_metadata(backend_hint=query_request.backend))
 
-    state = await parse_intent_node(state)
-    if state.get("error"):
-        await tracer.end_trace(request_id, error=state["error"], **_trace_context_from_state(state))
-        return {"error": state["error"], "status": state.get("error_status", 400), "request_id": request_id}
+    if request.intent is not None:
+        state["intent"] = request.intent.model_copy(deep=True)
+        state["parse_source"] = "structured"
+    else:
+        state = await parse_intent_node(state)
+        if state.get("error"):
+            await tracer.end_trace(request_id, error=state["error"], **_trace_context_from_state(state))
+            return {"error": state["error"], "status": state.get("error_status", 400), "request_id": request_id}
 
     state = await resolve_params_node(state)
     if state.get("error"):
@@ -138,6 +148,12 @@ async def run_tools_plan(request: ToolsPlanRequest, *, agent_caller: str | None 
 
     intent = state["intent"]
     parse_source = state.get("parse_source") or "rules"
+    from tools._shared.capability.approval import requires_write_confirmation, risk_for_operation
+    from tools._shared.capability.plan_binding import intent_plan_hash, issue_plan_binding
+    from app.safety import CAPABILITY_BACKENDS
+
+    plan_hash = intent_plan_hash(intent)
+    risk = risk_for_operation(intent.operation)
     plan = ToolsPlanResponse(
         request_id=request_id,
         intent=intent,
@@ -145,6 +161,8 @@ async def run_tools_plan(request: ToolsPlanRequest, *, agent_caller: str | None 
         confidence_ok=intent.confidence >= settings.TOOL_AGENT_INTENT_MIN_CONFIDENCE,
         parse_source=parse_source,
         min_confidence=settings.TOOL_AGENT_INTENT_MIN_CONFIDENCE,
+        plan_hash=plan_hash,
+        approval_risk=risk,
     )
     if intent.backend == "vault":
         from tools.vault.safety import is_write_operation
@@ -155,6 +173,11 @@ async def run_tools_plan(request: ToolsPlanRequest, *, agent_caller: str | None 
             plan.requires_write_confirmation = True
             plan.confirmation_token = token
             plan.confirmation_phrase = phrase
+    elif intent.backend in CAPABILITY_BACKENDS and requires_write_confirmation(risk):
+        _, token, phrase = issue_plan_binding(intent)
+        plan.requires_write_confirmation = True
+        plan.confirmation_token = token
+        plan.confirmation_phrase = phrase
     await tracer.end_trace(
         request_id,
         output=plan.model_dump(),
@@ -174,10 +197,16 @@ async def run_tools_execute(request: ToolsExecuteRequest, *, agent_caller: str |
 
     request_id = str(uuid.uuid4())
     state = _base_state(request_id=request_id, request=query_request, agent_caller=agent_caller)
-    state["intent"] = request.intent.model_copy()
+    state["intent"] = request.intent.model_copy(deep=True)
     state["parse_source"] = "structured"
     state["write_confirmation"] = request.write_confirmation
-
+    state["plan_hash"] = request.plan_hash
+    if request.idempotency_key:
+        state["idempotency_key"] = request.idempotency_key
+        state["intent"].params = {
+            **(state["intent"].params or {}),
+            "idempotency_key": request.idempotency_key,
+        }
     await tracer.start_trace(
         request_id,
         query=query_request.query,

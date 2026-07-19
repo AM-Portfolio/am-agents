@@ -18,6 +18,8 @@ async def validate_safety_node(state: ToolAgentState) -> ToolAgentState:
             request_read_only=request.read_only,
             write_confirmation=state.get("write_confirmation"),
             is_execute_path=state.get("parse_source") == "structured",
+            is_plan_path=bool(state.get("is_plan_path")),
+            plan_hash=state.get("plan_hash"),
         )
     except SafetyError as exc:
         await tracer.span(

@@ -1,0 +1,83 @@
+fullnameOverride: am-support-agent
+
+global:
+  image:
+    registry: ghcr.io/am-portfolio
+    pullPolicy: Always
+    imagePullSecrets:
+      - name: regcred
+  vault:
+    enabled: true
+    role: "am-backend-role"
+    authPath: "auth/kubernetes"
+    serviceAccountName: "am-backend-sa"
+
+image:
+  repository: am-support-agent
+
+replicaCount: 1
+language: python
+port: 8091
+
+service:
+  port: 8091
+
+entrypoint: "exec am-support-agent-gateway"
+
+security:
+  automountServiceAccountToken: true
+  readOnlyRootFilesystem: true
+
+# Runtime environment is injected from Vault path configured by values.<env>.yaml.
+env: {}
+
+companionWorker:
+  enabled: true
+  replicaCount: 1
+  nameSuffix: worker
+  entrypoint: "exec am-support-agent-worker"
+  # Expose /metrics so Prometheus can scrape agent_work_* from Temporal-direct starts
+  # (alerting-runtime bypasses the gateway). Keep HTTP probes off — worker health is Temporal.
+  port: 8091
+  httpProbes: false
+  # TEMPORAL_* + SUPPORT_AGENT_TEMPORAL_ENABLED come from Vault (am-agents-ops)
+  env:
+    SUPPORT_AGENT_METRICS_PORT: "8091"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+probes:
+  port: 8091
+  startup:
+    path: /healthz
+    failureThreshold: 30
+    periodSeconds: 10
+  liveness:
+    path: /healthz
+  readiness:
+    path: /readyz
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 50m
+    memory: 128Mi
+
+ingress:
+  enabled: true
+  className: "traefik"
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8091"
+  prometheus.io/path: "/metrics"

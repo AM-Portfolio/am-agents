@@ -1,0 +1,19 @@
+name: work-item
+display_name: Work Item
+enabled: false
+version: "0.1.0"
+
+infer_keywords: ['work-item', 'work item', 'ticket', 'openproject', 'workpackage']
+
+env_prefix: WORK_ITEM_
+
+supports_mcp: false
+has_entities: false
+health_check: skip
+
+prompts:
+  intent:
+    source: file
+    name: tool-agent/intent/work_item
+    label: "{{APP_ENV}}"
+    fallback: prompts/intent.yaml

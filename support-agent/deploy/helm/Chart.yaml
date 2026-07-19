@@ -1,0 +1,6 @@
+apiVersion: v2
+name: support-agent
+description: Parallel support-agent gateway (does not replace legacy agent-gateway)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

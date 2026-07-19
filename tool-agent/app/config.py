@@ -91,6 +91,7 @@ class Settings(BaseSettings):
 
     PROMPT_SOURCE: Literal["langfuse", "file"] = Field(default="file")
     TOOL_AGENT_PROMPT_CACHE_TTL_SECONDS: int = Field(default=60)
+    TOOL_AGENT_PROMPT_ADMIN_ENABLED: bool = Field(default=True)
 
     LANGFUSE_ENABLED: bool = Field(default=False)
     LANGFUSE_HOST: str = Field(default="https://langfuse.munish.org")

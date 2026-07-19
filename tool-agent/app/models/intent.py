@@ -28,9 +28,11 @@ class ToolsQueryRequest(BaseModel):
 
 
 class ToolsPlanRequest(BaseModel):
-    query: str
+    query: str = ""
     backend: str | None = None
     read_only: bool = True
+    # Agent callers may supply a fully structured intent and skip LLM/rules parse.
+    intent: IntentDocument | None = None
 
 
 class ToolsWriteConfirmation(BaseModel):
@@ -43,6 +45,8 @@ class ToolsExecuteRequest(BaseModel):
     include_summary: bool = False
     max_rows: int = Field(default=100, ge=1, le=1000)
     write_confirmation: ToolsWriteConfirmation | None = None
+    plan_hash: str | None = None
+    idempotency_key: str | None = None
 
 
 class ToolsPlanResponse(BaseModel):
@@ -55,6 +59,8 @@ class ToolsPlanResponse(BaseModel):
     requires_write_confirmation: bool = False
     confirmation_token: str | None = None
     confirmation_phrase: str | None = None
+    plan_hash: str | None = None
+    approval_risk: str | None = None
 
 
 class ToolsQueryResponse(BaseModel):

@@ -32,3 +32,6 @@ class ToolAgentState(TypedDict, total=False):
     resolved_params: dict[str, Any]
     entity: str | None
     write_confirmation: ToolsWriteConfirmation | None
+    plan_hash: str | None
+    idempotency_key: str | None
+    is_plan_path: bool

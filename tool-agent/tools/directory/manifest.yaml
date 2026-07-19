@@ -1,0 +1,19 @@
+name: directory
+display_name: Directory
+enabled: false
+version: "0.1.0"
+
+infer_keywords: ['directory', 'owner', 'assignee', 'oncall']
+
+env_prefix: DIRECTORY_
+
+supports_mcp: false
+has_entities: false
+health_check: skip
+
+prompts:
+  intent:
+    source: file
+    name: tool-agent/intent/directory
+    label: "{{APP_ENV}}"
+    fallback: prompts/intent.yaml

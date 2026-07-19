@@ -1,0 +1,70 @@
+version: 1
+# Platform orchestrator identity (not a specialist HTTP target).
+platform:
+  agent_id: support-agent
+  display_name: Support Agent
+
+defaults:
+  prefer: tool-agent
+  budgets:
+    max_fanout: 8
+    max_latency_ms: 120000
+    max_cost_units: 100
+
+agents:
+  - agent_id: tool-agent
+    display_name: Tool Agent
+    base_url_env: TOOL_AGENT_BASE_URL
+    default_base_url: http://127.0.0.1:8141
+    preferred: true
+    health_path: /health
+    ready_path: /ready
+    capabilities:
+      - id: tools.plan
+        ops: [discover, plan, execute, stream]
+      - id: tools.execute
+        ops: [discover, plan, execute, stream]
+      - id: tools.query
+        ops: [discover, execute, stream]
+    limits:
+      multi_replica_status: false
+
+  - agent_id: db-agent
+    display_name: DB Agent (legacy)
+    base_url_env: DB_AGENT_BASE_URL
+    default_base_url: http://127.0.0.1:8140
+    preferred: false
+    tags: [legacy.db-agent]
+    health_path: /health
+    ready_path: /ready
+    auth:
+      scheme: header
+      header: X-Agent-Caller
+    capabilities:
+      - id: db.plan
+        ops: [discover, plan, execute]
+      - id: db.execute
+        ops: [discover, plan, execute]
+    limits:
+      multi_replica_status: false
+
+  - agent_id: ui-test-agent
+    display_name: UI Test Agent
+    base_url_env: UI_TEST_AGENT_BASE_URL
+    default_base_url: http://127.0.0.1:8130
+    preferred: true
+    health_path: /health
+    capabilities:
+      - id: ui.test.run
+        ops: [discover, plan, execute, status, stream]
+      - id: ui.test.report
+        ops: [discover, status]
+    limits:
+      multi_replica_status: false
+
+integrations:
+  kagent_mcp:
+    description: Declarative kagent agents call Tool Agent via MCP bridge
+    mcp_url_env: TOOL_AGENT_MCP_URL
+    default_base_url: http://127.0.0.1:8085
+    executor: tool-agent
