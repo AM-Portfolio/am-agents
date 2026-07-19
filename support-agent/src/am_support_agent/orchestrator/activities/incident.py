@@ -477,6 +477,7 @@ async def assign_ticket(payload: dict[str, Any]) -> dict[str, Any]:
             args={
                 "work_item_ref": work_item.work_item_ref,
                 "assignee_ref": str(owner_raw.get("assignee_ref") or ""),
+                "assignee_name": str(owner_raw.get("assignee_name") or ""),
             },
             approval=ApprovalMetadata(risk=ApprovalRisk.UPDATE),
             idempotency=IdempotencyMetadata(key=f"{tracking_id}:wi-assign"),
@@ -490,11 +491,21 @@ async def assign_ticket(payload: dict[str, Any]) -> dict[str, Any]:
     )
     if got.ok:
         work_item = _work_item_from_data(got.data, provider=got.provider)
+    # Ensure owner fields survive into lifecycle summary even when the work-item
+    # provider omits assignee_name (common for fake / partial adapters).
+    wi = work_item.model_dump()
+    if owner_raw.get("assignee_ref") and not wi.get("assignee_ref"):
+        wi["assignee_ref"] = str(owner_raw.get("assignee_ref") or "")
+    if owner_raw.get("assignee_name") and not wi.get("assignee_name"):
+        wi["assignee_name"] = str(owner_raw.get("assignee_name") or "")
+    if owner_raw.get("assignee_email") and not wi.get("assignee_email"):
+        wi["assignee_email"] = str(owner_raw.get("assignee_email") or "")
     return {
         "gated": False,
         "phase": "assign_ticket",
         "tracking_id": tracking_id,
-        "work_item": work_item.model_dump(),
+        "work_item": wi,
+        "owner": dict(owner_raw) if owner_raw else None,
         "skipped": False,
     }
 

@@ -219,6 +219,8 @@ class FakeCapabilityClient:
             ref = str(args.get("work_item_ref") or "")
             item = self._items.setdefault(ref, {"work_item_ref": ref, "status": "open"})
             item["assignee_ref"] = str(args.get("assignee_ref") or "")
+            if args.get("assignee_name"):
+                item["assignee_name"] = str(args.get("assignee_name") or "")
             return CapabilityResult(ok=True, capability=cap, provider="fake", data=dict(item))
         if cap == "work-item.get":
             ref = str(args.get("work_item_ref") or "")
@@ -226,6 +228,7 @@ class FakeCapabilityClient:
                 "work_item_ref": ref,
                 "status": "open",
                 "assignee_ref": "fake:user:default",
+                "assignee_name": "default-owner",
             }
             return CapabilityResult(ok=True, capability=cap, provider="fake", data=dict(item))
         if cap == "work-item.comment":

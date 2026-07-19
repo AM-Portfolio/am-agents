@@ -427,7 +427,12 @@ FEEDBACK_POSTGRES_TABLE = "support_agent.incident_feedback_events"
 
 
 def apply_migrations(conn) -> list[int]:
-    """Apply pending migrations under a Postgres advisory lock. Returns applied versions."""
+    """Apply pending migrations under a Postgres advisory lock. Returns applied versions.
+
+    Always ends with a committed (or rolled-back) transaction. Unlock after the
+    migration commit must itself be committed — otherwise ``autocommit=False``
+    connections are left idle-in-transaction and exhaust ``max_connections``.
+    """
     applied: list[int] = []
     with conn.cursor() as cur:
         cur.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
@@ -458,8 +463,16 @@ def apply_migrations(conn) -> list[int]:
                 )
                 applied.append(version)
             conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
         finally:
-            cur.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+            # Session advisory unlock starts a new txn when autocommit=False.
+            try:
+                cur.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+                conn.commit()
+            except Exception:
+                conn.rollback()
     return applied
 
 

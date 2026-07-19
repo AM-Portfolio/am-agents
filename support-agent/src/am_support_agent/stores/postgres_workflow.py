@@ -45,8 +45,13 @@ class PostgresWorkflowLedger:
                 with self._conn.cursor() as cur:
                     cur.execute("SELECT 1")
                     cur.fetchone()
+                self._conn.commit()
             return True
         except Exception:  # noqa: BLE001
+            try:
+                self._conn.rollback()
+            except Exception:  # noqa: BLE001
+                pass
             return False
 
     def create_run(
