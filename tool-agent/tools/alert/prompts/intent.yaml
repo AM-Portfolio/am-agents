@@ -1,0 +1,2 @@
+name: tool-agent/intent/alert
+description: Create temporary Alertmanager silences with exact env/service matchers.

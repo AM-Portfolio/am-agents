@@ -84,10 +84,10 @@ jobs:
           ! grep -q 'GROWTHBOOK_API_HOST:' support-agent/helm/values.yaml
           ! grep -q 'TEMPORAL_HOST:' support-agent/helm/values.yaml
           ! grep -q 'TEMPORAL_TASK_QUEUE:' support-agent/helm/values.yaml
-          grep -q 'apps/data/dev/services/am-agents-ops' support-agent/helm/values.dev.yaml
-          grep -q 'apps/data/preprod/services/am-agents-ops' support-agent/helm/values.preprod.yaml
-          grep -q 'apps/data/prod/services/am-agents"' support-agent/helm/values.prod.yaml
-          ! grep -E 'services/am-agents"' support-agent/helm/values.dev.yaml support-agent/helm/values.preprod.yaml
+          grep -q 'apps/data/dev/services/am-agents' support-agent/helm/values.dev.yaml
+          grep -q 'apps/data/preprod/services/am-agents' support-agent/helm/values.preprod.yaml
+          grep -q 'apps/data/prod/services/am-agents' support-agent/helm/values.prod.yaml
+          ! grep -q 'services/am-agents-ops' support-agent/helm/values.dev.yaml support-agent/helm/values.preprod.yaml support-agent/helm/values.prod.yaml
           ! grep -q 'apps/data/.*/infra/postgres' support-agent/helm/values.dev.yaml support-agent/helm/values.preprod.yaml support-agent/helm/values.prod.yaml
           ! grep -q 'agent-platform' support-agent/helm/values.yaml
           ! grep -E 'postgresql://[^:]+:[^@]+@' support-agent/helm/values*.yaml

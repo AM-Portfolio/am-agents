@@ -6,15 +6,14 @@ import asyncio
 import logging
 import os
 
+from am_support_agent.orchestrator.queue import (
+    assert_safe_task_queue,
+    resolve_task_queue,
+)
+
 LOG = logging.getLogger("support_agent.worker")
 
-
-def assert_safe_task_queue(queue: str) -> None:
-    if queue == "agent-platform":
-        raise SystemExit(
-            "Refusing to bind support-agent worker to legacy queue 'agent-platform'. "
-            "Use TEMPORAL_TASK_QUEUE=support-agent-v2"
-        )
+__all__ = ["assert_safe_task_queue", "resolve_task_queue", "run_worker", "main"]
 
 
 async def run_worker() -> None:
@@ -27,11 +26,8 @@ async def run_worker() -> None:
         ) from exc
 
     from am_support_agent.orchestrator.activities.a2a import execute_plan
-    from am_support_agent.orchestrator.activities.incident import (
-        bootstrap_incident,
-        finalize_incident,
-        record_hitl,
-    )
+    from am_support_agent.orchestrator.activities.incident import INCIDENT_ACTIVITIES
+    from am_support_agent.orchestrator.activities.telemetry import TELEMETRY_ACTIVITIES
     from am_support_agent.orchestrator.activities.spt import (
         bootstrap_spt,
         resolve_spt_catalog,
@@ -49,7 +45,7 @@ async def run_worker() -> None:
     )
     host = os.getenv("TEMPORAL_HOST", "localhost:7233")
     ns = os.getenv("TEMPORAL_NAMESPACE", "default")
-    queue = os.getenv("TEMPORAL_TASK_QUEUE", "support-agent-v2")
+    queue = resolve_task_queue()
     assert_safe_task_queue(queue)
     LOG.info(
         "support-agent worker connecting Temporal %s ns=%s queue=%s",
@@ -58,6 +54,15 @@ async def run_worker() -> None:
         queue,
     )
     configure_tracing(service_name="support-agent")
+
+    # Alert fanout starts Temporal workflows directly (bypasses gateway), so
+    # lifecycle counters live on the worker and must be scrapable here.
+    from am_support_agent.observability.metrics_server import start_metrics_server
+    from am_support_agent.stores.telemetry_outbox import ensure_telemetry_schema
+
+    ensure_telemetry_schema()
+    start_metrics_server()
+
     client = await Client.connect(
         host,
         namespace=ns,
@@ -69,9 +74,8 @@ async def run_worker() -> None:
         workflows=[SupportA2AWorkflow, AlertIncidentWorkflow, SptRunWorkflow],
         activities=[
             execute_plan,
-            bootstrap_incident,
-            finalize_incident,
-            record_hitl,
+            *INCIDENT_ACTIVITIES,
+            *TELEMETRY_ACTIVITIES,
             bootstrap_spt,
             resolve_spt_catalog,
         ],

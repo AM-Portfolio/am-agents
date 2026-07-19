@@ -28,9 +28,11 @@ class ToolsQueryRequest(BaseModel):
 
 
 class ToolsPlanRequest(BaseModel):
-    query: str
+    query: str = ""
     backend: str | None = None
     read_only: bool = True
+    # Agent callers may supply a fully structured intent and skip LLM/rules parse.
+    intent: IntentDocument | None = None
 
 
 class ToolsWriteConfirmation(BaseModel):

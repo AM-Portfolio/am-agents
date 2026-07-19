@@ -6,7 +6,7 @@ import os
 from typing import Any
 
 from am_support_agent.observability import temporal_interceptors
-from am_support_agent.orchestrator import TEMPORAL_TASK_QUEUE as DEFAULT_QUEUE
+from am_support_agent.orchestrator.queue import resolve_task_queue
 
 
 def _host() -> str:
@@ -18,10 +18,7 @@ def _namespace() -> str:
 
 
 def _task_queue() -> str:
-    queue = os.getenv("TEMPORAL_TASK_QUEUE", DEFAULT_QUEUE)
-    if queue == "agent-platform":
-        raise ValueError("Refusing legacy Temporal queue agent-platform")
-    return queue
+    return resolve_task_queue()
 
 
 def temporal_enabled() -> bool:
@@ -104,10 +101,18 @@ async def start_spt(
     }
 
 
-async def signal_workflow(*, workflow_id: str, signal_name: str) -> dict[str, str]:
+async def signal_workflow(
+    *,
+    workflow_id: str,
+    signal_name: str,
+    payload: dict[str, Any] | None = None,
+) -> dict[str, str]:
     client = await connect()
     handle = client.get_workflow_handle(workflow_id)
-    await handle.signal(signal_name)
+    if payload:
+        await handle.signal(signal_name, payload)
+    else:
+        await handle.signal(signal_name)
     return {"action": "signaled", "workflow_id": workflow_id, "signal": signal_name}
 
 

@@ -9,19 +9,38 @@ from am_support_agent.orchestrator.hitl import (
     SIGNAL_ALERT_REFIRED,
     SIGNAL_ALERT_RESOLVED,
     SIGNAL_APPROVE,
+    SIGNAL_APPROVE_INVESTIGATION,
+    SIGNAL_APPROVE_KNOWN_FIX,
+    SIGNAL_APPROVE_SILENCE,
+    SIGNAL_FEEDBACK,
     HitlState,
 )
 
 
-def test_hitl_signal_names_match_legacy():
+def test_hitl_signal_names_include_purpose_approvals():
     assert SIGNAL_APPROVE == "approve"
     assert SIGNAL_ALERT_RESOLVED == "alert.resolved"
     assert SIGNAL_ALERT_REFIRED == "alert.refired"
-    assert HITL_SIGNAL_NAMES == {
-        "approve",
-        "alert.resolved",
-        "alert.refired",
-    }
+    assert SIGNAL_APPROVE_INVESTIGATION == "approve.investigation"
+    assert SIGNAL_APPROVE_KNOWN_FIX == "approve.known_fix"
+    assert SIGNAL_APPROVE_SILENCE == "approve.silence"
+    assert SIGNAL_FEEDBACK == "alert.feedback"
+    assert "approve" in HITL_SIGNAL_NAMES
+    assert "approve.silence" in HITL_SIGNAL_NAMES
+
+
+def test_hitl_approval_purposes_are_isolated():
+    state = HitlState()
+    state.apply_signal(SIGNAL_APPROVE_SILENCE, {"actor": "ops", "request_id": "r1"})
+    assert state.silence_approved is True
+    assert state.investigation_approved is False
+    assert state.known_fix_approved is False
+    assert not state.waiting_satisfied()
+    assert state.silence_waiting_satisfied()
+
+    state.apply_signal(SIGNAL_APPROVE_INVESTIGATION, {"actor": "ops"})
+    assert state.waiting_satisfied()
+    assert state.investigation_approved is True
 
 
 def test_hitl_state_waiting():
@@ -33,6 +52,52 @@ def test_hitl_state_waiting():
 
 
 @pytest.mark.asyncio
+async def test_human_handoff_assigns_ticket_and_completes(monkeypatch):
+    from am_support_agent.orchestrator.workflows.alert_incident import (
+        AlertIncidentWorkflow,
+    )
+
+    incident = AlertIncidentWorkflow()
+    incident._tracking_id = "AM-HITL-1"
+    incident._state = {
+        "owner": {"assignee_ref": "user:ops"},
+        "work_item": {"id": "INC-1"},
+    }
+    calls: list[str] = []
+
+    async def ticket_and_notify(actions, *, comment_body=None):
+        assert actions == []
+        assert "Human action required" in comment_body
+        calls.append("ticket_and_notify")
+
+    async def persist(*, outcome, actions=None):
+        assert outcome == "human_required"
+        assert actions == []
+        incident._state["episode_id"] = "episode-1"
+        calls.append("persist")
+
+    async def act(fn, payload, *, timeout_s=120):
+        assert payload["episode_id"] == "episode-1"
+        assert payload["hitl"]["required"] is True
+        calls.append("record_hitl")
+        return {"phase": "record_hitl"}
+
+    monkeypatch.setattr(incident, "_ticket_and_notify", ticket_and_notify)
+    monkeypatch.setattr(incident, "_persist", persist)
+    monkeypatch.setattr(incident, "_act", act)
+
+    result = await incident._handoff_to_human(
+        reason="missing evidence",
+        approval_purpose="investigation",
+    )
+
+    assert calls == ["ticket_and_notify", "persist", "record_hitl"]
+    assert result["status"] == "human_required"
+    assert result["phase"] == "human_handoff_complete"
+    assert result["work_item"]["id"] == "INC-1"
+
+
+@pytest.mark.asyncio
 async def test_incident_bootstrap_gated(monkeypatch):
     monkeypatch.delenv("SUPPORT_AGENT_INCIDENT_PARITY", raising=False)
     from am_support_agent.orchestrator.activities.incident import bootstrap_incident
@@ -41,6 +106,15 @@ async def test_incident_bootstrap_gated(monkeypatch):
     assert out["gated"] is True
     assert out["tracking_id"] == "t-1"
     assert "CapabilityClient" in out["required_ports"]
+
+
+@pytest.mark.asyncio
+async def test_check_parity_gated(monkeypatch):
+    monkeypatch.delenv("SUPPORT_AGENT_INCIDENT_PARITY", raising=False)
+    from am_support_agent.orchestrator.activities.incident import check_parity
+
+    out = await check_parity({"tracking_id": "t-1"})
+    assert out["gated"] is True
 
 
 @pytest.mark.asyncio
@@ -71,6 +145,14 @@ def test_worker_registers_parity_workflows():
     assert SptRunWorkflow.__name__
 
 
+def test_resolve_task_queue_keeps_support_agent_v2(monkeypatch):
+    monkeypatch.setenv("TEMPORAL_TASK_QUEUE", "support-agent-v2")
+    monkeypatch.setenv("DEPLOYMENT_ENVIRONMENT", "prod")
+    from am_support_agent.orchestrator.queue import resolve_task_queue
+
+    assert resolve_task_queue() == "support-agent-v2"
+
+
 @pytest.mark.asyncio
 async def test_worker_sandbox_accepts_registered_workflows():
     """Fail loud if a workflow pulls sandbox-restricted imports (e.g. httpx)."""
@@ -79,11 +161,7 @@ async def test_worker_sandbox_accepts_registered_workflows():
     from temporalio.worker import Worker
 
     from am_support_agent.orchestrator.activities.a2a import execute_plan
-    from am_support_agent.orchestrator.activities.incident import (
-        bootstrap_incident,
-        finalize_incident,
-        record_hitl,
-    )
+    from am_support_agent.orchestrator.activities.incident import INCIDENT_ACTIVITIES
     from am_support_agent.orchestrator.activities.spt import (
         bootstrap_spt,
         resolve_spt_catalog,
@@ -95,17 +173,13 @@ async def test_worker_sandbox_accepts_registered_workflows():
     )
 
     async with await WorkflowEnvironment.start_time_skipping() as env:
-        # Construction validates each workflow in the sandbox; this is the
-        # failure mode that CrashLoop'd the prod worker (SupportA2AWorkflow).
         Worker(
             env.client,
-            task_queue="support-agent-v2-test",
+            task_queue="support-agent-v2",
             workflows=[SupportA2AWorkflow, AlertIncidentWorkflow, SptRunWorkflow],
             activities=[
                 execute_plan,
-                bootstrap_incident,
-                finalize_incident,
-                record_hitl,
+                *INCIDENT_ACTIVITIES,
                 bootstrap_spt,
                 resolve_spt_catalog,
             ],

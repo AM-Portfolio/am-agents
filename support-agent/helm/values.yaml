@@ -36,10 +36,13 @@ companionWorker:
   replicaCount: 1
   nameSuffix: worker
   entrypoint: "exec am-support-agent-worker"
-  port: 0
+  # Expose /metrics so Prometheus can scrape agent_work_* from Temporal-direct starts
+  # (alerting-runtime bypasses the gateway). Keep HTTP probes off — worker health is Temporal.
+  port: 8091
   httpProbes: false
   # TEMPORAL_* + SUPPORT_AGENT_TEMPORAL_ENABLED come from Vault (am-agents-ops)
-  env: {}
+  env:
+    SUPPORT_AGENT_METRICS_PORT: "8091"
   resources:
     requests:
       cpu: 50m

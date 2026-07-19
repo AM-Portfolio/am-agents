@@ -106,7 +106,12 @@ class ToolAgentCapabilityClient:
             plan_resp = await client.post(
                 f"{self.base_url}/api/v1/tools/plan",
                 headers=headers,
-                json={"query": f"execute {backend}.{operation}", "backend": backend, "read_only": False},
+                json={
+                    "query": f"execute {backend}.{operation}",
+                    "backend": backend,
+                    "read_only": False,
+                    "intent": intent,
+                },
             )
             plan_data = _json_or_text(plan_resp)
             if plan_resp.status_code >= 400:
@@ -120,7 +125,11 @@ class ToolAgentCapabilityClient:
             if isinstance(plan_data, dict):
                 plan_hash = str(plan_data.get("plan_hash") or plan_hash)
                 execute_body["plan_hash"] = plan_hash
-                execute_body["intent"] = plan_data.get("intent") or intent
+                planned_intent = plan_data.get("intent")
+                if isinstance(planned_intent, dict):
+                    # Structured plan echoes the same intent we sent (plus any
+                    # server-side param resolution). Use it so plan_hash matches.
+                    execute_body["intent"] = planned_intent
                 if plan_data.get("requires_write_confirmation"):
                     execute_body["write_confirmation"] = {
                         "confirmation_token": plan_data.get("confirmation_token"),
@@ -136,13 +145,31 @@ class ToolAgentCapabilityClient:
         ok = resp.status_code < 400
         payload = data if isinstance(data, dict) else {"body": data}
         nested = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+        provider = ""
+        if isinstance(nested, dict):
+            provider = str(nested.get("provider") or "")
+            # tool-agent capability envelope: {ok, provider, data: {...domain...}}
+            inner = nested.get("data")
+            if isinstance(inner, dict) and (
+                "work_item_ref" in inner
+                or "silence_id" in inner
+                or "assignee_ref" in inner
+                or nested.get("ok") is True
+            ):
+                if nested.get("ok") is False:
+                    ok = False
+                nested = inner
+                provider = provider or str(nested.get("provider") or "")
         return CapabilityResult(
             ok=ok,
             capability=call.capability,
             data=nested if isinstance(nested, dict) else {"value": nested},
-            error=None if ok else f"execute failed HTTP {resp.status_code}",
+            error=None if ok else (
+                str((payload.get("data") or {}).get("error") if isinstance(payload.get("data"), dict) else None)
+                or f"execute failed HTTP {resp.status_code}"
+            ),
             plan_hash=plan_hash,
-            provider=str((nested or {}).get("provider") or "") if isinstance(nested, dict) else "",
+            provider=provider,
             raw=payload,
         )
 
@@ -210,11 +237,83 @@ class FakeCapabilityClient:
             )
         if cap.startswith("observe."):
             kind = cap.split(".", 1)[1].split(".", 1)[0]
+            recovery = bool(args.get("recovery"))
+            if kind == "metrics":
+                if recovery:
+                    data = {
+                        "kind": kind,
+                        "status": "ok",
+                        "health": "healthy",
+                        "summary": "fake metrics healthy",
+                        "points": [[0, 0.0]],
+                        "value": 0,
+                    }
+                else:
+                    data = {
+                        "kind": kind,
+                        "status": "firing",
+                        "health": "unhealthy",
+                        "summary": "fake metrics unhealthy",
+                        "points": [[0, 1.0]],
+                        "value": 1,
+                    }
+            else:
+                data = {
+                    "kind": kind,
+                    "status": "ok" if recovery else "firing",
+                    "error_count": 0 if recovery else 1,
+                    "summary": f"fake {cap}",
+                }
             return CapabilityResult(
                 ok=True,
                 capability=cap,
                 provider="fake",
-                data={"kind": kind, "status": "ok", "summary": f"fake {cap}", "points": []},
+                data=data,
+            )
+        if cap == "work-item.transition":
+            ref = str(args.get("work_item_ref") or "")
+            item = self._items.setdefault(ref, {"work_item_ref": ref})
+            item["status"] = str(args.get("status") or "closed")
+            return CapabilityResult(ok=True, capability=cap, provider="fake", data=dict(item))
+        if cap == "alert.silence.create":
+            env = str(args.get("env") or "").strip()
+            service = str(args.get("service") or "").strip()
+            minutes = int(args.get("minutes") or 60)
+            if not env or not service:
+                return CapabilityResult(
+                    ok=False,
+                    capability=cap,
+                    error="env and service required",
+                    provider="fake",
+                )
+            if minutes < 5 or minutes > 60 * 24 * 14:
+                return CapabilityResult(
+                    ok=False,
+                    capability=cap,
+                    error="duration must be between 5 minutes and 14 days",
+                    provider="fake",
+                )
+            self._counter += 1
+            silence_id = f"fake:silence:{self._counter}"
+            return CapabilityResult(
+                ok=True,
+                capability=cap,
+                provider="fake",
+                data={
+                    "silence_id": silence_id,
+                    "starts_at": "2026-01-01T00:00:00Z",
+                    "ends_at": "2026-01-01T01:00:00Z",
+                    "env": env,
+                    "service": service,
+                    "minutes": minutes,
+                },
+            )
+        if cap in {"alert.silence.get", "alert.silence.expire"}:
+            return CapabilityResult(
+                ok=True,
+                capability=cap,
+                provider="fake",
+                data={"silence_id": args.get("silence_id") or "", "ok": True},
             )
         if cap.startswith("chat.") or cap.startswith("mail."):
             return CapabilityResult(

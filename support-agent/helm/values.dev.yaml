@@ -1,5 +1,5 @@
 # Dev: companion worker on; canary off (legacy remains default).
-# Vault folder: apps/data/dev/services/am-agents-ops
+# Vault folder: apps/data/dev/services/am-agents
 environment: dev
 
 vault:

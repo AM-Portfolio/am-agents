@@ -1,5 +1,5 @@
 # Preprod: durable Postgres memory + GrowthBook shadow routing.
-# Vault folder: apps/data/preprod/services/am-agents-ops
+# Vault folder: apps/data/preprod/services/am-agents
 environment: preprod
 
 vault:
