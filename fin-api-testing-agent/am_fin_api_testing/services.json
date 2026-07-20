@@ -1,0 +1,10 @@
+[
+  {"name": "Auth Tokens", "url": "http://localhost:8001", "spec_url": "http://localhost:8001/v3/api-docs"},
+  {"name": "User Management", "url": "http://localhost:8002", "spec_url": "http://localhost:8002/v3/api-docs"},
+  {"name": "Market Data", "url": "http://localhost:8092", "spec_url": "http://localhost:8092/v3/api-docs"},
+  {"name": "Trade Service", "url": "http://localhost:8040", "spec_url": "http://localhost:8040/v3/api-docs"},
+  {"name": "Analysis Service", "url": "http://localhost:8010", "spec_url": "http://localhost:8010/v3/api-docs"},
+  {"name": "Market Data Parser", "url": "http://localhost:8022", "spec_url": "http://localhost:8022/v3/api-docs"},
+  {"name": "Document Processor", "url": "http://localhost:8081", "spec_url": "http://localhost:8081/v3/api-docs"},
+  {"name": "Email Extractor", "url": "http://localhost:8088", "spec_url": "http://localhost:8088/v3/api-docs"}
+]

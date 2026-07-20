@@ -1,7 +1,6 @@
-# db-agent (Baseline)
+# db-agent
 
-> [!WARNING]
-> This service is the legacy baseline NLP agent. It has been succeeded by the new, plugin-based **[tool-agent](file:///Users/munishm/Desktop/AM/am-agents/tool-agent)** which supports dynamic satellite MCPs and decentralized adapters. Refer to `tool-agent` for the active production deployment configurations.
+Natural-language interface to AM infrastructure databases (Postgres, Mongo, Redis, Qdrant, Kafka, Grafana/Influx/Loki).
 
 ## Quick start
 
@@ -16,13 +15,13 @@ npm run preprod
 
 ## API
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/v1/db/query` | NL question → intent → execute |
-| POST | `/api/v1/db/plan` | Intent only (verify collection/operation before run) |
-| POST | `/api/v1/db/execute` | Structured intent — skips LLM parse |
-| GET | `/health` | Liveness |
-| GET | `/ready` | Registry + LLM routing health |
+| Method | Path                 | Description                                          |
+| ------ | -------------------- | ---------------------------------------------------- |
+| POST   | `/api/v1/db/query`   | NL question → intent → execute                       |
+| POST   | `/api/v1/db/plan`    | Intent only (verify collection/operation before run) |
+| POST   | `/api/v1/db/execute` | Structured intent — skips LLM parse                  |
+| GET    | `/health`            | Liveness                                             |
+| GET    | `/ready`             | Registry + LLM routing health                        |
 
 ### Example — collection count
 
@@ -59,10 +58,10 @@ POST /api/v1/db/execute
 
 ## LLM routing
 
-| `LLM_ROUTING` | Path |
-|---------------|------|
+| `LLM_ROUTING`       | Path                                                                           |
+| ------------------- | ------------------------------------------------------------------------------ |
 | `gateway` (preprod) | db-agent → am-mcp-gateway `/api/v1/agent/llm/completions` → LiteLLM → Langfuse |
-| `direct` (local) | db-agent → LiteLLM directly |
+| `direct` (local)    | db-agent → LiteLLM directly                                                    |
 
 Set in `.env`: `MCP_GATEWAY_BASE_URL`, `AM_MCP_CLIENT_SECRET`, `KEYCLOAK_TOKEN_URL` for gateway mode.
 
@@ -93,10 +92,10 @@ Add an HTTP-based MCP or stdio wrapper that calls db-agent. Phase 2 can ship a t
 
 ## MCP deployment
 
-| Env | Default | Description |
-|-----|---------|-------------|
-| `MCP_ENABLED` | `false` | Native adapters locally; MCP in preprod |
-| `TOOLBOX_URL` | — | HTTP Toolbox sidecar for Postgres/Mongo/Redis |
+| Env           | Default | Description                                   |
+| ------------- | ------- | --------------------------------------------- |
+| `MCP_ENABLED` | `false` | Native adapters locally; MCP in preprod       |
+| `TOOLBOX_URL` | —       | HTTP Toolbox sidecar for Postgres/Mongo/Redis |
 
 Satellites: [`config/servers.yaml`](config/servers.yaml)  
 Registry: [`config/registry.yaml`](config/registry.yaml)

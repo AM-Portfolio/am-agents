@@ -110,7 +110,7 @@ class DirectLiteLLMClient:
             data = resp.json()
         usage_raw = data.get("usage") or {}
         return LlmCallResult(
-            content=data["choices"][0]["message"]["content"],
+            content=data["choices"][0]["message"].get("content") or data["choices"][0]["message"].get("reasoning_content") or "",
             model=str(data.get("model") or settings.LLM_PLANNER_MODEL),
             usage={
                 "prompt_tokens": int(usage_raw.get("prompt_tokens") or 0),
@@ -178,7 +178,7 @@ class DirectLiteLLMClient:
                             "total_tokens": int(u.get("total_tokens") or 0),
                         }
                     delta = (data.get("choices") or [{}])[0].get("delta") or {}
-                    token = delta.get("content")
+                    token = delta.get("content") or delta.get("reasoning_content")
                     if token:
                         parts.append(token)
                         if on_token:

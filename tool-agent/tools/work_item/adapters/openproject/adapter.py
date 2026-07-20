@@ -70,7 +70,10 @@ class Adapter:
             }
         if operation == "search":
             q = str(params.get("query") or "")
-            filt = quote(json.dumps([{"subject": {"operator": "**", "values": [q]}}]), safe="")
+            filters = []
+            if q:
+                filters.append({"subject": {"operator": "~", "values": [q]}})
+            filt = quote(json.dumps(filters), safe="")
             data = self._client.get(f"/api/v3/work_packages?filters={filt}&pageSize=20")
             els = (data.get("_embedded") or {}).get("elements") or []
             return {

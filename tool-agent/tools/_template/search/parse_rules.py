@@ -3,7 +3,7 @@ from __future__ import annotations
 from app.models.intent import IntentDocument
 
 
-def parse_rules(query: str, *, tool_name: str) -> IntentDocument | None:
+def parse_rules(query: str, *, tool_name: str, backend_hint: str | None = None) -> IntentDocument | None:
     q = query.lower().strip()
     if f"{tool_name} ping" in q or q == "ping":
         return IntentDocument(

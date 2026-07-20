@@ -5,11 +5,11 @@ from app.models.intent import IntentDocument
 _KEYWORDS = ['chat', 'cliq', 'notify', 'message']
 
 
-def parse_rules(query: str, *, tool_name: str) -> IntentDocument | None:
+def parse_rules(query: str, *, tool_name: str, backend_hint: str | None = None) -> IntentDocument | None:
     q = (query or "").lower()
     if not any(k in q for k in _KEYWORDS):
         return None
-    operation = "get"
+    operation = "message.send"
     read_only = True
     for candidate in ('message.send', 'card.send'):
         if candidate.replace(".", " ") in q or candidate in q:

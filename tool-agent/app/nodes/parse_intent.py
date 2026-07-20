@@ -20,13 +20,59 @@ logger = logging.getLogger(__name__)
 
 def _parse_llm_json(raw: str) -> dict[str, Any]:
     cleaned = raw.strip()
+    # Strip thinking process tags if present (for reasoning models)
+    cleaned = re.sub(r"<think>.*?</think>", "", cleaned, flags=re.DOTALL | re.IGNORECASE).strip()
     if cleaned.startswith("```"):
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
         cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+    
     start = cleaned.find("{")
-    end = cleaned.rfind("}")
-    if start != -1 and end > start:
-        cleaned = cleaned[start : end + 1]
+    if start != -1:
+        # Extract the first matching JSON block via brace counting
+        brace_count = 0
+        in_quotes = False
+        escape = False
+        json_str = ""
+        for i in range(start, len(cleaned)):
+            char = cleaned[i]
+            if char == '"' and not escape:
+                in_quotes = not in_quotes
+            elif char == '\\' and in_quotes:
+                escape = not escape
+                json_str += char
+                continue
+            elif not in_quotes:
+                if char == "{":
+                    brace_count += 1
+                elif char == "}":
+                    brace_count -= 1
+                    if brace_count == 0:
+                        json_str += char
+                        cleaned = json_str
+                        break
+            escape = False
+            json_str += char
+
+        # Escape raw newlines inside string literals in the JSON string
+        cleaned_chars = []
+        in_quotes = False
+        escape = False
+        for char in cleaned:
+            if char == '"' and not escape:
+                in_quotes = not in_quotes
+            elif char == '\\' and in_quotes:
+                escape = not escape
+            else:
+                escape = False
+            
+            if char == '\n' and in_quotes:
+                cleaned_chars.append('\\n')
+            elif char == '\r' and in_quotes:
+                cleaned_chars.append('\\r')
+            else:
+                cleaned_chars.append(char)
+        cleaned = "".join(cleaned_chars)
+
     data = json.loads(cleaned)
     if not isinstance(data, dict):
         raise ValueError("Expected JSON object")
