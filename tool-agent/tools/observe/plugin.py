@@ -13,10 +13,10 @@ class ObserveTool(CapabilityTool):
 
     def build_adapter(self, provider: str) -> Any:
         if provider == 'grafana':
-            from .adapters.grafana.adapter import Adapter
+            from tools.observe.adapters.grafana.adapter import Adapter
             return Adapter()
         if provider == 'memory':
-            from .adapters.memory import MemoryAdapter
+            from tools.observe.adapters.memory import MemoryAdapter
             return MemoryAdapter()
         raise ValueError(f'unknown provider {provider!r}')
 

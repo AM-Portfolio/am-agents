@@ -46,7 +46,7 @@ class CapabilityTool(BaseIntegrationTool):
         if backend_hint and backend_hint != self.name:
             return None
         mod = importlib.import_module(f"{self._pkg()}.search.parse_rules")
-        return mod.parse_rules(query, tool_name=self.name)
+        return mod.parse_rules(query, tool_name=self.name, backend_hint=backend_hint)
 
     def resolve(self, intent: IntentDocument, query: str) -> tuple[IntentDocument, str | None]:
         mod = importlib.import_module(f"{self._pkg()}.search.resolve")

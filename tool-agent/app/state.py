@@ -35,3 +35,4 @@ class ToolAgentState(TypedDict, total=False):
     plan_hash: str | None
     idempotency_key: str | None
     is_plan_path: bool
+    god_mode: bool

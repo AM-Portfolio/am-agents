@@ -1,0 +1,10 @@
+{
+  "name": "@am/fin-portfolio-agent",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "python am_fin_portfolio_analysis/api.py",
+    "ui": "streamlit run am_fin_portfolio_analysis/ui.py",
+    "test": "PYTHONPATH=shared:am_fin_portfolio_analysis python -m pytest tests -q"
+  }
+}

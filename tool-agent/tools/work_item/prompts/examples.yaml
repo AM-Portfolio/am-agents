@@ -1,0 +1,12 @@
+content: |
+  Example 1 — List work items
+  Query: list work items
+  JSON: {"backend":"work-item","operation":"search","params":{"query":""},"read_only":true,"confidence":0.9,"rationale":"search all work items"}
+
+  Example 2 — Search work items by text
+  Query: search tickets containing memory leak
+  JSON: {"backend":"work-item","operation":"search","params":{"query":"memory leak"},"read_only":true,"confidence":0.9,"rationale":"search tickets by query"}
+
+  Example 3 — Get specific work item
+  Query: show work item op:wp:105
+  JSON: {"backend":"work-item","operation":"get","params":{"work_item_ref":"op:wp:105"},"read_only":true,"confidence":0.92,"rationale":"retrieve work item"}
