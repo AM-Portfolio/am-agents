@@ -9,7 +9,10 @@ from tools.kafka.search.convention import extract_topic
 
 def parse_rules(query: str, *, tool_name: str, backend_hint: str | None = None) -> IntentDocument | None:
     q = query.lower()
-    if not (tool_name == "kafka" or backend_hint == "kafka" or "kafka" in q):
+    _KAFKA_KW = ("kafka", "topic", "partition", "offset", "consumer group", "consumer lag")
+    if backend_hint and backend_hint != tool_name:
+        return None
+    if not backend_hint == tool_name and not any(k in q for k in _KAFKA_KW):
         return None
 
     topic = extract_topic(query)

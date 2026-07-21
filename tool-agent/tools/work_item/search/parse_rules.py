@@ -7,7 +7,9 @@ _KEYWORDS = ['work-item', 'work item', 'ticket', 'openproject', 'workpackage']
 
 def parse_rules(query: str, *, tool_name: str, backend_hint: str | None = None) -> IntentDocument | None:
     q = (query or "").lower()
-    if not (tool_name == "work-item" or backend_hint == "work-item" or any(k in q for k in _KEYWORDS)):
+    if backend_hint and backend_hint != tool_name:
+        return None
+    if not backend_hint == tool_name and not any(k in q for k in _KEYWORDS):
         return None
 
     # Check for explicit keywords

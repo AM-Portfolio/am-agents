@@ -205,6 +205,7 @@ async def parse_intent_node(state: ToolAgentState) -> ToolAgentState:
             }
         tool.validate_intent(intent)
     except Exception as exc:
+        logger.error(f"Failed to parse JSON from LLM content: {llm_result.content!r}")
         return {
             **state,
             "error": f"Invalid LLM intent JSON: {exc}",
