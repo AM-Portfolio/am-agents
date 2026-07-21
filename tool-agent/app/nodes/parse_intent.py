@@ -19,64 +19,36 @@ logger = logging.getLogger(__name__)
 
 
 def _parse_llm_json(raw: str) -> dict[str, Any]:
-    cleaned = raw.strip()
-    # Strip thinking process tags if present (for reasoning models)
-    cleaned = re.sub(r"<think>.*?</think>", "", cleaned, flags=re.DOTALL | re.IGNORECASE).strip()
-    if cleaned.startswith("```"):
-        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
-        cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+    cleaned = (raw or "").strip()
+    cleaned = re.sub(r"<(think|thought)>.*?</\1>", "", cleaned, flags=re.DOTALL | re.IGNORECASE).strip()
     
+    # 1. Try finding markdown JSON block first
+    md_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, re.DOTALL)
+    if md_match:
+        try:
+            data = json.loads(md_match.group(1))
+            if isinstance(data, dict) and "backend" in data:
+                return data
+        except Exception:
+            pass
+
+    # 2. Extract JSON objects from end to beginning (reasoning models output JSON at the end)
+    matches = list(re.finditer(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", cleaned, re.DOTALL))
+    for m in reversed(matches):
+        try:
+            data = json.loads(m.group(0))
+            if isinstance(data, dict) and ("backend" in data or "operation" in data):
+                return data
+        except Exception:
+            continue
+
+    # 3. Fallback search for outer braces
     start = cleaned.find("{")
-    if start != -1:
-        # Extract the first matching JSON block via brace counting
-        brace_count = 0
-        in_quotes = False
-        escape = False
-        json_str = ""
-        for i in range(start, len(cleaned)):
-            char = cleaned[i]
-            if char == '"' and not escape:
-                in_quotes = not in_quotes
-            elif char == '\\' and in_quotes:
-                escape = not escape
-                json_str += char
-                continue
-            elif not in_quotes:
-                if char == "{":
-                    brace_count += 1
-                elif char == "}":
-                    brace_count -= 1
-                    if brace_count == 0:
-                        json_str += char
-                        cleaned = json_str
-                        break
-            escape = False
-            json_str += char
+    end = cleaned.rfind("}")
+    if start != -1 and end > start:
+        return json.loads(cleaned[start:end + 1])
 
-        # Escape raw newlines inside string literals in the JSON string
-        cleaned_chars = []
-        in_quotes = False
-        escape = False
-        for char in cleaned:
-            if char == '"' and not escape:
-                in_quotes = not in_quotes
-            elif char == '\\' and in_quotes:
-                escape = not escape
-            else:
-                escape = False
-            
-            if char == '\n' and in_quotes:
-                cleaned_chars.append('\\n')
-            elif char == '\r' and in_quotes:
-                cleaned_chars.append('\\r')
-            else:
-                cleaned_chars.append(char)
-        cleaned = "".join(cleaned_chars)
-
-    data = json.loads(cleaned)
-    if not isinstance(data, dict):
-        raise ValueError("Expected JSON object")
-    return data
+    return json.loads(cleaned)
 
 
 def _normalize_intent(data: dict[str, Any], backend_hint: str | None) -> IntentDocument:

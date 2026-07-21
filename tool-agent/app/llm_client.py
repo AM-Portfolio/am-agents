@@ -99,7 +99,7 @@ class DirectLiteLLMClient:
                 "source": "tool-agent",
                 "request_id": request_id,
                 "generation_name": generation_name,
-                "backend": backend,
+                "backend": backend or "general",
             },
         }
         started = time.perf_counter()

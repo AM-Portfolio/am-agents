@@ -28,7 +28,9 @@ class Settings(BaseSettings):
 
     LLM_ROUTING: Literal["gateway", "direct"] = Field(default="direct")
     LITELLM_BASE_URL: str = Field(default="http://localhost:4000")
-    LITELLM_MASTER_KEY: str | None = Field(default=None)
+    LITELLM_MASTER_KEY: str | None = Field(
+        default_factory=lambda: os.getenv("LITELLM_MASTER_KEY") or os.getenv("TOGETHER_API_KEY")
+    )
     MCP_GATEWAY_BASE_URL: str = Field(default="http://localhost:8120")
     MCP_GATEWAY_AUTH_DISABLED: bool = Field(default=True)
     AM_MCP_CLIENT_ID: str = Field(default="am-mcp-service")

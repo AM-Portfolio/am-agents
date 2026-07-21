@@ -68,6 +68,9 @@ if [ -f "../.env" ]; then
     source ../.env
     set +a
 fi
+export LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-$TOGETHER_API_KEY}
+export LITELLM_BASE_URL=${LITELLM_BASE_URL:-"https://api.together.xyz/v1"}
+export LLM_PLANNER_MODEL=${LLM_PLANNER_MODEL:-"Prism-ML/Ternary-Bonsai-27B"}
 # Force local tool agent settings
 export LLM_ROUTING="direct"
 
