@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: am-spt-poc
+  namespace: load-testing
+spec:
+  template:
+    spec:
+      volumes:
+        - name: spt-data
+          persistentVolumeClaim:
+            claimName: am-spt-poc-data
+        - name: portal-html
+          configMap:
+            name: am-spt-poc-portal
+      containers:
+        - name: am-spt-poc
+          volumeMounts:
+            - name: spt-data
+              mountPath: /data
+            - name: portal-html
+              mountPath: /app/app/templates/portal.html
+              subPath: portal.html

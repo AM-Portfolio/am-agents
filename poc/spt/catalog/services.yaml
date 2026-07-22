@@ -1,0 +1,36 @@
+services:
+  - id: am-analysis
+    label: am-analysis
+    default_target_url_dev: "http://am-analysis.am-apps-dev.svc.cluster.local:8080"
+    public_target_url_dev: "https://am.asrax.in/analysis"
+  - id: am-portfolio
+    label: am-portfolio
+  - id: am-auth
+    label: am-auth
+  - id: am-core-services
+    label: am-core-services
+  - id: am-market
+    label: am-market
+  - id: am-agents
+    label: am-agents
+  - id: am-modern-ui
+    label: am-modern-ui
+
+environments:
+  - dev
+  - preprod
+  - prod
+
+load_presets:
+  smoke:
+    vus: 3
+    duration: "30s"
+  load:
+    vus: 10
+    duration: "2m"
+  "20u-50":
+    vus: 20
+    iterations: 50
+  stress:
+    vus: 25
+    duration: "5m"

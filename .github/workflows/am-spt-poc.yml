@@ -1,0 +1,45 @@
+name: AM SPT POC Publish
+
+on:
+  push:
+    branches: ["main", "develop", "test/**", "feature/**"]
+    paths:
+      - "poc/spt/**"
+  pull_request:
+    branches: ["main", "develop"]
+    paths:
+      - "poc/spt/**"
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test spt-poc
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: poc/spt
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python -c "from app.main import app; print(app.title)"
+
+  publish:
+    name: Publish AM SPT POC
+    needs: test
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: write
+    uses: AM-Portfolio/am-pipelines/.github/workflows/central-build-publish.yml@main
+    with:
+      language: python
+      working_directory: poc/spt
+      image_name: am-spt-poc
+      build_context: poc/spt
+      preprod_namespace: load-testing
+      deploy_dev: false
+      deploy_prod: false
+    secrets: inherit

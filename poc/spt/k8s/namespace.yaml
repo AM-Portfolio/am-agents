@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: load-testing
+  labels:
+    app.kubernetes.io/part-of: am-agents
+    purpose: spt-load-testing
