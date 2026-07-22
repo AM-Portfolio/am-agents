@@ -67,10 +67,19 @@ class RemoteMcpClient:
     @asynccontextmanager
     async def session(self) -> AsyncIterator[Any]:
         with _pypi_mcp_context():
-            streamable_http = importlib.import_module("mcp.client.streamable_http")
+            try:
+                mod = importlib.import_module("mcp.client.streamable_http")
+                client_fn = getattr(mod, "streamablehttp_client", getattr(mod, "streamable_http_client", None))
+            except ModuleNotFoundError:
+                mod = importlib.import_module("mcp.client.sse")
+                client_fn = getattr(mod, "sse_client", None)
+            
+            if not client_fn:
+                raise ImportError("Neither streamablehttp_client nor sse_client found in mcp.client")
+
             mcp_pkg = importlib.import_module("mcp")
             ClientSession = mcp_pkg.ClientSession
-            async with streamable_http.streamablehttp_client(self.url) as (read, write, _):
+            async with client_fn(self.url) as (read, write, _):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
                     yield session

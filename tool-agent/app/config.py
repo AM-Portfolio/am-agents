@@ -70,9 +70,9 @@ class Settings(BaseSettings):
     KAFKA_PASSWORD: str | None = Field(default=None)
     KAFKA_SECURITY_PROTOCOL: str = Field(default="SASL_PLAINTEXT")
     KAFKA_SASL_MECHANISM: str = Field(default="SCRAM-SHA-256")
-    KAFKA_UI_URL: str | None = Field(default=None)
-    KAFKA_UI_CLUSTER: str = Field(default="am-preprod")
-    KAFKA_PEEK_MODE: Literal["auto", "native", "kafka_ui"] = Field(default="auto")
+    KAFKA_UI_URL: str | None = Field(default="http://localhost:8080/kafka-ui")
+    KAFKA_UI_CLUSTER: str = Field(default="shared")
+    KAFKA_PEEK_MODE: Literal["auto", "native", "kafka_ui"] = Field(default="kafka_ui")
 
     GRAFANA_MCP_URL: str | None = Field(
         default="http://kagent-grafana-mcp.kagent.svc.cluster.local:8000/mcp"

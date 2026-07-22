@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 from typing import Any
 
@@ -765,12 +766,19 @@ class AlertIncidentWorkflow:
         await self._persist_lifecycle(final_status="open")
         while True:
             self._phase = "awaiting_resolved_or_refired"
-            await workflow.wait_condition(
-                lambda: self._hitl.resolved
-                or self._hitl.refired
-                or self._hitl.pending_feedback is not None
-                or self._hitl.closed
-            )
+            try:
+                await workflow.wait_condition(
+                    lambda: self._hitl.resolved
+                    or self._hitl.refired
+                    or self._hitl.pending_feedback is not None
+                    or self._hitl.closed,
+                    timeout=timedelta(hours=24),
+                )
+            except asyncio.TimeoutError:
+                return await self._handoff_to_human(
+                    reason="Incident remained open without resolution signal for 24 hours; handing off to human on-call.",
+                    approval_purpose="investigation",
+                )
 
             if self._hitl.pending_feedback is not None:
                 await self._handle_pending_feedback()
@@ -858,38 +866,13 @@ class AlertIncidentWorkflow:
                     }
 
                 if self._verify_rounds >= _MAX_VERIFY_ROUNDS:
-                    self._phase = "continue_as_new"
-                    workflow.continue_as_new(
-                        {
-                            "tracking_id": self._tracking_id,
-                            "_continued": {
-                                "tracking_id": self._tracking_id,
-                                "refire_count": self._refire_count,
-                                "verify_rounds": 0,
-                                "state": {
-                                    **{
-                                        k: self._state.get(k)
-                                        for k in (
-                                            "alert",
-                                            "run_ref",
-                                            "policy",
-                                            "owner",
-                                            "work_item",
-                                            "episode_id",
-                                            "actions",
-                                            "executed_actions",
-                                            "decision",
-                                            "validation",
-                                            "known_fix",
-                                        )
-                                    },
-                                    "recovery_batches": sample_batches[-2:],
-                                },
-                                "steps": {},
-                            },
-                        }
+                    return await self._handoff_to_human(
+                        reason=f"Recovery verification unconfirmed after {_MAX_VERIFY_ROUNDS} rounds; metrics remained unhealthy.",
+                        approval_purpose="investigation",
                     )
-                # Remain open — wait again.
+                # Re-arm resolution flag so workflow re-verifies instead of hanging indefinitely
+                self._hitl.resolved = True
+                await workflow.sleep(timedelta(seconds=10))
                 continue
 
             if self._hitl.closed:
