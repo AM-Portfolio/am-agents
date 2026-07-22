@@ -369,14 +369,30 @@ async def plan_investigation(payload: dict[str, Any]) -> dict[str, Any]:
     tracking_id = str(payload.get("tracking_id") or "")
     if not incident_parity_enabled():
         return _gate_payload("plan_investigation", tracking_id)
-    # Notification/ticket admin are planned later; investigation plan is empty
-    # until real remediation capabilities are available.
+    alert = dict(payload.get("alert") or {})
+    alertname = str(alert.get("alertname") or "")
+    service = str(alert.get("service") or "")
+    
+    actions: list[dict[str, Any]] = []
+    if "Kafka" in alertname or service == "kafka":
+        actions.append({
+            "capability": "observe.metrics.query",
+            "args": {"query": "kafka_consumergroup_lag", "service": "kafka"},
+            "effect": "read",
+        })
+    elif "Mongo" in alertname or service == "mongodb":
+        actions.append({
+            "capability": "observe.metrics.query",
+            "args": {"query": "mongodb_connections", "service": "mongodb"},
+            "effect": "read",
+        })
+
     return {
         "gated": False,
         "phase": "plan_investigation",
         "tracking_id": tracking_id,
-        "actions": [],
-        "matched": False,
+        "actions": actions,
+        "matched": len(actions) > 0,
     }
 
 
