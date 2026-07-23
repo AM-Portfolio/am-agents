@@ -4,6 +4,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+Audience = Literal["developer", "agent", "ci", "shared"]
+
 
 class PayloadBundle(BaseModel):
     k6_import: dict[str, Any] = Field(default_factory=dict)
@@ -11,6 +13,8 @@ class PayloadBundle(BaseModel):
     bench_run: dict[str, Any] = Field(default_factory=dict)
     har_stub: dict[str, Any] | None = None
     api_overrides: list[dict[str, Any]] = Field(default_factory=list)
+    auth_env: dict[str, Any] = Field(default_factory=dict)
+    payload_set_version: int | None = None
 
 
 class TestConfigIn(BaseModel):
@@ -22,6 +26,9 @@ class TestConfigIn(BaseModel):
     test_type: Literal["k6", "playwright", "mixed"] = "k6"
     target_url: str | None = None
     run_profile: Literal["debug", "load"] | None = None
+    audience: Audience = "developer"
+    payload_set_version: int | None = None
+    selected_api_ids: list[str] | None = None
     payloads: PayloadBundle = Field(default_factory=PayloadBundle)
     scripts: dict[str, str] = Field(default_factory=dict)
 
@@ -34,6 +41,10 @@ class TestConfigUpdate(BaseModel):
     openapi_version: str | None = None
     test_type: str | None = None
     target_url: str | None = None
+    run_profile: Literal["debug", "load"] | None = None
+    audience: Audience | None = None
+    payload_set_version: int | None = None
+    selected_api_ids: list[str] | None = None
     payloads: PayloadBundle | None = None
     scripts: dict[str, str] | None = None
 
@@ -55,6 +66,9 @@ class RunExecuteRequest(BaseModel):
     api_ids: list[str] | None = None  # subset of catalog APIs; None/empty = all
     environment: str | None = None  # override config env for this run (API version source)
     openapi_version: str | None = None  # record/pin OpenAPI info.version for this run
+    # Resolve profile when config_id is omitted (agents): service + audience
+    service: str | None = None
+    audience: Audience | None = None
 
 
 class SavePayloadRequest(BaseModel):

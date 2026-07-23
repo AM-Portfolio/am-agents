@@ -43,10 +43,12 @@
       <option value="stress">stress (25 VU / 5m)</option>
     </select>
     <div class="load-inputs" title="Shared across all VUs — 20 users × 50 total VU-iterations">
-      <label>VUs</label><input id="run-vus" type="number" min="1" max="50" value="20"/>
-      <label>Calls</label><input id="run-calls" type="number" min="1" max="10000" value="50"/>
+      <label>VUs</label><input id="run-vus" type="number" min="1" max="50" value="20" oninput="refreshOverrideChip()"/>
+      <label>Calls</label><input id="run-calls" type="number" min="1" max="10000" value="50" oninput="refreshOverrideChip()"/>
     </div>
-    <select id="run-profile" style="background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:5px;padding:.4rem" onchange="onProfileChange()" title="load = multi VU/calls with per-call traces. debug = 1 VU × 1 call.">
+    <div id="audience-load-lock" class="audience-lock" style="display:none"></div>
+    <span id="override-chip" class="override-chip" style="display:none" title="Header values differ from the selected profile">Overriding profile</span>
+    <select id="run-profile" style="background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:5px;padding:.4rem" onchange="onProfileChange(); refreshOverrideChip();" title="load = multi VU/calls with per-call traces. debug = 1 VU × 1 call.">
       <option value="load" selected>load</option>
       <option value="debug">debug (1×1)</option>
     </select>
@@ -67,11 +69,16 @@
     <button class="secondary sidebar-toggle" type="button" onclick="toggleSidebar()" title="Minimize / expand sidebar">☰</button>
     <div class="filters">
       <div class="tabs">
-        <button class="active" id="tab-runs" onclick="setMode('runs'); syncPortalUrl({replace:true})">Runs <span id="runs-count" class="pill"></span></button>
-        <button id="tab-configs" onclick="setMode('configs'); syncPortalUrl({replace:true})">Configs <span id="configs-count" class="pill"></span></button>
-        <button id="tab-specs" onclick="setMode('specs'); syncPortalUrl({replace:true})">OpenAPI <span id="specs-count" class="pill"></span></button>
+        <button class="active" id="tab-runs" onclick="setMode('runs')">Runs <span id="runs-count" class="pill"></span></button>
+        <button id="tab-configs" onclick="setMode('configs')">Profiles <span id="configs-count" class="pill"></span></button>
+        <button id="tab-specs" onclick="setMode('specs')">OpenAPI <span id="specs-count" class="pill"></span></button>
       </div>
       <div class="filters-runs">
+        <select id="f-profile" onchange="onProfileFilterChange()" title="Filter by run settings profile (kept across tabs)">
+          <option value="">All profiles</option>
+        </select>
+        <input id="f-run-id" placeholder="Run ID (when no profile)…" title="Exact or prefix run id — use when browsing history without a profile"
+          onkeydown="if(event.key==='Enter'){applyFilters();}" onchange="applyFilters()"/>
         <select id="f-service" onchange="applyFilters()"><option value="">All services</option></select>
         <select id="f-env" onchange="applyFilters()"><option value="">All envs</option></select>
         <select id="f-api-version" onchange="applyFilters()" title="OpenAPI / API version">
@@ -93,7 +100,14 @@
           </div>
         </div>
         <input id="f-q" placeholder="Search URL, name, id…" oninput="applyFilters()"/>
-        <button class="secondary" style="width:100%" onclick="newConfig()">+ New config</button>
+        <select id="f-audience" onchange="refreshConfigs()" title="Profile audience">
+          <option value="">All audiences</option>
+          <option value="developer">developer</option>
+          <option value="agent">agent</option>
+          <option value="ci">ci</option>
+          <option value="shared">shared</option>
+        </select>
+        <button class="secondary" style="width:100%" onclick="newConfig()">+ New profile</button>
       </div>
     </div>
     <div class="list" id="sidebar-list"><div class="empty">Loading…</div></div>

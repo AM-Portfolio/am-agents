@@ -15,6 +15,7 @@ from app.catalog_loader import (
     openapi_versions_by_env,
     platform_bearer_token,
     proxy_try_request,
+    reachable_target_for_service,
 )
 from app.config import settings
 
@@ -24,14 +25,18 @@ _TRY_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
 
 
 @router.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok", "service": settings.app_name}
+async def health() -> dict:
+    from app.services import health as svc_health
+
+    return svc_health()
 
 
 @router.get("/ready")
 async def ready() -> dict:
     h = await load_ops.platform_health()
-    return {"status": "ready", "platform": h}
+    from app.db.engine import db_health, store_mode
+
+    return {"status": "ready", "platform": h, "store": store_mode(), "db": db_health()}
 
 
 @router.get("/api/catalog")
@@ -54,14 +59,36 @@ async def api_service_apis(
     env = environment or settings.default_environment
     data = load_service_apis(service, env)
     reg = load_registration(service)
+    target = reachable_target_for_service(service, env)
+    # target_url last so registration/baked payloads cannot overwrite the reachable URL
     return {
         "service": service,
         "environment": env,
-        "target_url": default_target_for_service(service, env),
         "runtime": (reg or {}).get("runtime") or data.get("runtime"),
         "openapi_version": data.get("openapi_version"),
         **data,
+        "target_url": target,
         "count": len(data.get("apis") or []),
+    }
+
+
+@router.get("/api/catalog/{service}/target")
+async def api_service_target(
+    service: str,
+    environment: str | None = Query(default=None, description="dev|preprod|prod"),
+) -> dict:
+    """Resolve browser/k6-reachable base URL for service+env (public_* outside cluster)."""
+    env = environment or settings.default_environment
+    reg = load_registration(service) or {}
+    targets = reg.get("targets") if isinstance(reg.get("targets"), dict) else {}
+    target = reachable_target_for_service(service, env)
+    return {
+        "service": service,
+        "environment": env,
+        "target_url": target,
+        "targets": targets,
+        "public_key": f"public_{env}",
+        "cluster_key": env,
     }
 
 
@@ -163,6 +190,8 @@ async def api_scripts() -> dict:
 
 @router.get("/config")
 async def config_preview() -> dict:
+    from app.db.engine import store_mode
+
     return {
         "poc_target_url": settings.poc_target_url,
         "grafana_public_url": settings.grafana_public_url,
@@ -173,4 +202,8 @@ async def config_preview() -> dict:
         "ui_url": f"{settings.root_path.rstrip('/')}/ui" if settings.root_path else "/ui",
         "data_dir": settings.data_dir,
         "runner": "k6-local",
+        "spt_store": store_mode(),
+        "spt_acl_required": settings.spt_acl_required,
+        "max_concurrent_runs": settings.spt_max_concurrent_runs,
+        "mcp_path": "/mcp",
     }

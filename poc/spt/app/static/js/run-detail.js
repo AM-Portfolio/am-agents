@@ -273,8 +273,10 @@ function showRunDetail(r, opts){
       '<div id="api-inspector-wrap">'+(r.status==="running"
         ? '<div class="empty compact">Inspector unlocks when the run finishes (per-call request/response).</div>'
         : '<div class="empty compact">Loading call traces…</div>')+'</div></div></div>'+
-    '<div class="section"><div class="section-h">Metrics <span class="sub">Grafana locked to this run</span></div><div class="section-b">'+metricStrip(r.metrics_summary)+
-      grafanaBlock+'</div></div>'+
+    '<div class="section"><div class="section-h">Metrics <span class="sub">RPS · latency · data in/out from k6</span></div><div class="section-b">'+metricStrip(r.metrics_summary)+
+      grafanaBlock+
+      '<div id="baseline-wrap" class="sub" style="margin-top:.65rem">Loading baseline…</div>'+
+    '</div></div>'+
     '<div class="section"><div class="section-h">Load settings (next run)</div><div class="section-b">'+
       '<label class="sub">bench (VUs / duration / iterations)</label><textarea class="code" id="payload-editor" oninput="syncPayloadEdit()" style="min-height:90px"></textarea>'+
       (apisTested.length?'<p class="sub" style="margin-top:.5rem">APIs in catalog for this run: '+apisTested.map(a=>esc((a.method||"GET")+" "+(a.path||a.id))).join(" · ")+'</p>':'')+
@@ -292,6 +294,29 @@ function showRunDetail(r, opts){
   updateStopButton(r.status === "running");
   if(r.status !== "running"){
     refreshApiSection(r.id);
+  }
+  loadBaselineCompare(r.id);
+}
+
+async function loadBaselineCompare(runId){
+  const el = document.getElementById("baseline-wrap");
+  if(!el) return;
+  try {
+    const data = await fetchJson("/api/runs/"+encodeURIComponent(runId)+"/baseline");
+    if(!data.ok){
+      el.textContent = "No previous run for this profile yet.";
+      return;
+    }
+    const d = (data.compare && data.compare.deltas_b_minus_a) || {};
+    const prev = data.previous || {};
+    const bits = [];
+    if(d.p90_ms != null) bits.push("p90 "+(d.p90_ms>=0?"+":"")+Number(d.p90_ms).toFixed(1)+"ms vs prev");
+    if(d.fail_pct != null) bits.push("fail% "+(d.fail_pct>=0?"+":"")+Number(d.fail_pct).toFixed(3));
+    if(d.rps != null) bits.push("rps "+(d.rps>=0?"+":"")+Number(d.rps).toFixed(2));
+    el.innerHTML = "vs previous <code>"+esc((prev.id||"").slice(0,8))+"</code>"+(bits.length?(" · "+bits.join(" · ")):"")
+      +' · <a href="#" onclick="selectRun(\''+esc(prev.id)+'\');return false">open previous</a>';
+  } catch(_){
+    el.textContent = "";
   }
 }
 

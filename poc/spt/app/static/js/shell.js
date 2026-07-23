@@ -32,6 +32,46 @@ function openDatePicker(el){
   } catch(_){ /* browser may block if not a user gesture; click handler covers that */ }
 }
 
+function activeProfileId(){
+  const side = document.getElementById("f-profile");
+  const head = document.getElementById("run-config");
+  const fromSide = side && side.value;
+  const fromHead = head && head.value;
+  return (fromSide || fromHead || "") || "";
+}
+
+function activeProfile(){
+  const id = activeProfileId();
+  if(!id) return null;
+  return (configs||[]).find(c=>c.id===id) || null;
+}
+
+function syncProfileControls(profileId, opts){
+  opts = opts || {};
+  const id = profileId != null ? profileId : activeProfileId();
+  const side = document.getElementById("f-profile");
+  const head = document.getElementById("run-config");
+  if(side && [].some.call(side.options, o=>o.value===id)) side.value = id;
+  else if(side && id === "") side.value = "";
+  if(head){
+    if(id && [].some.call(head.options, o=>o.value===id)) head.value = id;
+    else if(!id) head.value = "";
+  }
+  updateRunIdFilterState();
+}
+
+function updateRunIdFilterState(){
+  const runIdEl = document.getElementById("f-run-id");
+  if(!runIdEl) return;
+  const hasProfile = !!activeProfileId();
+  runIdEl.placeholder = hasProfile
+    ? "Run ID (optional within profile)…"
+    : "Run ID — pick from history or paste id…";
+  runIdEl.title = hasProfile
+    ? "Optional: narrow to a specific run id under the selected profile"
+    : "No profile selected — browse history or filter by run id";
+}
+
 function filterParams(extra){
   const p = new URLSearchParams();
   const service = document.getElementById("f-service").value;
@@ -40,12 +80,16 @@ function filterParams(extra){
   const from = document.getElementById("f-from") && document.getElementById("f-from").value;
   const to = document.getElementById("f-to") && document.getElementById("f-to").value;
   const q = document.getElementById("f-q").value.trim();
+  const profileId = activeProfileId();
+  const runId = (document.getElementById("f-run-id") && document.getElementById("f-run-id").value.trim()) || "";
   if(service) p.set("service", service);
   if(environment) p.set("environment", environment);
   if(status) p.set("status", status);
   if(from) p.set("from", from);
   if(to) p.set("to", to);
   if(q) p.set("q", q);
+  if(profileId) p.set("config_id", profileId);
+  if(runId) p.set("run_id", runId);
   if(extra){
     Object.keys(extra).forEach(k=>{
       if(extra[k] != null && extra[k] !== "") p.set(k, String(extra[k]));
@@ -70,7 +114,10 @@ function applyUrlStateToFilters(params){
     "f-status": "status",
     "f-from": "from",
     "f-to": "to",
-    "f-q": "q"
+    "f-q": "q",
+    "f-run-id": "run_id",
+    "f-profile": "config",
+    "f-audience": "audience"
   };
   Object.keys(map).forEach(id=>{
     const el = document.getElementById(id);
@@ -78,6 +125,10 @@ function applyUrlStateToFilters(params){
     const v = params.get(map[id]);
     if(v != null) el.value = v;
   });
+  // Header profile mirrors sidebar / URL config=
+  const cfg = params.get("config");
+  if(cfg != null) syncProfileControls(cfg);
+  updateRunIdFilterState();
 }
 
 function syncPortalUrl(opts){
@@ -89,15 +140,19 @@ function syncPortalUrl(opts){
   const from = document.getElementById("f-from") && document.getElementById("f-from").value;
   const to = document.getElementById("f-to") && document.getElementById("f-to").value;
   const q = document.getElementById("f-q") && document.getElementById("f-q").value.trim();
+  const runIdFilter = document.getElementById("f-run-id") && document.getElementById("f-run-id").value.trim();
+  const profileId = activeProfileId();
   if(service) p.set("service", service);
   if(environment) p.set("environment", environment);
   if(status) p.set("status", status);
   if(from) p.set("from", from);
   if(to) p.set("to", to);
   if(q) p.set("q", q);
-  if(mode === "configs" && selectedConfigId) p.set("config", selectedConfigId);
-  else if(mode === "specs" && selectedSpecService) p.set("spec", selectedSpecService);
-  else if(selectedRunId) p.set("run", selectedRunId);
+  if(runIdFilter) p.set("run_id", runIdFilter);
+  // Keep profile filter across tabs (OpenAPI / Profiles / Runs)
+  if(profileId) p.set("config", profileId);
+  if(mode === "specs" && selectedSpecService) p.set("spec", selectedSpecService);
+  else if(mode === "runs" && selectedRunId) p.set("run", selectedRunId);
   if(mode === "specs" && specsEnv) p.set("spec_env", specsEnv);
   if(mode === "specs" && typeof specsPayloadSetVersion !== "undefined" && specsPayloadSetVersion != null){
     p.set("set", String(specsPayloadSetVersion));
@@ -108,7 +163,7 @@ function syncPortalUrl(opts){
   const next = portalUiPath() + (p.toString() ? "?" + p.toString() : "");
   const cur = location.pathname.replace(/\/$/, "") + (location.search || "");
   if(next === cur) return;
-  const state = { run: selectedRunId, config: selectedConfigId, mode: mode };
+  const state = { run: selectedRunId, config: profileId || selectedConfigId, mode: mode };
   if(opts.replace) history.replaceState(state, "", next);
   else history.pushState(state, "", next);
 }
@@ -131,7 +186,7 @@ async function loadHealth(){
   } catch(e){ document.getElementById("health-bar").textContent = "platform check failed"; }
 }
 
-function setMode(m){
+async function setMode(m){
   mode=m;
   document.body.classList.remove("mode-runs","mode-configs","mode-specs");
   document.body.classList.add("mode-"+m);
@@ -143,25 +198,78 @@ function setMode(m){
     // Prefetch Swagger assets so first paint is faster
     try { ensureSwaggerSdk(); } catch(_){}
     try { loadTryToken(false); } catch(_){}
-    refreshSpecsList().then(async ()=>{
-      updateCounts();
-      renderList();
-      if(!selectedSpecService && specsList.length){
-        // Prefer a registered OpenAPI service so Try it out works immediately
-        const preferred = specsList.find(s=>s.source==="registration" && s.openapi_path)
-          || specsList.find(s=>s.openapi_path)
-          || specsList[0];
-        if(preferred) await selectSpec(preferred.id, { replaceUrl: true });
-        return;
+    // Keep profile filter intact — prefer that profile's service in OpenAPI
+    const prof = activeProfile();
+    if(prof && prof.service){
+      const svcEl = document.getElementById("f-service");
+      if(svcEl && !svcEl.value) svcEl.value = prof.service;
+      if(prof.environment){
+        const envEl = document.getElementById("f-env");
+        if(envEl && !envEl.value){
+          envEl.value = prof.environment;
+          specsEnv = prof.environment;
+        }
       }
-      if(selectedSpecService) renderSpecDetail();
-      else {
-        document.getElementById("main").innerHTML = '<div class="empty">Select a service to view OpenAPI.</div>';
-      }
-    });
-  } else {
+    }
+    await refreshSpecsList();
+    updateCounts();
     renderList();
+    if(prof && prof.service && specsList.some(s=>s.id===prof.service)){
+      await selectSpec(prof.service, { replaceUrl: true });
+      return;
+    }
+    if(!selectedSpecService && specsList.length){
+      // Prefer a registered OpenAPI service so Try it out works immediately
+      const preferred = specsList.find(s=>s.source==="registration" && s.openapi_path)
+        || specsList.find(s=>s.openapi_path)
+        || specsList[0];
+      if(preferred) await selectSpec(preferred.id, { replaceUrl: true });
+      return;
+    }
+    if(selectedSpecService){
+      renderSpecDetail();
+      syncPortalUrl({ replace: true });
+    } else {
+      document.getElementById("main").innerHTML = '<div class="empty">Select a service to view OpenAPI.</div>';
+      syncPortalUrl({ replace: true });
+    }
+    return;
   }
+  if(m === "runs"){
+    // Profile filter stays applied — list is filtered by config_id when set
+    await refreshRuns({ resetPage: true });
+    const wantRunId = (document.getElementById("f-run-id") && document.getElementById("f-run-id").value.trim()) || "";
+    if(wantRunId && runs.length){
+      const hit = runs.find(r=>r.id===wantRunId) || runs[0];
+      await selectRun(hit.id, { replaceUrl: true });
+    } else if(runs.length){
+      await selectRun(runs[0].id, { replaceUrl: true });
+    } else {
+      stopRunWatch();
+      selectedRunId = null;
+      const emptyMsg = activeProfileId()
+        ? 'No runs for this profile yet. Click <strong>Run test</strong> above.'
+        : 'No runs match. Pick a profile, or enter a <strong>Run ID</strong>, or clear filters.';
+      document.getElementById("main").innerHTML = '<div class="empty">'+emptyMsg+'</div>';
+      syncPortalUrl({ replace: true });
+    }
+    return;
+  }
+  if(m === "configs"){
+    await refreshConfigs();
+    renderList();
+    const id = (selectedConfigId && configs.some(c=>c.id===selectedConfigId))
+      ? selectedConfigId
+      : (configs[0] && configs[0].id);
+    if(id) await selectConfig(id, { replaceUrl: true });
+    else {
+      selectedConfigId = null;
+      document.getElementById("main").innerHTML = '<div class="empty">No profiles. Click <strong>+ New profile</strong>.</div>';
+      syncPortalUrl({ replace: true });
+    }
+    return;
+  }
+  renderList();
 }
 
 async function applyFilters(){
@@ -171,9 +279,15 @@ async function applyFilters(){
     head.value = verEl.value;
     if(typeof onRunOpenApiVersionChange === "function") await onRunOpenApiVersionChange();
   }
+  updateRunIdFilterState();
   if(mode==="runs"){
     runsPage = 1;
     await refreshRuns();
+    const wantRunId = (document.getElementById("f-run-id") && document.getElementById("f-run-id").value.trim()) || "";
+    if(wantRunId && runs.length){
+      const hit = runs.find(r=>r.id===wantRunId) || runs.find(r=>String(r.id).startsWith(wantRunId)) || runs[0];
+      if(hit) await selectRun(hit.id, { replaceUrl: true });
+    }
   }
   else if(mode==="configs") await refreshConfigs();
   else if(mode==="specs"){
@@ -263,40 +377,90 @@ async function goRunsPage(page){
 
 async function refreshConfigs(){
   try {
-    configs = (await fetchJson("/api/configs"+(document.getElementById("f-service").value ? "?service="+encodeURIComponent(document.getElementById("f-service").value) : ""))).configs || [];
+    const params = new URLSearchParams();
+    const svc = document.getElementById("f-service")?.value;
+    const aud = document.getElementById("f-audience")?.value;
+    if(svc) params.set("service", svc);
+    if(aud) params.set("audience", aud);
+    const qs = params.toString() ? ("?"+params.toString()) : "";
+    configs = (await fetchJson("/api/configs"+qs)).configs || [];
     updateCounts();
     if(mode==="configs") renderList();
     await refreshConfigSelect();
   } catch(e) {
     configs = [];
     updateCounts();
-    if(mode==="configs") setSidebarMessage("Could not load configs: "+e.message);
+    if(mode==="configs") setSidebarMessage("Could not load profiles: "+e.message);
+  }
+}
+
+async function onProfileFilterChange(){
+  const side = document.getElementById("f-profile");
+  const id = side ? side.value : "";
+  syncProfileControls(id);
+  const c = configs.find(x=>x.id===id);
+  selectedApiIds = null;
+  serviceApisCache = {};
+  openApiVersionCache = {};
+  if(c){
+    if(typeof applyProfileToHeader === "function") applyProfileToHeader(c);
+    try { await refreshRunOpenApiVersionSelect(c.environment, c.openapi_version); } catch(_){}
+    // Align service/env filters with profile (user can still clear)
+    const svcEl = document.getElementById("f-service");
+    const envEl = document.getElementById("f-env");
+    if(svcEl && c.service) svcEl.value = c.service;
+    if(envEl && c.environment) envEl.value = c.environment;
+  }
+  const btn = document.getElementById("btn-api-picker");
+  if(btn) btn.textContent = "APIs (all)";
+  await applyFilters();
+  // If on OpenAPI with a profile, jump to that service
+  if(mode === "specs" && c && c.service){
+    await refreshSpecsList();
+    if(specsList.some(s=>s.id===c.service)) await selectSpec(c.service, { replaceUrl: true });
+  }
+  // If on Profiles tab, open the profile editor
+  if(mode === "configs" && id){
+    await selectConfig(id, { replaceUrl: true });
   }
 }
 
 async function refreshConfigSelect(){
   if(!configs.length) configs = (await fetchJson("/api/configs")).configs || [];
+  const prev = activeProfileId();
   const sel = document.getElementById("run-config");
-  if(!sel) return;
-  const prev = sel.value;
-  sel.innerHTML = configs.map(c=>'<option value="'+c.id+'">'+esc(c.name)+' ('+esc(c.service)+')</option>').join("");
-  if(prev && configs.some(c=>c.id===prev)) sel.value = prev;
-  if(!sel._sptBound){
-    sel._sptBound = true;
-    sel.addEventListener("change", async ()=>{
-      selectedApiIds = null;
-      serviceApisCache = {};
-      openApiVersionCache = {};
-      const c = configs.find(x=>x.id===sel.value);
-      try { await refreshRunOpenApiVersionSelect(c && c.environment, c && c.openapi_version); } catch(_){}
-      const btn = document.getElementById("btn-api-picker");
-      if(btn) btn.textContent = "APIs (all)";
-    });
+  const side = document.getElementById("f-profile");
+  const opts = ['<option value="">All profiles</option>'].concat(configs.map(c=>{
+    const aud = c.audience || "developer";
+    return '<option value="'+c.id+'">'+esc(c.name)+' · '+esc(aud)+'</option>';
+  }));
+  if(sel){
+    sel.innerHTML = opts.join("");
+    if(prev && configs.some(c=>c.id===prev)) sel.value = prev;
+    else sel.value = "";
+    if(!sel._sptBound){
+      sel._sptBound = true;
+      sel.addEventListener("change", async ()=>{
+        const sideEl = document.getElementById("f-profile");
+        if(sideEl) sideEl.value = sel.value;
+        await onProfileFilterChange();
+      });
+    }
   }
-  const c = configs.find(x=>x.id===sel.value) || configs[0];
-  if(c && typeof refreshRunOpenApiVersionSelect === "function"){
-    try { await refreshRunOpenApiVersionSelect(c.environment, c.openapi_version); } catch(_){}
+  if(side){
+    side.innerHTML = opts.join("");
+    if(prev && configs.some(c=>c.id===prev)) side.value = prev;
+    else side.value = "";
   }
+  syncProfileControls(prev);
+  const c = activeProfile();
+  if(c){
+    if(typeof applyProfileToHeader === "function") applyProfileToHeader(c);
+    if(typeof refreshRunOpenApiVersionSelect === "function"){
+      try { await refreshRunOpenApiVersionSelect(c.environment, c.openapi_version); } catch(_){}
+    }
+  }
+  updateRunIdFilterState();
 }
 
 function renderList(){
@@ -323,9 +487,18 @@ function renderList(){
     });
     renderRunsPager();
   } else {
-    if(!configs.length){ el.innerHTML='<div class="empty">No configs. Click <strong>+ New config</strong>.</div>'; return; }
-    el.innerHTML = configs.map(c=>'<div class="item '+(c.id===selectedConfigId?"active":"")+'" data-config-id="'+esc(c.id)+'">'+
-      '<div><strong>'+esc(c.name)+'</strong></div><div class="sub">'+esc(c.service)+' · '+esc(c.environment)+'</div></div>').join("");
+    if(!configs.length){ el.innerHTML='<div class="empty">No profiles. Click <strong>+ New profile</strong>.</div>'; return; }
+    el.innerHTML = configs.map(c=>{
+      const aud = c.audience || "developer";
+      const bench = (c.payloads&&c.payloads.bench_run) || {};
+      const loadBits = [];
+      if(bench.vus != null) loadBits.push("VU "+bench.vus);
+      if(bench.iterations != null) loadBits.push(bench.iterations+" calls");
+      else if(bench.duration) loadBits.push(String(bench.duration));
+      return '<div class="item '+(c.id===selectedConfigId?"active":"")+'" data-config-id="'+esc(c.id)+'">'+
+        '<div><strong>'+esc(c.name)+'</strong> <span class="pill">'+esc(aud)+'</span></div>'+
+        '<div class="sub">'+esc(c.service)+' · '+esc(c.environment)+(loadBits.length?' · '+esc(loadBits.join(" / ")):"")+'</div></div>';
+    }).join("");
     el.querySelectorAll("[data-config-id]").forEach(node=>{
       node.addEventListener("click", ()=> selectConfig(node.getAttribute("data-config-id")));
     });
@@ -335,7 +508,9 @@ function renderList(){
 async function selectRun(id, opts){
   opts = opts || {};
   stopRunWatch();
-  selectedRunId=id; selectedConfigId=null; renderList();
+  selectedRunId=id;
+  // Keep profile filter intact when browsing run history
+  renderList();
   const r = await fetchJson("/api/runs/"+id);
   editPayloads = JSON.parse(JSON.stringify(r.payloads_used||{}));
   showRunDetail(r, {preserveApi: !!opts.preserveApi});
@@ -343,12 +518,38 @@ async function selectRun(id, opts){
   if(!opts.skipUrl) syncPortalUrl({ replace: !!opts.replaceUrl });
 }
 
+function formatBytes(n){
+  const x = Number(n);
+  if(!isFinite(x) || x < 0) return String(n);
+  if(x < 1024) return Math.round(x) + " B";
+  if(x < 1024*1024) return (x/1024).toFixed(1) + " KB";
+  if(x < 1024*1024*1024) return (x/(1024*1024)).toFixed(2) + " MB";
+  return (x/(1024*1024*1024)).toFixed(2) + " GB";
+}
+
+function formatBytesRate(n){
+  const x = Number(n);
+  if(!isFinite(x) || x < 0) return String(n);
+  return formatBytes(x) + "/s";
+}
+
 function metricStrip(m){
   m = m || {};
-  const keys = ["throughput.requestsPerSecond","errorRate","responseTime.p90","responseTime.avg"];
+  const items = [
+    {key:"throughput.requestsPerSecond", label:"RPS"},
+    {key:"errorRate", label:"Fail %", fmt:v=>esc(v)+"%"},
+    {key:"responseTime.p90", label:"p90 ms"},
+    {key:"responseTime.avg", label:"Avg ms"},
+    {key:"transfer.receivedBytes", label:"Data in", fmt:v=>esc(formatBytes(v))},
+    {key:"transfer.sentBytes", label:"Data out", fmt:v=>esc(formatBytes(v))},
+    {key:"transfer.receivedBytesPerSec", label:"In rate", fmt:v=>esc(formatBytesRate(v))},
+    {key:"transfer.sentBytesPerSec", label:"Out rate", fmt:v=>esc(formatBytesRate(v))},
+  ];
   const parts = [];
-  keys.forEach(k=>{
-    if(m[k]!=null) parts.push('<div class="metric"><div class="k">'+esc(k)+'</div><div class="n">'+esc(m[k])+'</div></div>');
+  items.forEach(it=>{
+    if(m[it.key]==null) return;
+    const val = it.fmt ? it.fmt(m[it.key]) : esc(m[it.key]);
+    parts.push('<div class="metric"><div class="k">'+esc(it.label)+'</div><div class="n">'+val+'</div></div>');
   });
   if(!parts.length) return "";
   return '<div class="metrics">'+parts.join("")+'</div>';

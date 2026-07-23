@@ -1,41 +1,44 @@
 from __future__ import annotations
 
-import asyncio
 import json
-import threading
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import Body, FastAPI, HTTPException, Query
+from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.catalog_loader import (
-    apply_preset,
-    apply_run_profile,
-    apis_for_config,
-    default_target_for_service,
-    load_service_apis,
-    reachable_target_for_service,
-)
+from app.acl import AclMiddleware, Caller, seed_bootstrap_keys
+from app.api.platform import router as platform_router
 from app.config import settings
 from app.config_builder import config_from_request, ensure_default_config
 from app.dashboard import render_portal
+from app.db.engine import init_db, store_mode
 from app.grafana_links import grafana_embed_url, grafana_run_url
 from app import load_ops
-from app.api.platform import router as platform_router
 from app.load_runner import (
-    _planned_api_rows,
     get_run_api_index,
     get_run_trace,
     get_run_trace_at,
     list_run_traces,
 )
+from app.mcp_control import mount_mcp
+from app.payload_store import (
+    create_payload_set,
+    delete_payload,
+    ensure_payload_set,
+    get_payload,
+    get_payload_set,
+    list_payload_sets,
+    list_payloads,
+    save_from_trace,
+    save_payload,
+    set_active_payload_set,
+    upsert_api_in_payload_set,
+)
 from app.runners import process_registry
 from app.run_store import (
-    api_outcome_counts,
     delete_config,
     get_config,
     get_run,
@@ -56,27 +59,14 @@ from app.schemas import (
     TestConfigIn,
     TestConfigUpdate,
 )
-from app.payload_store import (
-    apply_payload_refs,
-    apply_payload_set,
-    create_payload_set,
-    delete_payload,
-    ensure_payload_set,
-    get_payload,
-    get_payload_set,
-    list_payload_sets,
-    list_payloads,
-    save_from_trace,
-    save_payload,
-    set_active_payload_set,
-    upsert_api_in_payload_set,
-)
+from app.services import compare_runs, previous_for_profile
+from app.services import execute_svc
 from app.trace_store import filter_api_index
 
 app = FastAPI(
     title="SPT Load Test Portal",
     version="1.0.0",
-    description="Self-hosted load testing — k6, configs, Grafana metrics",
+    description="Self-hosted load testing — k6, configs, Grafana metrics, MCP control",
     root_path=settings.root_path.rstrip("/") if settings.root_path else "",
     docs_url="/docs",
     redoc_url="/redoc",
@@ -86,10 +76,39 @@ app = FastAPI(
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 app.include_router(platform_router)
+app.add_middleware(AclMiddleware)
+mount_mcp(app)
 
 
 @app.on_event("startup")
 async def startup() -> None:
+    if store_mode() != "json":
+        init_db()
+        try:
+            from app.db.migrate_json import migrate_all
+
+            migrate_all()
+        except Exception:
+            pass
+        seed_bootstrap_keys()
+        # Orphaned "running" rows from crashed processes / JSON migration
+        try:
+            from app.run_store import list_runs, update_run
+
+            rows, _ = list_runs(limit=200, status="running")
+            for row in rows:
+                update_run(
+                    str(row["id"]),
+                    {
+                        "status": "failed",
+                        "passed": False,
+                        "error": row.get("error") or "stale running state cleared on startup",
+                        "finished_at": datetime.now(timezone.utc).isoformat(),
+                        "live": {"phase": "error", "message": "cleared on startup"},
+                    },
+                )
+        except Exception:
+            pass
     ensure_default_config()
 
 
@@ -110,6 +129,8 @@ async def api_list_runs(
     environment: str | None = None,
     status: str | None = None,
     config_name: str | None = None,
+    config_id: str | None = None,
+    run_id: str | None = None,
     test_type: str | None = None,
     triggered_by: str | None = None,
     q: str | None = None,
@@ -125,6 +146,8 @@ async def api_list_runs(
         environment=environment,
         status=status,
         config_name=config_name,
+        config_id=config_id,
+        run_id=run_id,
         test_type=test_type,
         triggered_by=triggered_by,
         q=q,
@@ -138,6 +161,17 @@ async def api_list_runs(
         "limit": limit,
         "offset": offset,
     }
+
+
+@app.get("/api/runs/compare")
+async def api_compare_runs(
+    a: str = Query(..., description="Baseline run id"),
+    b: str = Query(..., description="Compare run id"),
+) -> dict:
+    result = compare_runs(a, b)
+    if not result.get("ok"):
+        raise HTTPException(status_code=404, detail=result)
+    return result
 
 
 @app.get("/api/runs/{run_id}")
@@ -436,231 +470,22 @@ async def api_delete_payload(service: str, api_id: str, name: str, version: int)
 
 
 @app.post("/api/runs/execute")
-async def api_execute_run(body: RunExecuteRequest) -> dict:
-    if body.config_id:
-        cfg = get_config(body.config_id)
-        if not cfg:
-            raise HTTPException(status_code=404, detail="Config not found")
-    elif body.config:
-        cfg = config_from_request(body.config)
-    else:
-        cfg = ensure_default_config()
+async def api_execute_run(body: RunExecuteRequest, request: Request) -> dict:
+    caller = getattr(request.state, "spt_caller", None) or Caller(role="developer")
+    idem = (request.headers.get("idempotency-key") or "").strip() or None
+    return await execute_svc.execute_run(body, caller=caller, idempotency_key=idem)
 
-    cfg = apply_preset(cfg, body.preset)
-    # Optional: pick which env / OpenAPI version catalog feeds this run
-    if body.environment:
-        cfg["environment"] = body.environment
-        cfg["target_url"] = default_target_for_service(
-            cfg.get("service") or "am-analysis", body.environment
-        )
-    if body.openapi_version is not None:
-        cfg["openapi_version"] = body.openapi_version
-    elif body.config and getattr(body.config, "openapi_version", None):
-        cfg["openapi_version"] = body.config.openapi_version
 
-    profile = body.profile or (body.config.run_profile if body.config else None) or cfg.get("run_profile")
-    # 20 VUs / 50 calls (or any multi-VU / multi-iter) cannot use debug — debug hard-forces 1×1.
-    if body.preset == "20u-50" or (body.vus and body.vus > 1) or (body.iterations and body.iterations > 1):
-        profile = "load"
-    cfg = apply_run_profile(cfg, profile)
-    if body.payload_set_version is not None:
-        cfg = apply_payload_set(cfg, body.payload_set_version)
-    if body.payload_refs:
-        cfg = apply_payload_refs(cfg, body.payload_refs)
-
-    selected_api_ids = [str(x) for x in (body.api_ids or []) if x]
-    if selected_api_ids:
-        cfg["selected_api_ids"] = selected_api_ids
-        try:
-            apis_for_config(cfg, run_id="validate")
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    # Always resolve a reachable target for local SPT (public_* outside the cluster)
-    cfg["target_url"] = reachable_target_for_service(
-        cfg.get("service") or "am-analysis",
-        cfg.get("environment") or settings.default_environment,
-        cfg.get("target_url"),
-    )
-
-    # Optional UI overrides: VUs / calls (iterations) / duration
-    if body.vus is not None or body.iterations is not None or body.duration is not None:
-        payloads = dict(cfg.get("payloads") or {})
-        bench = dict(payloads.get("bench_run") or {})
-        if body.vus is not None:
-            bench["vus"] = body.vus
-        if body.iterations is not None:
-            bench["iterations"] = body.iterations
-            bench.pop("duration", None)
-        elif body.duration is not None:
-            bench["duration"] = body.duration
-            bench.pop("iterations", None)
-        if (body.vus and body.vus > 1) or (body.iterations and body.iterations > 1):
-            profile = "load"
-            cfg["run_profile"] = "load"
-        payloads["bench_run"] = bench
-        cfg["payloads"] = payloads
-        if profile != "debug":
-            cfg["run_profile"] = "load"
-
-    if body.save_config and body.config:
-        cfg = save_config(config_from_request(body.config))
-
-    if body.wait is True:
-        record = await load_ops.run_test_from_config(cfg, triggered_by=body.triggered_by)
-        save_run(record)
-        return record
-
-    run_id = str(uuid.uuid4())
-    bench = ((cfg.get("payloads") or {}).get("bench_run")) or {}
-    auth = ((cfg.get("payloads") or {}).get("auth_env")) or {}
-    started_at = datetime.now(timezone.utc).isoformat()
-    planned_rows: list[dict[str, Any]] = []
-    apis_tested: list[dict[str, Any]] = []
-    try:
-        _, planned = apis_for_config(cfg, run_id=run_id)
-        planned_rows = _planned_api_rows(planned)
-        apis_tested = [
-            {
-                "id": a.get("id"),
-                "name": a.get("name"),
-                "method": a.get("method"),
-                "path": a.get("path"),
-            }
-            for a in planned
-        ]
-        if not cfg.get("openapi_version"):
-            cat = load_service_apis(
-                cfg.get("service") or "am-analysis",
-                cfg.get("environment") or settings.default_environment,
-            )
-            if cat.get("openapi_version"):
-                cfg["openapi_version"] = cat.get("openapi_version")
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception:
-        try:
-            raw = (load_service_apis(cfg.get("service") or "am-analysis").get("apis") or [])
-            planned_rows = _planned_api_rows(raw)
-            apis_tested = [
-                {"id": a.get("id"), "name": a.get("name"), "method": a.get("method"), "path": a.get("path")}
-                for a in raw
-                if a.get("id")
-            ]
-        except Exception:
-            planned_rows = []
-            apis_tested = []
-    placeholder = {
-        "id": run_id,
-        "started_at": started_at,
-        "status": "running",
-        "passed": False,
-        "runner": "k6-local",
-        "run_profile": cfg.get("run_profile") or "load",
-        "config_id": cfg.get("id"),
-        "config_name": cfg.get("name", "unnamed"),
-        "service": cfg.get("service", "am-analysis"),
-        "environment": cfg.get("environment", settings.default_environment),
-        "openapi_version": cfg.get("openapi_version"),
-        "test_type": cfg.get("test_type", "k6"),
-        "triggered_by": body.triggered_by,
-        "target_url": cfg.get("target_url") or settings.poc_target_url,
-        "api_count": len(planned_rows) or None,
-        "api_ids": selected_api_ids or None,
-        "payloads_used": {
-            "bench_run": dict(bench),
-            "auth_env": {k: auth[k] for k in ("username", "user_id", "identity_url") if auth.get(k)},
-            "run_params": {
-                "profile": cfg.get("run_profile") or "load",
-                "vus": bench.get("vus"),
-                "duration": bench.get("duration"),
-                "iterations": bench.get("iterations"),
-                "triggered_by": body.triggered_by,
-                "api_ids": selected_api_ids or None,
-                "openapi_version": cfg.get("openapi_version"),
-            },
-            "apis_tested": apis_tested,
-        },
-        "steps": [{"step": "queued", "status": "running"}],
-        "metrics_summary": {},
-        "api_summary": planned_rows,
-        "live": {
-            "phase": "queued",
-            "message": "Run accepted — starting…",
-            "vus": bench.get("vus"),
-            "iterations": bench.get("iterations"),
-            "duration": bench.get("duration"),
-            "api_count": len(planned_rows),
-            "completed_iterations": 0,
-            "total_iterations": bench.get("iterations"),
-            "api_hits": 0,
-            "pct": 0,
-            "by_api": {},
-        },
-        "error": None,
-    }
-    save_run(placeholder)
-
-    triggered_by = body.triggered_by
-
-    def _bg_thread() -> None:
-        def on_progress(live: dict) -> None:
-            current = get_run(run_id) or {}
-            prev = dict(current.get("live") or {})
-            live_copy = dict(live)
-            api_summary = live_copy.pop("api_summary", None)
-            merged = {**prev, **{k: v for k, v in live_copy.items() if v is not None}}
-            # Never let a stale callback rewind progress counters
-            for key in ("completed_iterations", "api_hits", "pct", "elapsed_s"):
-                try:
-                    merged[key] = max(int(prev.get(key) or 0), int(merged.get(key) or 0))
-                except (TypeError, ValueError):
-                    pass
-            # Preserve per-API stream map
-            if prev.get("by_api") and not merged.get("by_api"):
-                merged["by_api"] = prev["by_api"]
-            patch: dict = {"status": "running", "live": merged}
-            # Never clobber streaming per-API rows with a static catalog snapshot
-            cur_summary = current.get("api_summary") or []
-            if api_summary is not None and not cur_summary:
-                patch["api_summary"] = api_summary
-            update_run(run_id, patch)
-
-        async def _run() -> None:
-            try:
-                record = await load_ops.run_test_from_config(
-                    cfg,
-                    triggered_by=triggered_by,
-                    run_id=run_id,
-                    progress=on_progress,
-                )
-                record["started_at"] = started_at
-                # Prefer user-cancel if stop landed first
-                current = get_run(run_id) or {}
-                if current.get("status") == "cancelled" and record.get("status") != "cancelled":
-                    record["status"] = "cancelled"
-                    record["passed"] = False
-                    record["error"] = current.get("error") or "stopped by user"
-                save_run(record)
-            except Exception as exc:
-                current = get_run(run_id) or {}
-                if current.get("status") == "cancelled":
-                    return
-                update_run(
-                    run_id,
-                    {
-                        "status": "failed",
-                        "passed": False,
-                        "finished_at": datetime.now(timezone.utc).isoformat(),
-                        "error": str(exc),
-                        "live": {"phase": "error", "message": str(exc)},
-                    },
-                )
-
-        asyncio.run(_run())
-
-    threading.Thread(target=_bg_thread, name=f"spt-run-{run_id[:8]}", daemon=True).start()
-    return placeholder
+@app.get("/api/runs/{run_id}/baseline")
+async def api_run_baseline(run_id: str) -> dict:
+    row = get_run(run_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Run not found")
+    prev = previous_for_profile(str(row.get("config_id") or ""), exclude_run_id=run_id)
+    if not prev:
+        return {"ok": False, "message": "no previous run for profile"}
+    cmp = compare_runs(str(prev.get("id")), run_id)
+    return {"ok": True, "previous": prev, "compare": cmp}
 
 
 @app.post("/api/runs/{run_id}/stop")
@@ -681,18 +506,67 @@ async def api_stop_run(run_id: str) -> dict:
             "live": {"phase": "cancelled", "message": "Stopped by user"},
         },
     )
-    return {"ok": True, "status": "cancelled", **stop_result}
+    return {"ok": True, "status": "cancelled", "stop": stop_result}
+
+
+def _list_profiles_payload(
+    service: str | None = None,
+    environment: str | None = None,
+    audience: str | None = None,
+) -> dict:
+    configs = list_configs(service=service, environment=environment, audience=audience)
+    if not configs:
+        configs = [ensure_default_config()]
+        configs = list_configs(service=service, environment=environment, audience=audience) or configs
+    return {"configs": configs, "profiles": configs, "count": len(configs)}
 
 
 @app.get("/api/configs")
 async def api_list_configs(
     service: str | None = None,
     environment: str | None = None,
+    audience: str | None = None,
 ) -> dict:
-    configs = list_configs(service=service, environment=environment)
-    if not configs:
-        configs = [ensure_default_config()]
-    return {"configs": configs, "count": len(configs)}
+    return _list_profiles_payload(service, environment, audience)
+
+
+@app.get("/api/profiles")
+async def api_list_profiles(
+    service: str | None = None,
+    environment: str | None = None,
+    audience: str | None = None,
+) -> dict:
+    return _list_profiles_payload(service, environment, audience)
+
+
+@app.get("/api/profiles/default")
+async def api_default_profile() -> dict:
+    return ensure_default_config()
+
+
+@app.get("/api/profiles/{config_id}")
+async def api_get_profile(config_id: str) -> dict:
+    row = get_config(config_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return row
+
+
+@app.post("/api/profiles")
+async def api_create_profile(body: TestConfigIn) -> dict:
+    return save_config(config_from_request(body))
+
+
+@app.put("/api/profiles/{config_id}")
+async def api_update_profile(config_id: str, body: TestConfigUpdate) -> dict:
+    return await api_update_config(config_id, body)
+
+
+@app.delete("/api/profiles/{config_id}")
+async def api_delete_profile(config_id: str) -> dict:
+    if not delete_config(config_id):
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return {"deleted": config_id}
 
 
 @app.get("/api/configs/default")
@@ -719,11 +593,35 @@ async def api_update_config(config_id: str, body: TestConfigUpdate) -> dict:
     if not existing:
         raise HTTPException(status_code=404, detail="Config not found")
     patch = body.model_dump(exclude_unset=True)
-    merged = {**existing, **patch}
+    payloads_patch = None
     if body.payloads is not None:
-        merged["payloads"] = {**existing.get("payloads", {}), **body.payloads.model_dump()}
-    if body.scripts is not None:
-        merged["scripts"] = {**existing.get("scripts", {}), **body.scripts}
+        payloads_patch = body.payloads.model_dump(exclude_unset=True)
+        patch.pop("payloads", None)
+    scripts_patch = patch.pop("scripts", None)
+    merged = {**existing, **patch}
+    if payloads_patch is not None:
+        existing_payloads = dict(existing.get("payloads") or {})
+        # Nested merge for auth_env / bench_run so partial updates do not wipe keys
+        if isinstance(payloads_patch.get("auth_env"), dict):
+            payloads_patch["auth_env"] = {
+                **(existing_payloads.get("auth_env") or {}),
+                **payloads_patch["auth_env"],
+            }
+        if isinstance(payloads_patch.get("bench_run"), dict):
+            payloads_patch["bench_run"] = {
+                **(existing_payloads.get("bench_run") or {}),
+                **payloads_patch["bench_run"],
+            }
+        merged["payloads"] = {**existing_payloads, **payloads_patch}
+        if "payload_set_version" in payloads_patch and payloads_patch["payload_set_version"] is not None:
+            merged["payload_set_version"] = payloads_patch["payload_set_version"]
+    if "payload_set_version" in patch:
+        merged["payload_set_version"] = patch["payload_set_version"]
+        payloads = dict(merged.get("payloads") or {})
+        payloads["payload_set_version"] = patch["payload_set_version"]
+        merged["payloads"] = payloads
+    if scripts_patch is not None:
+        merged["scripts"] = {**existing.get("scripts", {}), **scripts_patch}
     merged["id"] = config_id
     return save_config(merged)
 
@@ -749,13 +647,17 @@ async def api_save_config_from_run(run_id: str, name: str | None = None) -> dict
             "environment": run.get("environment") or settings.default_environment,
             "service": run.get("service") or "am-analysis",
             "test_type": run.get("test_type") or "k6",
+            "run_profile": run.get("run_profile") or snap.get("run_profile") or "load",
+            "audience": snap.get("audience") or "developer",
+            "payload_set_version": snap.get("payload_set_version")
+            or (payloads.get("payload_set_version") if isinstance(payloads, dict) else None),
+            "openapi_version": run.get("openapi_version"),
             "target_url": run.get("target_url"),
             "payloads": payloads,
             "scripts": snap.get("scripts") or {},
         }
     )
     return cfg
-
 
 @app.get("/api/runs/{run_id}/export")
 async def api_export_run(run_id: str) -> dict:

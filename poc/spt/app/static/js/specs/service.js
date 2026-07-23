@@ -37,7 +37,7 @@ async function selectSpec(service, opts){
   opts = opts || {};
   selectedSpecService = service;
   selectedRunId = null;
-  selectedConfigId = null;
+  // Do not clear profile filter — OpenAPI keeps the selected profile intact
   if(specsPayloadService !== service){
     specsPayloadService = null;
     specsPayloadCatalog = [];

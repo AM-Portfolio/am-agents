@@ -8,7 +8,10 @@ function renderSpecsSidebar(){
   const el = document.getElementById("sidebar-list");
   const filterSvc = (document.getElementById("f-service") && document.getElementById("f-service").value) || "";
   const filterQ = ((document.getElementById("f-q") && document.getElementById("f-q").value) || "").trim().toLowerCase();
-  let rows = filterSvc ? specsList.filter(s=>s.id===filterSvc) : specsList.slice();
+  const prof = (typeof activeProfile === "function") ? activeProfile() : null;
+  // Profile filter stays intact on OpenAPI — prefer that service when no explicit service filter
+  const svcFilter = filterSvc || (prof && prof.service) || "";
+  let rows = svcFilter ? specsList.filter(s=>s.id===svcFilter) : specsList.slice();
   if(filterQ){
     rows = rows.filter(s=>{
       const hay = [s.id, s.label, s.runtime, s.source, ownersText(s.owners)].join(" ").toLowerCase();
@@ -16,7 +19,9 @@ function renderSpecsSidebar(){
     });
   }
   if(!rows.length){
-    el.innerHTML = '<div class="empty">No services match filters.<br/><span class="sub">Clear service/search or check catalog.</span></div>';
+    el.innerHTML = '<div class="empty">No services match filters.'+
+      (prof ? '<br/><span class="sub">Profile <strong>'+esc(prof.name)+'</strong> → '+esc(prof.service||"?")+'. Clear profile or service filter.</span>' : '<br/><span class="sub">Clear service/search or check catalog.</span>')+
+      '</div>';
     return;
   }
   el.innerHTML = rows.map(s=>{

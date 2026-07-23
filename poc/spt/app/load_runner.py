@@ -633,7 +633,7 @@ async def run_k6_local(
                     result["status"] = "failed"
                     result["error"] = steps[-1]["error"]
                     # Still collect whatever summary we have for Grafana
-                    metrics = extract_metrics_summary(report) or _metrics_from_k6_summary(report)
+                    metrics = merge_run_metrics(report)
                     result["metrics_summary"] = metrics
                     result["api_summary"] = api_index
                     result["api_count"] = len(api_index)
@@ -646,9 +646,7 @@ async def run_k6_local(
                         "status": "pass",
                         "detail": {"exit_code": 0, "apis_tested": len(api_index)},
                     }
-                    metrics = extract_metrics_summary(report)
-                    if not metrics and report:
-                        metrics = _metrics_from_k6_summary(report)
+                    metrics = merge_run_metrics(report)
                     failed = [a for a in api_index if not a.get("checks_passed")]
                     passed_apis = [a for a in api_index if a.get("checks_passed")]
                     result["report"] = report
@@ -804,20 +802,48 @@ def _metrics_from_k6_summary(report: dict[str, Any]) -> dict[str, Any]:
     for key, val in metrics.items() if isinstance(metrics, dict) else []:
         if not isinstance(val, dict):
             continue
-        if key == "http_reqs" and "rate" in val:
-            out["throughput.requestsPerSecond"] = round(float(val["rate"]), 2)
+        # k6 handleSummary nests stats under "values"; older dumps may be flat
+        stats = val.get("values") if isinstance(val.get("values"), dict) else val
+        if not isinstance(stats, dict):
+            continue
+        if key == "http_reqs" and "rate" in stats:
+            out["throughput.requestsPerSecond"] = round(float(stats["rate"]), 2)
+            if "count" in stats:
+                out["throughput.requestCount"] = int(stats["count"])
         if key == "http_req_duration":
-            if "med" in val:
-                out["responseTime.p50"] = round(float(val["med"]), 2)
-            if "p(90)" in val:
-                out["responseTime.p90"] = round(float(val["p(90)"]), 2)
-            if "p(95)" in val:
-                out["responseTime.p95"] = round(float(val["p(95)"]), 2)
-            if "p(99)" in val:
-                out["responseTime.p99"] = round(float(val["p(99)"]), 2)
-            if "avg" in val:
-                out["responseTime.avg"] = round(float(val["avg"]), 2)
-        if key == "http_req_failed" and "rate" in val:
+            if "med" in stats:
+                out["responseTime.p50"] = round(float(stats["med"]), 2)
+            if "p(90)" in stats:
+                out["responseTime.p90"] = round(float(stats["p(90)"]), 2)
+            if "p(95)" in stats:
+                out["responseTime.p95"] = round(float(stats["p(95)"]), 2)
+            if "p(99)" in stats:
+                out["responseTime.p99"] = round(float(stats["p(99)"]), 2)
+            if "avg" in stats:
+                out["responseTime.avg"] = round(float(stats["avg"]), 2)
+        if key == "http_req_failed" and "rate" in stats:
             # k6 rate is 0..1 → percent for SPT dashboards
-            out["errorRate"] = round(float(val["rate"]) * 100, 2)
+            out["errorRate"] = round(float(stats["rate"]) * 100, 2)
+        # Network transfer (k6 built-ins)
+        if key == "data_received":
+            if "count" in stats:
+                out["transfer.receivedBytes"] = int(float(stats["count"]))
+            if "rate" in stats:
+                out["transfer.receivedBytesPerSec"] = round(float(stats["rate"]), 2)
+        if key == "data_sent":
+            if "count" in stats:
+                out["transfer.sentBytes"] = int(float(stats["count"]))
+            if "rate" in stats:
+                out["transfer.sentBytesPerSec"] = round(float(stats["rate"]), 2)
     return out
+
+
+def merge_run_metrics(report: dict[str, Any] | None) -> dict[str, Any]:
+    """Prefer typed k6 metrics; keep OctoPerf/walk keys as fallback fillers."""
+    report = report if isinstance(report, dict) else {}
+    k6 = _metrics_from_k6_summary(report)
+    other = extract_metrics_summary(report) if report else {}
+    # Drop noisy raw_keys when we have real metrics
+    if k6 and "raw_keys" in other:
+        other = {k: v for k, v in other.items() if k != "raw_keys"}
+    return {**other, **k6}

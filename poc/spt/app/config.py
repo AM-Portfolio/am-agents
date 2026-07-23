@@ -15,6 +15,17 @@ class Settings(BaseSettings):
     # Mounted ConfigMaps / local dir of service spt.yaml registrations
     catalog_external_dir: str = "/catalog-external"
     data_dir: str = "/data"
+    # Persistence: json | dual | db (default db after cutover; use dual then json to rollback)
+    spt_store: str = "db"
+    # Empty → SQLite at {data_dir}/spt.db; set postgresql+psycopg://… for cluster
+    spt_database_url: str | None = None
+    # ACL: when True, mutating APIs require a valid API key (except local UI if key seeded open)
+    spt_acl_required: bool = False
+    # Bootstrap keys (plaintext, hashed on startup). Format role:name:secret
+    # e.g. developer:local-dev:spt_sk_dev_localchange_me
+    spt_bootstrap_keys: str = ""
+    spt_max_concurrent_runs: int = 3
+    spt_run_retention_days: int = 30
     k6_bin: str = "/usr/local/bin/k6"
     default_environment: str = "dev"
     spt_user_id: str = "ssd2658"

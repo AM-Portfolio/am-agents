@@ -59,6 +59,14 @@ def build_spt_influx_lines(
     p95 = influx_num(metrics.get("responseTime.p95"))
     p99 = influx_num(metrics.get("responseTime.p99"))
     error_rate = influx_num(metrics.get("errorRate") or metrics.get("http_req_failed.rate"))
+    bytes_in = influx_num(metrics.get("transfer.receivedBytes") or metrics.get("data_received.count"))
+    bytes_out = influx_num(metrics.get("transfer.sentBytes") or metrics.get("data_sent.count"))
+    bytes_in_rate = influx_num(
+        metrics.get("transfer.receivedBytesPerSec") or metrics.get("data_received.rate")
+    )
+    bytes_out_rate = influx_num(
+        metrics.get("transfer.sentBytesPerSec") or metrics.get("data_sent.rate")
+    )
 
     rows = api_summary or []
     api_pass = sum(1 for a in rows if a.get("checks_passed") is True)
@@ -79,7 +87,9 @@ def build_spt_influx_lines(
             f"run_name={run_name},profile={profile},status={st} "
             f"rps={rps},p50={p50},p90={p90},p95={p95},p99={p99},"
             f"error_rate={error_rate},vus={vus},iterations={iterations},"
-            f"api_pass={api_pass},api_fail={api_fail},api_count={api_count},duration_s={dur}"
+            f"api_pass={api_pass},api_fail={api_fail},api_count={api_count},duration_s={dur},"
+            f"bytes_in={bytes_in},bytes_out={bytes_out},"
+            f"bytes_in_rate={bytes_in_rate},bytes_out_rate={bytes_out_rate}"
         ),
         # Legacy compat (one release)
         (
