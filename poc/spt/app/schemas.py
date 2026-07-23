@@ -118,3 +118,17 @@ class RunFilterQuery(BaseModel):
     triggered_by: str | None = None
     q: str | None = None
     limit: int = 100
+
+
+class PayloadBuildRequest(BaseModel):
+    service: str
+    environment: str | None = None
+    method: str | None = None
+    path: str | None = None
+    operation_id: str | None = None
+    api_id: str | None = None
+
+
+class PayloadEnsureRequest(PayloadBuildRequest):
+    write_back: bool = True
+    allow_llm: bool | None = None

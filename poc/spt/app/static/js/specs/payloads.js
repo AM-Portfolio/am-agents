@@ -646,30 +646,28 @@ function enrichOpenApiForTryIt(doc, payloadCatalog){
 
 function exampleFromParam(p){
   const schema = p.schema || {};
+  if(p.example != null) return p.example;
   if(schema.example != null) return schema.example;
   if(schema.default != null) return schema.default;
   if(Array.isArray(schema.enum) && schema.enum.length) return schema.enum[0];
   const name = String(p.name||"").toLowerCase();
-  if(name === "timeframe" || name === "time_frame") return "1M";
+  // Generic pagination only — domain codes/ids come from OpenAPI enum/example
   if(name === "page" || name === "offset") return 0;
   if(name === "size" || name === "limit") return 10;
-  if(name === "symbol" || name === "ticker") return "AAPL";
-  // Leave path ids blank so user pastes real values (not fake "1"/"example")
-  if(name === "type") return "";
-  if(name === "id" || name.endsWith("_id") || name.endsWith("id")) return "";
   if(schema.type === "integer" || schema.type === "number") return 1;
   if(schema.type === "boolean") return true;
   if(schema.type === "array") return [exampleFromSchema(schema.items||{type:"string"}, {}, 0)];
+  if(schema.format === "date") return "2026-01-01";
+  if(schema.format === "date-time") return "2026-01-01T00:00:00Z";
+  if(schema.format === "uuid") return "00000000-0000-0000-0000-000000000001";
+  // Open ids stay empty until overlay/set provides them
   if(p.in === "path") return "";
   return schema.type === "string" ? "" : null;
 }
 
 function paramValueHints(p){
-  const name = String(p.name||"").toLowerCase();
   const schema = p.schema || {};
   if(Array.isArray(schema.enum) && schema.enum.length) return schema.enum.map(String);
-  if(name === "timeframe" || name === "time_frame") return ["1D","1W","1M","3M","6M","1Y","YTD","ALL"];
-  if(name === "type") return ["portfolio","account","strategy","watchlist"];
   return [];
 }
 
@@ -691,18 +689,13 @@ function buildResolvedPath(template, pathParams){
 }
 
 function suggestedWorkingOps(ops){
-  const prefer = [
-    "/v1/analysis/dashboard/summary",
-    "/v1/analysis/dashboard/performance",
-    "/v1/analysis/dashboard/top-movers",
-    "/v1/analysis/dashboard/recent-activity"
-  ];
-  const out = [];
-  prefer.forEach(path=>{
-    const hit = (ops||[]).find(o=>String(o.path)===path && String(o.method).toUpperCase()==="GET");
-    if(hit) out.push(hit);
+  // Prefer GETs with no unresolved path templates (schema/examples fill the rest)
+  const list = ops || [];
+  const easy = list.filter(o=>{
+    if(String(o.method||"").toUpperCase() !== "GET") return false;
+    return !/\{[^}]+\}/.test(String(o.path||""));
   });
-  return out;
+  return (easy.length ? easy : list).slice(0, 8);
 }
 
 function exampleFromSchema(schema, components, depth){

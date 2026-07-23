@@ -388,14 +388,88 @@ async function onPayloadUpdateSet(bumpSet){
   }
 }
 
+function setPayloadSourceBadge(source){
+  const badge = document.getElementById("oas-payload-source");
+  if(!badge) return;
+  const src = String(source || "schema");
+  badge.textContent = src;
+    badge.className = "badge " + (src === "set" || src === "ensure-working" ? "done"
+    : (src === "llm-fallback" ? "partial" : "pending"));
+}
+
+async function onPayloadBuild(ensure){
+  const opblock = findOpenOpblock();
+  const status = document.getElementById("oas-payload-status");
+  if(!opblock){
+    if(status) status.textContent = "Open an operation first";
+    return;
+  }
+  const meta = openOpMeta(opblock);
+  if(!meta.path){
+    if(status) status.textContent = "Could not read operation path";
+    return;
+  }
+  if(status) status.textContent = ensure ? "Ensuring working…" : "Building…";
+  try {
+    const body = {
+      service: selectedSpecService,
+      environment: specsEnv || "dev",
+      method: meta.method,
+      path: meta.path,
+      operation_id: meta.operationId || null,
+      api_id: (meta.apiIds && meta.apiIds[0]) || null
+    };
+    const data = await fetchJson(ensure ? "/api/payloads/ensure-working" : "/api/payloads/build", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify(body)
+    });
+    setPayloadSourceBadge(data.source || "schema");
+    if(!data.ok && !data.request){
+      if(status) status.textContent = "Failed: "+(data.error || "unknown");
+      return;
+    }
+    const req = data.request || {};
+    const entry = {
+      key: "spt-build",
+      name: "working",
+      label: (ensure ? "Ensured" : "Built")+" ("+(data.source||"schema")+")",
+      apiId: req.api_id || (meta.apiIds && meta.apiIds[0]),
+      body: req.body,
+      query: req.query || {},
+      pathParams: req.path_params || req.pathParams || {}
+    };
+    applyPayloadToTryIt(entry);
+    if(status){
+      const trySt = data.try && data.try.status_code;
+      status.textContent = (ensure
+        ? (data.ok ? "Working · HTTP "+trySt : "Not working · HTTP "+(trySt||"—"))
+        : "Built from "+(data.source||"schema"))+
+        (data.overlay_written ? " · overlay saved" : "");
+    }
+    if(ensure && data.ok){
+      await loadServicePayloadSets(selectedSpecService, true);
+      applyPayloadSetToActive(specsPayloadSetDetail);
+      const catalog = await loadServicePayloadCatalog(selectedSpecService);
+      fillPayloadSelect(catalog);
+    }
+  } catch(e){
+    if(status) status.textContent = "Failed: "+e.message;
+  }
+}
+
 function bindPayloadBar(){
   const apply = document.getElementById("oas-payload-apply");
   const save = document.getElementById("oas-payload-save");
   const saveNew = document.getElementById("oas-payload-save-new");
+  const build = document.getElementById("oas-payload-build");
+  const ensure = document.getElementById("oas-payload-ensure");
   const sel = document.getElementById("oas-payload-select");
   if(apply) apply.onclick = ()=> onPayloadApply();
   if(save) save.onclick = ()=> onPayloadUpdateSet(false);
   if(saveNew) saveNew.onclick = ()=> onPayloadUpdateSet(true);
+  if(build) build.onclick = ()=> onPayloadBuild(false);
+  if(ensure) ensure.onclick = ()=> onPayloadBuild(true);
   if(sel && !sel._sptBound){
     sel._sptBound = true;
     sel.addEventListener("change", ()=> onPayloadApply());

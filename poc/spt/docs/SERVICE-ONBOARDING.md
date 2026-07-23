@@ -3,7 +3,11 @@
 Services register with a minimal `spt.yaml` (no auth, no API list).
 SPT loads OpenAPI from the live target and injects platform identity auth.
 
-See also: [am-core-services docs/spt-onboarding.md](../../../../am-core-services/docs/spt-onboarding.md)
+See also:
+
+- [am-core-services docs/spt-onboarding.md](../../../../am-core-services/docs/spt-onboarding.md)
+- [am-core-services OpenAPI guidelines](../../../../am-core-services/docs/openapi-spec-guidelines.md) (enums, examples, timestamps)
+- [openapi-contract.md](openapi-contract.md) (SPT zero-coupling rules)
 
 ## Contract
 
@@ -30,3 +34,6 @@ See also: [am-core-services docs/spt-onboarding.md](../../../../am-core-services
 Specs tab embeds **Swagger UI** (`swagger-ui-dist`, vendored under `app/static/vendor/swagger-ui/`).
 SPT fetches OpenAPI with platform identity, then mounts the official SDK on that document.
 Try it out uses `public_*` targets when set, plus `/api/platform/try-token` for Bearer auth.
+
+Payloads: **Build** / **Ensure working** use schema-first generation (`POST /api/payloads/build`).
+LLM fallback is off by default (`SPT_PAYLOAD_LLM_FALLBACK=false`).

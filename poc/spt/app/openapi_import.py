@@ -43,12 +43,12 @@ def _param_example(param: dict[str, Any]) -> str | None:
     enum = schema.get("enum")
     if isinstance(enum, list) and enum:
         return str(enum[0])
-    # Common Spring path hints
+    # Generic pagination only — closed domain codes must come from OpenAPI enum/example
     name = str(param.get("name") or "").lower()
-    if name in ("timeframe", "time_frame"):
-        return "1D"
-    if name in ("page", "size", "limit", "offset"):
-        return "0" if name != "size" and name != "limit" else "10"
+    if name in ("page", "offset"):
+        return "0"
+    if name in ("size", "limit"):
+        return "10"
     return None
 
 

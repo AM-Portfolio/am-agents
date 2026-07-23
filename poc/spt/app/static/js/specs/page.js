@@ -79,6 +79,9 @@ async function renderSpecDetail(){
           '<button type="button" id="oas-payload-apply" title="Fill Try it out from selection">Apply</button>'+
           '<button type="button" id="oas-payload-save" title="Write Try it out values into the current set version">Update set</button>'+
           '<button type="button" class="secondary" id="oas-payload-save-new" title="Clone set to a new version, then save this API">New version</button>'+
+          '<button type="button" class="secondary" id="oas-payload-build" title="Schema-first build from OpenAPI">Build</button>'+
+          '<button type="button" class="secondary" id="oas-payload-ensure" title="Build, Try, write set on 2xx">Ensure working</button>'+
+          '<span class="badge pending" id="oas-payload-source" title="Payload source">schema</span>'+
           '<span class="sub" id="oas-payload-status">Edit Try it out → Update set</span>'+
         '</div>'+
         '<div class="section-b" id="swagger-ui-host"></div>'+

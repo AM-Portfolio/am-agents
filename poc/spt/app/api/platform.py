@@ -18,6 +18,9 @@ from app.catalog_loader import (
     reachable_target_for_service,
 )
 from app.config import settings
+from app.openapi_overlay import load_overlay, merge_effective_document
+from app.payload_pipeline import build_payload, ensure_working_payload
+from app.schemas import PayloadBuildRequest, PayloadEnsureRequest
 
 router = APIRouter(tags=["platform"])
 
@@ -96,6 +99,7 @@ async def api_service_target(
 async def api_service_openapi_document(
     service: str,
     environment: str | None = Query(default=None),
+    effective: bool = Query(default=False, description="Merge SPT overlay examples into document"),
 ):
     """Raw OpenAPI JSON proxied by SPT (browser-reachable; cluster DNS is not)."""
     meta = load_openapi_document(service, environment)
@@ -104,14 +108,47 @@ async def api_service_openapi_document(
             status_code=502,
             detail=meta.get("error") or f"OpenAPI unavailable for {service}",
         )
+    doc = meta["document"]
+    env = str(meta.get("environment") or environment or settings.default_environment)
+    if effective:
+        doc, _overlay = merge_effective_document(doc, service, env)
     return JSONResponse(
-        content=meta["document"],
+        content=doc,
         headers={
             "X-SPT-OpenAPI-Source": str(meta.get("openapi_url") or ""),
             "X-SPT-Service": service,
-            "X-SPT-Environment": str(meta.get("environment") or ""),
+            "X-SPT-Environment": env,
+            "X-SPT-OpenAPI-Effective": "1" if effective else "0",
         },
     )
+
+
+@router.get("/api/catalog/{service}/openapi/effective")
+async def api_service_openapi_effective(
+    service: str,
+    environment: str | None = Query(default=None),
+) -> dict:
+    """Live OpenAPI merged with SPT-local overlay (examples from ensure-working / sets)."""
+    env = environment or settings.default_environment
+    meta = load_openapi_document(service, env)
+    if not meta.get("ok") or not isinstance(meta.get("document"), dict):
+        raise HTTPException(
+            status_code=502,
+            detail=meta.get("error") or f"OpenAPI unavailable for {service}",
+        )
+    doc, overlay = merge_effective_document(meta["document"], service, env)
+    return {
+        "service": service,
+        "environment": env,
+        "ok": True,
+        "version": meta.get("version"),
+        "openapi_url": meta.get("openapi_url"),
+        "overlay": {
+            "updated_at": overlay.get("updated_at"),
+            "operation_count": len(overlay.get("operations") or {}),
+        },
+        "document": doc,
+    }
 
 
 @router.get("/api/catalog/{service}/openapi")
@@ -119,13 +156,57 @@ async def api_service_openapi(
     service: str,
     environment: str | None = Query(default=None),
     include_document: bool = Query(default=True, description="Include full OpenAPI JSON"),
+    effective: bool = Query(default=False, description="Merge SPT overlay into document"),
 ) -> dict:
     """Live OpenAPI document + registration config for Swagger-style Specs UI."""
     meta = load_openapi_document(service, environment)
+    if include_document and effective and isinstance(meta.get("document"), dict):
+        env = str(meta.get("environment") or environment or settings.default_environment)
+        doc, overlay = merge_effective_document(meta["document"], service, env)
+        meta = {**meta, "document": doc, "overlay": {
+            "updated_at": overlay.get("updated_at"),
+            "operation_count": len(overlay.get("operations") or {}),
+        }}
     if not include_document:
         meta = {**meta, "document": None}
     return meta
 
+
+@router.post("/api/payloads/build")
+async def api_payloads_build(body: PayloadBuildRequest) -> dict:
+    """Schema-first payload build from live OpenAPI (+ overlay). No LLM."""
+    return build_payload(
+        service=body.service,
+        environment=body.environment,
+        method=body.method,
+        path=body.path,
+        operation_id=body.operation_id,
+        api_id=body.api_id,
+    )
+
+
+@router.post("/api/payloads/ensure-working")
+async def api_payloads_ensure_working(body: PayloadEnsureRequest) -> dict:
+    """Build → Try proxy → on 2xx write set+overlay; optional one LLM fallback."""
+    return await ensure_working_payload(
+        service=body.service,
+        environment=body.environment,
+        method=body.method,
+        path=body.path,
+        operation_id=body.operation_id,
+        api_id=body.api_id,
+        write_back=body.write_back,
+        allow_llm=body.allow_llm,
+    )
+
+
+@router.get("/api/catalog/{service}/openapi/overlay")
+async def api_service_openapi_overlay(
+    service: str,
+    environment: str | None = Query(default=None),
+) -> dict:
+    env = environment or settings.default_environment
+    return load_overlay(service, env)
 
 @router.get("/api/catalog/{service}/openapi/versions")
 async def api_service_openapi_versions(service: str) -> dict:

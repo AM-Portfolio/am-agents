@@ -64,5 +64,9 @@ class Settings(BaseSettings):
     trace_max_calls: int = 500
     default_run_profile: str = "load"
 
+    # Schema-first payload agent — LLM is HTTP fallback only (off by default)
+    spt_payload_llm_fallback: bool = False
+    spt_fin_api_testing_url: str | None = None
+
 
 settings = Settings()

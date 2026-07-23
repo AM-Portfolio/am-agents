@@ -221,6 +221,58 @@ def spt_upsert_payload(payload_json: str) -> dict[str, Any]:
     return services.upsert_payload(data)
 
 
+@mcp.tool(name="spt_build_payload")
+def spt_build_payload(
+    service: str,
+    environment: str | None = None,
+    method: str | None = None,
+    path: str | None = None,
+    operation_id: str | None = None,
+    api_id: str | None = None,
+) -> dict[str, Any]:
+    """Schema-first payload from live OpenAPI (+ overlay). No LLM."""
+    from app.payload_pipeline import build_payload
+
+    return build_payload(
+        service=service,
+        environment=environment,
+        method=method,
+        path=path,
+        operation_id=operation_id,
+        api_id=api_id,
+    )
+
+
+@mcp.tool(name="spt_ensure_working_payload")
+def spt_ensure_working_payload(
+    service: str,
+    environment: str | None = None,
+    method: str | None = None,
+    path: str | None = None,
+    operation_id: str | None = None,
+    api_id: str | None = None,
+    write_back: bool = True,
+    allow_llm: bool | None = None,
+) -> dict[str, Any]:
+    """Build → Try → write set+overlay on 2xx. LLM only if allow_llm / env flag."""
+    import asyncio
+
+    from app.payload_pipeline import ensure_working_payload
+
+    return asyncio.run(
+        ensure_working_payload(
+            service=service,
+            environment=environment,
+            method=method,
+            path=path,
+            operation_id=operation_id,
+            api_id=api_id,
+            write_back=write_back,
+            allow_llm=allow_llm,
+        )
+    )
+
+
 @mcp.resource("spt://profiles/{config_id}")
 def resource_profile(config_id: str) -> str:
     row = services.profile_get(config_id)
