@@ -60,9 +60,16 @@ class PostgresEpisodeStore:
             "ready": self.ready(),
         }
 
+    def _ensure_conn(self) -> None:
+        if getattr(self, "_conn", None) is None or self._conn.closed:
+            from psycopg.rows import dict_row
+            self._conn = self._psycopg.connect(self._dsn, row_factory=dict_row)
+            self._conn.autocommit = False
+
     def ready(self) -> bool:
         try:
             with self._lock:
+                self._ensure_conn()
                 with self._conn.cursor() as cur:
                     cur.execute("SELECT 1")
                     cur.fetchone()
@@ -70,7 +77,8 @@ class PostgresEpisodeStore:
             return True
         except Exception:  # noqa: BLE001
             try:
-                self._conn.rollback()
+                if self._conn and not self._conn.closed:
+                    self._conn.rollback()
             except Exception:  # noqa: BLE001
                 pass
             return False
