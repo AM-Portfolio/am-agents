@@ -615,12 +615,19 @@ def create_app(
                 try:
                     metrics.observe_agent_work(
                         work_kind="alert_incident",
-                        status="failed",
-                        outcome="failed",
+                        status="accepted",
+                        outcome="refired",
                         event_name="incident.refired",
                     )
                 except Exception:  # noqa: BLE001
                     pass
+                return {
+                    "action": "refired",
+                    "workflow_id": workflow_id,
+                    "run_ref": run.run_ref,
+                    "deduplicated": True,
+                    "module": "support-agent",
+                }
             raise HTTPException(status_code=502, detail=detail) from exc
         workflow_ledger.update_run(
             run.run_ref,

@@ -59,7 +59,7 @@ _ACTIVITY_RETRY = RetryPolicy(
     initial_interval=timedelta(seconds=1),
     backoff_coefficient=2.0,
     maximum_interval=timedelta(seconds=30),
-    maximum_attempts=5,
+    maximum_attempts=10,
 )
 
 _MAX_REFIRES = 20
@@ -775,8 +775,14 @@ class AlertIncidentWorkflow:
                     timeout=timedelta(hours=24),
                 )
             except asyncio.TimeoutError:
+                # Automated fallback: check PromQL metrics for recovery before human handoff
+                if await self._close_if_recovered(sample_batches):
+                    self._phase = "recovered"
+                    await self._persist(outcome="recovered", actions=list(self._state.get("actions") or []))
+                    await self._persist_lifecycle(final_status="closed")
+                    return self._build_result(recovered=True)
                 return await self._handoff_to_human(
-                    reason="Incident remained open without resolution signal for 24 hours; handing off to human on-call.",
+                    reason="Observation deadline reached without resolution signal; metrics remained unconfirmed.",
                     approval_purpose="investigation",
                 )
 
