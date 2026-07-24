@@ -1,0 +1,30 @@
+operations:
+  - name: list_workflows
+    description: List or search Temporal workflow executions by status or query.
+    params:
+      status: { type: string, description: "Workflow status filter (e.g. Running, Completed, Failed, Terminated)" }
+      query: { type: string, description: "Custom Temporal visibility query string (e.g. ExecutionStatus = 'Running')" }
+  - name: describe_workflow
+    description: Get detailed execution state and history summary of a Temporal workflow.
+    params:
+      workflow_id: { type: string, required: true, description: "Temporal workflow ID" }
+      run_id: { type: string, description: "Optional specific run ID" }
+  - name: query_workflow
+    description: Query a live running workflow's query handler (e.g. status, hitl).
+    params:
+      workflow_id: { type: string, required: true, description: "Temporal workflow ID" }
+      query_name: { type: string, required: true, description: "Query handler name (e.g. status)" }
+      run_id: { type: string, description: "Optional specific run ID" }
+  - name: signal_workflow
+    description: Send a signal to a running Temporal workflow.
+    params:
+      workflow_id: { type: string, required: true, description: "Temporal workflow ID" }
+      signal_name: { type: string, required: true, description: "Signal name (e.g. alert.resolved)" }
+      arg: { type: object, description: "Optional argument to pass with signal" }
+      run_id: { type: string, description: "Optional specific run ID" }
+  - name: terminate_workflow
+    description: Terminate a running Temporal workflow execution.
+    params:
+      workflow_id: { type: string, required: true, description: "Temporal workflow ID" }
+      reason: { type: string, description: "Reason for termination" }
+      run_id: { type: string, description: "Optional specific run ID" }
