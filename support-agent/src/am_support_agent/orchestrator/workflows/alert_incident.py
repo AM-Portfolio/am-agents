@@ -772,7 +772,7 @@ class AlertIncidentWorkflow:
                     or self._hitl.refired
                     or self._hitl.pending_feedback is not None
                     or self._hitl.closed,
-                    timeout=timedelta(hours=24),
+                    timeout=timedelta(minutes=2),
                 )
             except asyncio.TimeoutError:
                 # Automated fallback: check PromQL metrics for recovery before human handoff
@@ -782,7 +782,7 @@ class AlertIncidentWorkflow:
                     await self._persist_lifecycle(final_status="closed")
                     return self._build_result(recovered=True)
                 return await self._handoff_to_human(
-                    reason="Observation deadline reached without resolution signal; metrics remained unconfirmed.",
+                    reason="Observation deadline (2m) reached without resolution signal; metrics remained unconfirmed.",
                     approval_purpose="investigation",
                 )
 
