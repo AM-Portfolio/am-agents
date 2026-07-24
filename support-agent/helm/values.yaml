@@ -51,6 +51,38 @@ companionWorker:
       cpu: 500m
       memory: 512Mi
 
+# Shared Temporal MCP Server — exposes Temporal tools over HTTP/SSE so that
+# any teammate's IDE MCP client can connect via https://mcp.asrax.in/temporal/sse
+# without any local Python setup.
+companionMcp:
+  enabled: true
+  replicaCount: 1
+  nameSuffix: mcp
+  entrypoint: "exec am-support-agent-mcp --transport sse --host 0.0.0.0 --port 8095"
+  port: 8095
+  httpProbes: false
+  # TEMPORAL_HOST is injected from Vault (points to temporal-frontend.temporal.svc:7233)
+  env:
+    MCP_PORT: "8095"
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  ingress:
+    enabled: true
+    className: "traefik"
+    annotations:
+      kubernetes.io/ingress.class: "traefik"
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    hosts:
+      - host: mcp.asrax.in
+        paths:
+          - path: /temporal
+            pathType: Prefix
+
 probes:
   port: 8091
   startup:
