@@ -414,8 +414,10 @@ class AlertIncidentWorkflow:
         *,
         reason: str,
         approval_purpose: str,
-    ) -> dict[str, Any]:
-        """Assign an open ticket to a human and complete this workflow run."""
+    ) -> None:
+        """Complete all side-effects then raise ApplicationError so Temporal marks
+        this workflow run as FAILED (not Completed). The non_retryable flag tells
+        Temporal not to retry — this is an intentional terminal state."""
         self._state["human_required"] = {
             "reason": reason,
             "approval_purpose": approval_purpose,
@@ -453,18 +455,15 @@ class AlertIncidentWorkflow:
             attributes={"reason": reason[:200]},
         )
         await self._finalize("human_required")
-        return {
-            "status": "human_required",
-            "tracking_id": self._tracking_id,
-            "phase": self._phase,
-            "steps": self._steps,
-            "owner": self._state.get("owner"),
-            "work_item": self._state.get("work_item"),
-            "episode_id": self._state.get("episode_id"),
-            "approval_purpose": approval_purpose,
-            "reason": reason,
-            "hitl": self._hitl.as_dict(),
-        }
+        # Raise so Temporal marks the workflow run as FAILED, not Completed.
+        # Callers (run()) do not catch this — it propagates to the Temporal worker.
+        raise ApplicationError(
+            f"human_required:{approval_purpose} — {reason}",
+            approval_purpose,
+            reason,
+            type="human_required",
+            non_retryable=True,
+        )
 
     async def _persist(self, *, outcome: str, actions: list[dict[str, Any]] | None = None) -> None:
         ep = await self._act(

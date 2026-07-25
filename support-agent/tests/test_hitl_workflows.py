@@ -52,7 +52,12 @@ def test_hitl_state_waiting():
 
 
 @pytest.mark.asyncio
-async def test_human_handoff_assigns_ticket_and_completes(monkeypatch):
+async def test_human_handoff_raises_application_error(monkeypatch):
+    """_handoff_to_human must complete all side-effects then raise ApplicationError
+    so Temporal marks the workflow run as FAILED (not Completed)."""
+    import pytest
+    from temporalio.exceptions import ApplicationError
+
     from am_support_agent.orchestrator.workflows.alert_incident import (
         AlertIncidentWorkflow,
     )
@@ -82,19 +87,32 @@ async def test_human_handoff_assigns_ticket_and_completes(monkeypatch):
         calls.append("record_hitl")
         return {"phase": "record_hitl"}
 
+    async def emit(event, **kwargs):
+        calls.append("emit")
+
+    async def finalize(outcome):
+        calls.append("finalize")
+
     monkeypatch.setattr(incident, "_ticket_and_notify", ticket_and_notify)
     monkeypatch.setattr(incident, "_persist", persist)
     monkeypatch.setattr(incident, "_act", act)
+    monkeypatch.setattr(incident, "_emit", emit)
+    monkeypatch.setattr(incident, "_finalize", finalize)
 
-    result = await incident._handoff_to_human(
-        reason="missing evidence",
-        approval_purpose="investigation",
-    )
+    with pytest.raises(ApplicationError) as exc_info:
+        await incident._handoff_to_human(
+            reason="missing evidence",
+            approval_purpose="investigation",
+        )
 
-    assert calls == ["ticket_and_notify", "persist", "record_hitl"]
-    assert result["status"] == "human_required"
-    assert result["phase"] == "human_handoff_complete"
-    assert result["work_item"]["id"] == "INC-1"
+    # All side-effects ran before the raise
+    assert calls == ["ticket_and_notify", "persist", "record_hitl", "emit", "finalize"]
+
+    err = exc_info.value
+    assert err.type == "human_required"
+    assert err.non_retryable is True
+    assert "investigation" in str(err)
+    assert incident._phase == "human_handoff_complete"
 
 
 @pytest.mark.asyncio
