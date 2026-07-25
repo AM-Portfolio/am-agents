@@ -296,12 +296,27 @@ async def intelligence_gate(payload: dict[str, Any]) -> dict[str, Any]:
 
             observations.append(EvidenceObservation.model_validate(raw))
     decision = classify_from_evidence(alert=alert, observations=observations, policy=policy)
+    
+    # Live LLM analysis & trace generation for Langfuse observability
+    runtime = build_runtime()
+    llm_res = await runtime.llm.complete(
+        system="You are an AI SRE assistant evaluating alert evidence and policy classification.",
+        user=f"Alert: {alert.get('alertname')} on {alert.get('service')}, env: {alert.get('env')}. Status: {decision.get('status')}.",
+        prompt_key="support_agent.intelligence_gate",
+        prompt_version="1.0",
+        prompt_source="runtime",
+    )
+    if not llm_res.gated and llm_res.text:
+        decision["llm_summary"] = llm_res.text
+        if llm_res.usage.get("langfuse_trace_id"):
+            decision["langfuse_trace_id"] = llm_res.usage["langfuse_trace_id"]
+
     validation = IncidentValidation(
         status=IncidentValidationStatus(decision["status"]),
         confidence=float(decision.get("confidence") or 0),
         reasons=list(decision.get("reasons") or []),
         missing_evidence=list(decision.get("missing_evidence") or []),
-        freshness_at=build_runtime().clock.now_iso(),
+        freshness_at=runtime.clock.now_iso(),
         work_item_ok=False,
         policy_version=str(decision.get("policy_version") or policy.policy_version),
     )
@@ -386,6 +401,16 @@ async def plan_investigation(payload: dict[str, Any]) -> dict[str, Any]:
             "args": {"query": "mongodb_connections", "service": "mongodb"},
             "effect": "read",
         })
+
+    # Live LLM analysis for investigation plan & Langfuse tracing
+    runtime = build_runtime()
+    await runtime.llm.complete(
+        system="You are an AI SRE assistant planning investigation steps for an alert.",
+        user=f"Alert: {alertname}, Service: {service}. Planned actions: {actions}",
+        prompt_key="support_agent.plan_investigation",
+        prompt_version="1.0",
+        prompt_source="runtime",
+    )
 
     return {
         "gated": False,
