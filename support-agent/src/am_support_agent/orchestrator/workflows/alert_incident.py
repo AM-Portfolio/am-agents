@@ -775,14 +775,48 @@ class AlertIncidentWorkflow:
                     timeout=timedelta(minutes=2),
                 )
             except asyncio.TimeoutError:
+                self._verify_rounds += 1
                 # Automated fallback: check PromQL metrics for recovery before human handoff
                 if await self._close_if_recovered(sample_batches):
+                    self._hitl.closed = True
                     self._phase = "recovered"
-                    await self._persist(outcome="recovered", actions=list(self._state.get("actions") or []))
-                    await self._persist_lifecycle(final_status="closed")
-                    return self._build_result(recovered=True)
+                    await self._emit(
+                        "incident.recovered",
+                        status="passed",
+                        outcome="recovered",
+                        terminal=True,
+                    )
+                    await self._finalize("recovered")
+                    return {
+                        "status": "recovered",
+                        "tracking_id": self._tracking_id,
+                        "steps": self._steps,
+                        "episode_id": self._state.get("episode_id"),
+                        "learned_fix": self._state.get("learned_fix"),
+                        "silence": self._state.get("silence"),
+                        "hitl": self._hitl.as_dict(),
+                    }
+
+                if self._verify_rounds < _MAX_VERIFY_ROUNDS:
+                    await self._act(
+                        comment_ticket,
+                        {
+                            "tracking_id": self._tracking_id,
+                            "work_item": self._state.get("work_item"),
+                            "body": (
+                                f"Observation round {self._verify_rounds}/{_MAX_VERIFY_ROUNDS}: "
+                                f"service still recovering/unconfirmed, continuing automated observation..."
+                            ),
+                            "idempotency_key": f"{self._tracking_id}:verify:{self._verify_rounds}",
+                        },
+                    )
+                    continue
+
                 return await self._handoff_to_human(
-                    reason="Observation deadline (2m) reached without resolution signal; metrics remained unconfirmed.",
+                    reason=(
+                        f"Observation deadline reached after {self._verify_rounds} rounds "
+                        f"without resolution signal; metrics remained unconfirmed."
+                    ),
                     approval_purpose="investigation",
                 )
 
