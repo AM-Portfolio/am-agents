@@ -198,21 +198,61 @@ class HttpLlmClient:
             usage = data.get("usage", {})
             latency_ms = int((time.time() - start_ts) * 1000)
 
-            # Close Langfuse generation with output
-            if langfuse_generation is not None:
-                try:
-                    langfuse_generation.end(
-                        output=text,
-                        usage={
-                            "input": usage.get("prompt_tokens", 0),
-                            "output": usage.get("completion_tokens", 0),
-                            "total": usage.get("total_tokens", 0),
-                        },
-                        metadata={"latency_ms": latency_ms, "model": model_used},
-                    )
-                    self._langfuse.flush()
-                except Exception:
-                    pass
+            # Ingest trace directly to Langfuse API for instant guaranteed observability
+            try:
+                pub_key = os.getenv("LANGFUSE_PUBLIC_KEY", "")
+                sec_key = os.getenv("LANGFUSE_SECRET_KEY", "")
+                host = (os.getenv("LANGFUSE_HOST") or "http://localhost:3001").rstrip("/")
+                if pub_key and sec_key and trace_id:
+                    import base64, uuid
+                    from datetime import datetime, timezone
+                    auth_b64 = base64.b64encode(f"{pub_key}:{sec_key}".encode()).decode()
+                    now_str = datetime.now(timezone.utc).isoformat()
+                    gen_id = str(uuid.uuid4())
+                    
+                    async with httpx.AsyncClient(timeout=5.0) as lf_client:
+                        await lf_client.post(
+                            f"{host}/api/public/ingestion",
+                            headers={
+                                "Authorization": f"Basic {auth_b64}",
+                                "Content-Type": "application/json",
+                            },
+                            json={
+                                "batch": [
+                                    {
+                                        "id": str(uuid.uuid4()),
+                                        "type": "trace-create",
+                                        "timestamp": now_str,
+                                        "body": {
+                                            "id": trace_id,
+                                            "name": f"support_agent.{prompt_key or 'completion'}",
+                                            "metadata": metadata,
+                                        },
+                                    },
+                                    {
+                                        "id": str(uuid.uuid4()),
+                                        "type": "generation-create",
+                                        "timestamp": now_str,
+                                        "body": {
+                                            "id": gen_id,
+                                            "traceId": trace_id,
+                                            "name": "litellm_completion",
+                                            "model": model_used,
+                                            "input": {"system": system, "user": user},
+                                            "output": text,
+                                            "usage": {
+                                                "promptTokens": usage.get("prompt_tokens", 0),
+                                                "completionTokens": usage.get("completion_tokens", 0),
+                                                "totalTokens": usage.get("total_tokens", 0),
+                                            },
+                                            "metadata": {"latency_ms": latency_ms},
+                                        },
+                                    },
+                                ]
+                            },
+                        )
+            except Exception:
+                pass
 
             return LlmCompletion(
                 text=text,
