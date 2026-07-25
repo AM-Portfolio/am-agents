@@ -11,8 +11,27 @@ import httpx
 from am_support_agent.ports.llm import LlmCompletion
 
 
+def get_env_var(key_name: str, default: str = "") -> str:
+    val = os.getenv(key_name)
+    if val:
+        return val
+    try:
+        for secret_file in ["/vault/secrets/am-agents-ops", "/vault/secrets/secrets"]:
+            if os.path.exists(secret_file):
+                with open(secret_file, "r") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith(f"export {key_name}=") or line.startswith(f"{key_name}="):
+                            parts = line.split("=", 1)
+                            if len(parts) == 2:
+                                return parts[1].strip("\"'")
+    except Exception:
+        pass
+    return default
+
+
 def llm_enabled() -> bool:
-    return os.getenv("SUPPORT_AGENT_LLM_ENABLED", "").lower() in {
+    return get_env_var("SUPPORT_AGENT_LLM_ENABLED", "").lower() in {
         "1",
         "true",
         "yes",
@@ -76,13 +95,13 @@ class HttpLlmClient:
 
     def __init__(self) -> None:
         self.base_url = (
-            os.getenv("LITELLM_BASE_URL") or "http://localhost:4000"
+            get_env_var("LITELLM_BASE_URL") or "http://localhost:4000"
         ).rstrip("/")
-        self.api_key = os.getenv("LITELLM_MASTER_KEY") or ""
+        self.api_key = get_env_var("LITELLM_MASTER_KEY") or ""
         self.model = (
-            os.getenv("SUPPORT_AGENT_LLM_MODEL") or "together_ai/Prism-ML/Ternary-Bonsai-27B"
+            get_env_var("SUPPORT_AGENT_LLM_MODEL") or "together_ai/Prism-ML/Ternary-Bonsai-27B"
         )
-        self.timeout = float(os.getenv("SUPPORT_AGENT_LLM_TIMEOUT", "60"))
+        self.timeout = float(get_env_var("SUPPORT_AGENT_LLM_TIMEOUT", "60"))
 
         # Optional direct Langfuse client for client-side spans
         self._langfuse: Any = None
@@ -93,9 +112,9 @@ class HttpLlmClient:
         try:
             from langfuse import Langfuse  # type: ignore
 
-            public_key = os.getenv("LANGFUSE_PUBLIC_KEY", "")
-            secret_key = os.getenv("LANGFUSE_SECRET_KEY", "")
-            host = os.getenv("LANGFUSE_HOST", "http://localhost:3001")
+            public_key = get_env_var("LANGFUSE_PUBLIC_KEY", "")
+            secret_key = get_env_var("LANGFUSE_SECRET_KEY", "")
+            host = get_env_var("LANGFUSE_HOST", "http://localhost:3001")
             if public_key and secret_key:
                 self._langfuse = Langfuse(
                     public_key=public_key,
@@ -200,9 +219,9 @@ class HttpLlmClient:
 
             # Ingest trace directly to Langfuse API for instant guaranteed observability
             try:
-                pub_key = os.getenv("LANGFUSE_PUBLIC_KEY", "")
-                sec_key = os.getenv("LANGFUSE_SECRET_KEY", "")
-                host = (os.getenv("LANGFUSE_HOST") or "http://localhost:3001").rstrip("/")
+                pub_key = get_env_var("LANGFUSE_PUBLIC_KEY", "")
+                sec_key = get_env_var("LANGFUSE_SECRET_KEY", "")
+                host = (get_env_var("LANGFUSE_HOST") or "http://localhost:3001").rstrip("/")
                 if pub_key and sec_key and trace_id:
                     import base64, uuid
                     from datetime import datetime, timezone
