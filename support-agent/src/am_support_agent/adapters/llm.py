@@ -270,13 +270,9 @@ class HttpLlmClient:
                                 ]
                             },
                         )
-                        import logging
-                        logging.getLogger("support_agent.llm").info(
-                            "Langfuse ingestion posted trace %s (HTTP %s)", trace_id, lf_res.status_code
-                        )
+                        print(f"[LANGFUSE INGESTION SUCCESS] Trace {trace_id} -> HTTP {lf_res.status_code}", flush=True)
             except Exception as exc:
-                import logging
-                logging.getLogger("support_agent.llm").warning("Langfuse direct ingestion failed: %s", exc)
+                print(f"[LANGFUSE INGESTION ERROR] Failed to post trace: {exc}", flush=True)
 
             return LlmCompletion(
                 text=text,
