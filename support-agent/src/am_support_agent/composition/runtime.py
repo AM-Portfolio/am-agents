@@ -124,10 +124,11 @@ def _build_documents(*, mode: str) -> DocumentStore:
 
 
 def _build_llm(*, mode: str) -> LlmClient:
-    provider = (os.getenv("SUPPORT_AGENT_LLM_PROVIDER") or "").strip().lower()
+    from am_support_agent.adapters.llm import get_env_var
+    provider = (get_env_var("SUPPORT_AGENT_LLM_PROVIDER") or "").strip().lower()
     if provider == "fake" or mode == "test":
         return FakeLlmClient()
-    if provider == "litellm" or (llm_enabled() and os.getenv("LITELLM_MASTER_KEY")):
+    if provider == "litellm" or (llm_enabled() and get_env_var("LITELLM_MASTER_KEY")):
         return HttpLlmClient()
     return GatedLlmClient()
 
