@@ -230,7 +230,7 @@ class HttpLlmClient:
                     gen_id = str(uuid.uuid4())
                     
                     async with httpx.AsyncClient(timeout=5.0) as lf_client:
-                        await lf_client.post(
+                        lf_res = await lf_client.post(
                             f"{host}/api/public/ingestion",
                             headers={
                                 "Authorization": f"Basic {auth_b64}",
@@ -270,8 +270,13 @@ class HttpLlmClient:
                                 ]
                             },
                         )
-            except Exception:
-                pass
+                        import logging
+                        logging.getLogger("support_agent.llm").info(
+                            "Langfuse ingestion posted trace %s (HTTP %s)", trace_id, lf_res.status_code
+                        )
+            except Exception as exc:
+                import logging
+                logging.getLogger("support_agent.llm").warning("Langfuse direct ingestion failed: %s", exc)
 
             return LlmCompletion(
                 text=text,
