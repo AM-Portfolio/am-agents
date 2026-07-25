@@ -12,7 +12,7 @@ from am_support_agent.adapters.capability_client import (
 )
 from am_support_agent.adapters.catalog_store import FileCatalogStore, StubSemanticIndex
 from am_support_agent.adapters.documents import MemoryDocumentStore, MinioDocumentStore
-from am_support_agent.adapters.llm import FakeLlmClient, GatedLlmClient
+from am_support_agent.adapters.llm import FakeLlmClient, GatedLlmClient, HttpLlmClient, llm_enabled
 from am_support_agent.adapters.prompts import FilePromptRegistry, LangfusePromptRegistry
 from am_support_agent.adapters.security import Redactor, SandboxPolicy, SecretBroker
 from am_support_agent.adapters.storage import DocStoreNamespace
@@ -127,6 +127,8 @@ def _build_llm(*, mode: str) -> LlmClient:
     provider = (os.getenv("SUPPORT_AGENT_LLM_PROVIDER") or "").strip().lower()
     if provider == "fake" or mode == "test":
         return FakeLlmClient()
+    if provider == "litellm" or (llm_enabled() and os.getenv("LITELLM_MASTER_KEY")):
+        return HttpLlmClient()
     return GatedLlmClient()
 
 
