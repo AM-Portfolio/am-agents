@@ -142,13 +142,13 @@ class HttpLlmClient:
         if prompt_source:
             metadata["prompt_source"] = prompt_source
 
+        import uuid
+        trace_id: str = str(uuid.uuid4())
+        
         # Start a Langfuse generation span if client is available
         langfuse_generation: Any = None
-        trace_id: str = ""
         if self._langfuse is not None:
             try:
-                import uuid
-                trace_id = str(uuid.uuid4())
                 trace = self._langfuse.trace(
                     id=trace_id,
                     name=f"support_agent.llm.{prompt_key or 'completion'}",
