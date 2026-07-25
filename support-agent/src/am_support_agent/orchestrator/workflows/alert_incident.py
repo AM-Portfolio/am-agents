@@ -8,6 +8,7 @@ from typing import Any
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy
+from temporalio.exceptions import ApplicationError
 
 with workflow.unsafe.imports_passed_through():
     from am_support_agent.orchestrator.activities.incident import (
@@ -452,18 +453,10 @@ class AlertIncidentWorkflow:
             attributes={"reason": reason[:200]},
         )
         await self._finalize("human_required")
-        return {
-            "status": "human_required",
-            "tracking_id": self._tracking_id,
-            "phase": self._phase,
-            "steps": self._steps,
-            "owner": self._state.get("owner"),
-            "work_item": self._state.get("work_item"),
-            "episode_id": self._state.get("episode_id"),
-            "approval_purpose": approval_purpose,
-            "reason": reason,
-            "hitl": self._hitl.as_dict(),
-        }
+        raise ApplicationError(
+            f"Human action required for {self._tracking_id}. Purpose: {approval_purpose}. Reason: {reason}",
+            non_retryable=True,
+        )
 
     async def _persist(self, *, outcome: str, actions: list[dict[str, Any]] | None = None) -> None:
         ep = await self._act(
