@@ -722,6 +722,17 @@ async def evaluate_recovery_activity(payload: dict[str, Any]) -> dict[str, Any]:
         ]
         batches.append(obs)
     result = evaluate_recovery(sample_batches=batches, policy=policy)
+    
+    # Live LLM analysis for recovery evaluation & Langfuse trace emission
+    runtime = build_runtime()
+    await runtime.llm.complete(
+        system="You are an AI SRE assistant evaluating incident recovery status.",
+        user=f"Incident {tracking_id} recovery evaluation. Recovered: {result.get('recovered')}, Consecutive PASS: {result.get('consecutive_pass')}",
+        prompt_key="support_agent.evaluate_recovery",
+        prompt_version="1.0",
+        prompt_source="runtime",
+    )
+
     return {
         "gated": False,
         "phase": "evaluate_recovery",
@@ -753,6 +764,16 @@ async def close_ticket(payload: dict[str, Any]) -> dict[str, Any]:
             "error": "refusing close without recovered=true",
         }
     runtime = build_runtime()
+
+    # Live LLM analysis for ticket resolution report & Langfuse trace emission
+    await runtime.llm.complete(
+        system="You are an AI SRE assistant generating resolution report for ticket closure.",
+        user=f"Closing work item {wi.get('work_item_ref')} for incident {tracking_id}. Status: closed, Reason: recovered.",
+        prompt_key="support_agent.close_ticket",
+        prompt_version="1.0",
+        prompt_source="runtime",
+    )
+
     res = await runtime.capability.call(
         CapabilityCall(
             capability="work-item.transition",
