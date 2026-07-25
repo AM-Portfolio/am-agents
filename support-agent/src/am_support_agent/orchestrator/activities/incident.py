@@ -405,8 +405,8 @@ async def plan_investigation(payload: dict[str, Any]) -> dict[str, Any]:
         })
     elif "CrashLoop" in alertname or "Pod" in alertname or "Kube" in alertname:
         actions.append({
-            "capability": "k8s.restart",
-            "args": {"service": service or "app", "namespace": namespace},
+            "capability": "k8s.rollout",
+            "args": {"name": service or "app", "namespace": namespace, "kind": "Deployment", "action": "restart"},
             "effect": "remediation",
         })
     elif "HighMemory" in alertname or "HighCpu" in alertname:
@@ -417,15 +417,15 @@ async def plan_investigation(payload: dict[str, Any]) -> dict[str, Any]:
         })
     elif "HTTP5xx" in alertname or "ServiceDown" in alertname:
         actions.append({
-            "capability": "k8s.restart",
-            "args": {"service": service or "app", "namespace": namespace},
+            "capability": "k8s.rollout",
+            "args": {"name": service or "app", "namespace": namespace, "kind": "Deployment", "action": "restart"},
             "effect": "remediation",
         })
     else:
-        # Remediation strategy for general active firing incidents
+        # Default remediation: rolling restart via kagent-tool-server k8s_rollout
         actions.append({
-            "capability": "k8s.restart",
-            "args": {"service": service or "app", "namespace": namespace},
+            "capability": "k8s.rollout",
+            "args": {"name": service or "app", "namespace": namespace, "kind": "Deployment", "action": "restart"},
             "effect": "remediation",
         })
 
