@@ -245,6 +245,8 @@ class HttpLlmClient:
                                         "body": {
                                             "id": trace_id,
                                             "name": f"support_agent.{prompt_key or 'completion'}",
+                                            "input": {"system": system, "user": user},
+                                            "output": text,
                                             "metadata": metadata,
                                         },
                                     },
