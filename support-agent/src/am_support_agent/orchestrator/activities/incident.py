@@ -412,7 +412,7 @@ async def plan_investigation(payload: dict[str, Any]) -> dict[str, Any]:
     elif "HighMemory" in alertname or "HighCpu" in alertname:
         actions.append({
             "capability": "k8s.scale",
-            "args": {"service": service or "app", "namespace": namespace, "replicas": 3},
+            "args": {"name": service or "app", "namespace": namespace, "kind": "Deployment", "replicas": 3},
             "effect": "remediation",
         })
     elif "HTTP5xx" in alertname or "ServiceDown" in alertname:
