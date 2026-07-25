@@ -48,7 +48,8 @@ from am_support_agent.contracts.incident import RemediationCandidate
 
 
 def incident_parity_enabled() -> bool:
-    return os.getenv("SUPPORT_AGENT_INCIDENT_PARITY", "").lower() in {
+    from am_support_agent.adapters.llm import get_env_var
+    return get_env_var("SUPPORT_AGENT_INCIDENT_PARITY", "").lower() in {
         "1",
         "true",
         "yes",
