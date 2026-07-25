@@ -45,7 +45,7 @@ companionWorker:
     SUPPORT_AGENT_METRICS_PORT: "8091"
     SUPPORT_AGENT_LLM_PROVIDER: "litellm"
     SUPPORT_AGENT_LLM_ENABLED: "true"
-    SUPPORT_AGENT_LLM_MODEL: "together-llama-turbo"
+    SUPPORT_AGENT_LLM_MODEL: "together_ai/Prism-ML/Ternary-Bonsai-27B"
     SUPPORT_AGENT_INCIDENT_PARITY: "true"
     LITELLM_BASE_URL: "http://litellm.am-ai.svc.cluster.local:4000"
     LANGFUSE_HOST: "http://langfuse-web.am-ai.svc.cluster.local:3000"

@@ -80,7 +80,7 @@ class HttpLlmClient:
         ).rstrip("/")
         self.api_key = os.getenv("LITELLM_MASTER_KEY") or ""
         self.model = (
-            os.getenv("SUPPORT_AGENT_LLM_MODEL") or "gemini-2.0-flash"
+            os.getenv("SUPPORT_AGENT_LLM_MODEL") or "together_ai/Prism-ML/Ternary-Bonsai-27B"
         )
         self.timeout = float(os.getenv("SUPPORT_AGENT_LLM_TIMEOUT", "60"))
 
