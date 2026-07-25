@@ -387,7 +387,8 @@ async def plan_investigation(payload: dict[str, Any]) -> dict[str, Any]:
         return _gate_payload("plan_investigation", tracking_id)
     alert = dict(payload.get("alert") or {})
     alertname = str(alert.get("alertname") or "")
-    service = str(alert.get("service") or "")
+    service = str(alert.get("service") or alert.get("app") or "")
+    namespace = str(alert.get("namespace") or alert.get("env") or "am-apps-dev")
     
     actions: list[dict[str, Any]] = []
     if "Kafka" in alertname or service == "kafka":
@@ -401,6 +402,31 @@ async def plan_investigation(payload: dict[str, Any]) -> dict[str, Any]:
             "capability": "observe.metrics.query",
             "args": {"query": "mongodb_connections", "service": "mongodb"},
             "effect": "read",
+        })
+    elif "CrashLoop" in alertname or "Pod" in alertname or "Kube" in alertname:
+        actions.append({
+            "capability": "k8s.restart",
+            "args": {"service": service or "app", "namespace": namespace},
+            "effect": "remediation",
+        })
+    elif "HighMemory" in alertname or "HighCpu" in alertname:
+        actions.append({
+            "capability": "k8s.scale",
+            "args": {"service": service or "app", "namespace": namespace, "replicas": 3},
+            "effect": "remediation",
+        })
+    elif "HTTP5xx" in alertname or "ServiceDown" in alertname:
+        actions.append({
+            "capability": "k8s.restart",
+            "args": {"service": service or "app", "namespace": namespace},
+            "effect": "remediation",
+        })
+    else:
+        # Remediation strategy for general active firing incidents
+        actions.append({
+            "capability": "k8s.restart",
+            "args": {"service": service or "app", "namespace": namespace},
+            "effect": "remediation",
         })
 
     # Live LLM analysis for investigation plan & Langfuse tracing
