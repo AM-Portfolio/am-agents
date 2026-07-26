@@ -780,6 +780,11 @@ class AlertIncidentWorkflow:
                 )
             except asyncio.TimeoutError:
                 self._verify_rounds += 1
+                # Gather recovery evidence batch for this observation round
+                batch = await self._gather_evidence(recovery=True)
+                sample_batches.append(batch)
+                self._state["recovery_batches"] = sample_batches
+
                 # Automated fallback: check PromQL metrics for recovery before human handoff
                 if await self._close_if_recovered(sample_batches):
                     self._hitl.closed = True
