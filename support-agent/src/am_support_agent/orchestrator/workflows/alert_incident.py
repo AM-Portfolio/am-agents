@@ -764,6 +764,11 @@ class AlertIncidentWorkflow:
         )
         self._phase = "awaiting_resolved_or_refired"
         await self._persist_lifecycle(final_status="open")
+
+        policy = dict(self._state.get("policy") or {})
+        max_rounds = int(policy.get("max_verify_rounds") or _MAX_VERIFY_ROUNDS)
+        interval_mins = int(policy.get("observation_interval_minutes") or 2)
+
         while True:
             self._phase = "awaiting_resolved_or_refired"
             try:
@@ -772,7 +777,7 @@ class AlertIncidentWorkflow:
                     or self._hitl.refired
                     or self._hitl.pending_feedback is not None
                     or self._hitl.closed,
-                    timeout=timedelta(minutes=2),
+                    timeout=timedelta(minutes=interval_mins),
                 )
             except asyncio.TimeoutError:
                 self._verify_rounds += 1
@@ -797,14 +802,14 @@ class AlertIncidentWorkflow:
                         "hitl": self._hitl.as_dict(),
                     }
 
-                if self._verify_rounds < _MAX_VERIFY_ROUNDS:
+                if self._verify_rounds < max_rounds:
                     await self._act(
                         comment_ticket,
                         {
                             "tracking_id": self._tracking_id,
                             "work_item": self._state.get("work_item"),
                             "body": (
-                                f"Observation round {self._verify_rounds}/{_MAX_VERIFY_ROUNDS}: "
+                                f"Observation round {self._verify_rounds}/{max_rounds}: "
                                 f"service still recovering/unconfirmed, continuing automated observation..."
                             ),
                             "idempotency_key": f"{self._tracking_id}:verify:{self._verify_rounds}",
