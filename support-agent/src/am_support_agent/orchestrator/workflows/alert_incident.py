@@ -690,7 +690,7 @@ class AlertIncidentWorkflow:
                     "alert": self._state["alert"],
                     "observations": observations,
                 },
-                timeout_s=30,
+                timeout_s=120,
             )
             self._steps["intelligence_gate"] = gate
             self._state["validation"] = gate.get("validation")
@@ -735,7 +735,7 @@ class AlertIncidentWorkflow:
                     "tracking_id": self._tracking_id,
                     "known_fix": self._state.get("known_fix"),
                 },
-                timeout_s=30,
+                timeout_s=120,
             )
             self._steps["propose_known_fix"] = proposed
             if proposed.get("matched"):
@@ -748,7 +748,7 @@ class AlertIncidentWorkflow:
                 planned = await self._act(
                     plan_investigation,
                     {"tracking_id": self._tracking_id, "alert": self._state.get("alert")},
-                    timeout_s=30,
+                    timeout_s=120,
                 )
                 self._steps["plan_investigation"] = planned
                 actions = list(planned.get("actions") or [])
