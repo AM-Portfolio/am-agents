@@ -422,13 +422,27 @@ class AlertIncidentWorkflow:
             "reason": reason,
             "approval_purpose": approval_purpose,
         }
-        await self._ticket_and_notify(
-            [],
-            comment_body=(
-                f"Human action required for {self._tracking_id}. "
-                f"Purpose: {approval_purpose}. Reason: {reason}"
-            ),
-        )
+        if self._state.get("work_item"):
+            await self._act(
+                comment_ticket,
+                {
+                    "tracking_id": self._tracking_id,
+                    "work_item": self._state.get("work_item"),
+                    "body": (
+                        f"Human action required for {self._tracking_id}. "
+                        f"Purpose: {approval_purpose}. Reason: {reason}"
+                    ),
+                    "idempotency_key": f"{self._tracking_id}:wi-comment-hitl",
+                },
+            )
+        else:
+            await self._ticket_and_notify(
+                [],
+                comment_body=(
+                    f"Human action required for {self._tracking_id}. "
+                    f"Purpose: {approval_purpose}. Reason: {reason}"
+                ),
+            )
         await self._persist(outcome="human_required", actions=[])
         recorded = await self._act(
             record_hitl,

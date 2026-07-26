@@ -82,6 +82,10 @@ async def test_human_handoff_raises_application_error(monkeypatch):
         calls.append("persist")
 
     async def act(fn, payload, *, timeout_s=120):
+        name = getattr(fn, "__name__", str(fn))
+        if "comment" in name:
+            calls.append("comment_ticket")
+            return {"ok": True}
         assert payload["episode_id"] == "episode-1"
         assert payload["hitl"]["required"] is True
         calls.append("record_hitl")
@@ -106,7 +110,7 @@ async def test_human_handoff_raises_application_error(monkeypatch):
         )
 
     # All side-effects ran before the raise
-    assert calls == ["ticket_and_notify", "persist", "record_hitl", "emit", "finalize"]
+    assert calls == ["comment_ticket", "persist", "record_hitl", "emit", "finalize"]
 
     err = exc_info.value
     assert err.type == "human_required"
