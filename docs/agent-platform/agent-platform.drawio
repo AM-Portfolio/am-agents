@@ -17,7 +17,7 @@
                     <mxGeometry x="290" y="40" width="220" height="32" as="geometry"/>
                 </mxCell>
                 <mxCell id="l2" value="Edge — Alert Ops (thin)" style="swimlane;startSize=28;fillColor=#FFFFFF;strokeColor=#E5E7EB;fontStyle=1;rounded=1;fontColor=#6B7280;fontFamily=Segoe UI;swimlaneFillColor=#FAFAFA;" parent="1" vertex="1">
-                    <mxGeometry x="40" y="170" width="1520" height="84" as="geometry"/>
+                    <mxGeometry x="40" y="170" widťh="1520" height="84" as="geometry"/>
                 </mxCell>
                 <mxCell id="l2a" value="StartWorkflow / SignalWorkflow only" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;fontColor=#111827;strokeColor=#D1D5DB;fontFamily=Segoe UI;" parent="l2" vertex="1">
                     <mxGeometry x="40" y="40" width="280" height="32" as="geometry"/>
