@@ -740,12 +740,11 @@ class AlertIncidentWorkflow:
             self._steps["propose_known_fix"] = proposed
             if proposed.get("matched"):
                 self._state["proposed_known_fix"] = proposed
-                candidate = str(proposed.get("candidate_id") or "matched remediation")
-                return await self._handoff_to_human(
-                    reason=f"Known fix {candidate} requires approval before execution",
-                    approval_purpose="known_fix",
-                )
-            else:
+                actions = list(proposed.get("actions") or [])
+                if not actions and isinstance(proposed.get("candidate"), dict):
+                    actions = [dict(proposed.get("candidate"))]
+
+            if not actions:
                 planned = await self._act(
                     plan_investigation,
                     {"tracking_id": self._tracking_id, "alert": self._state.get("alert")},
