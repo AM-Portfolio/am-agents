@@ -43,7 +43,8 @@ class ToolAgentCapabilityClient:
             base_url
             or os.getenv("TOOL_AGENT_BASE_URL", "").strip()
             or os.getenv("SUPPORT_AGENT_TOOL_AGENT_URL", "").strip()
-            or "http://127.0.0.1:8141"
+            or os.getenv("AM_TOOL_AGENT_URL", "").strip()
+            or "http://am-tool-agent:8141"
         ).rstrip("/")
         self._client = client
         self._owns_client = client is None
