@@ -389,55 +389,42 @@ async def plan_investigation(payload: dict[str, Any]) -> dict[str, Any]:
     alertname = str(alert.get("alertname") or "")
     service = str(alert.get("service") or alert.get("app") or "")
     namespace = str(alert.get("namespace") or alert.get("env") or "am-apps-dev")
-    
-    actions: list[dict[str, Any]] = []
-    if "Kafka" in alertname or service == "kafka":
-        actions.append({
-            "capability": "observe.metrics.query",
-            "args": {"query": "kafka_consumergroup_lag", "service": "kafka"},
-            "effect": "read",
-        })
-    elif "Mongo" in alertname or service == "mongodb":
-        actions.append({
-            "capability": "observe.metrics.query",
-            "args": {"query": "mongodb_connections", "service": "mongodb"},
-            "effect": "read",
-        })
-    elif "CrashLoop" in alertname or "Pod" in alertname or "Kube" in alertname:
-        actions.append({
-            "capability": "k8s.rollout",
-            "args": {"name": service or "app", "namespace": namespace, "kind": "Deployment", "action": "restart"},
-            "effect": "remediation",
-        })
-    elif "HighMemory" in alertname or "HighCpu" in alertname:
-        actions.append({
-            "capability": "k8s.scale",
-            "args": {"name": service or "app", "namespace": namespace, "kind": "Deployment", "replicas": 3},
-            "effect": "remediation",
-        })
-    elif "HTTP5xx" in alertname or "ServiceDown" in alertname:
-        actions.append({
-            "capability": "k8s.rollout",
-            "args": {"name": service or "app", "namespace": namespace, "kind": "Deployment", "action": "restart"},
-            "effect": "remediation",
-        })
-    else:
-        # Default remediation: rolling restart via kagent-tool-server k8s_rollout
-        actions.append({
-            "capability": "k8s.rollout",
-            "args": {"name": service or "app", "namespace": namespace, "kind": "Deployment", "action": "restart"},
-            "effect": "remediation",
-        })
+    import json
+    from am_support_agent.orchestrator.prompts import PLAN_INVESTIGATION_SYSTEM_PROMPT
 
-    # Live LLM analysis for investigation plan & Langfuse tracing
     runtime = build_runtime()
-    await runtime.llm.complete(
-        system="You are an AI SRE assistant planning investigation steps for an alert.",
-        user=f"Alert: {alertname}, Service: {service}. Planned actions: {actions}",
+    llm_res = await runtime.llm.complete(
+        system=PLAN_INVESTIGATION_SYSTEM_PROMPT,
+        user=f"Alert JSON: {json.dumps(alert)}",
         prompt_key="support_agent.plan_investigation",
         prompt_version="1.0",
         prompt_source="runtime",
     )
+
+    actions: list[dict[str, Any]] = []
+    if not llm_res.gated and llm_res.text:
+        try:
+            text = llm_res.text.strip()
+            if "```json" in text:
+                text = text.split("```json")[1].split("```")[0].strip()
+            elif "```" in text:
+                text = text.split("```")[1].split("```")[0].strip()
+            
+            parsed = json.loads(text)
+            if isinstance(parsed, dict) and isinstance(parsed.get("actions"), list):
+                actions = parsed["actions"]
+            elif isinstance(parsed, list):
+                actions = parsed
+        except Exception:
+            pass
+
+    if not actions:
+        # Fallback remediation: rolling restart via kagent-tool-server k8s_rollout
+        actions.append({
+            "capability": "k8s.rollout",
+            "args": {"name": service or "app", "namespace": namespace, "kind": "Deployment", "action": "restart"},
+            "effect": "remediation",
+        })
 
     return {
         "gated": False,
@@ -447,6 +434,64 @@ async def plan_investigation(payload: dict[str, Any]) -> dict[str, Any]:
         "matched": len(actions) > 0,
     }
 
+
+@activity.defn(name="support_agent.incident.agent_reasoning")
+async def agent_reasoning(payload: dict[str, Any]) -> dict[str, Any]:
+    tracking_id = str(payload.get("tracking_id") or "")
+    if not incident_parity_enabled():
+        return _gate_payload("agent_reasoning", tracking_id)
+    
+    alert = dict(payload.get("alert") or {})
+    history = list(payload.get("history") or [])
+    
+    runtime = build_runtime()
+    
+    # Dynamically fetch capabilities
+    capabilities_dict = await runtime.capability.list_capabilities()
+    import json
+    capabilities_str = json.dumps(capabilities_dict, indent=2)
+    history_str = json.dumps(history, indent=2)
+    alert_str = json.dumps(alert, indent=2)
+    
+    from am_support_agent.orchestrator.prompts import INVESTIGATE_SYSTEM_PROMPT
+    
+    system_prompt = INVESTIGATE_SYSTEM_PROMPT.format(
+        capabilities=capabilities_str,
+        history=history_str
+    )
+    
+    llm_res = await runtime.llm.complete(
+        system=system_prompt,
+        user=f"Alert JSON: {alert_str}\n\nWhat is the next action?",
+        prompt_key="support_agent.agent_reasoning",
+        prompt_version="1.0",
+        prompt_source="runtime",
+    )
+    
+    action: dict[str, Any] = {}
+    if not llm_res.gated and llm_res.text:
+        try:
+            text = llm_res.text.strip()
+            if "```json" in text:
+                text = text.split("```json")[1].split("```")[0].strip()
+            elif "```" in text:
+                text = text.split("```")[1].split("```")[0].strip()
+            
+            parsed = json.loads(text)
+            if isinstance(parsed, dict) and isinstance(parsed.get("action"), dict):
+                action = parsed["action"]
+            elif isinstance(parsed, dict):
+                action = parsed
+        except Exception:
+            pass
+            
+    return {
+        "gated": False,
+        "phase": "agent_reasoning",
+        "tracking_id": tracking_id,
+        "action": action,
+        "matched": bool(action)
+    }
 
 @activity.defn(name="support_agent.incident.resolve_owner")
 async def resolve_owner(payload: dict[str, Any]) -> dict[str, Any]:
@@ -1455,6 +1500,7 @@ INCIDENT_ACTIVITIES = [
     intelligence_gate,
     propose_known_fix,
     plan_investigation,
+    agent_reasoning,
     resolve_owner,
     create_ticket,
     assign_ticket,

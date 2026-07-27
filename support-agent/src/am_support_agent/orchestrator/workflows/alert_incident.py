@@ -12,6 +12,7 @@ from temporalio.exceptions import ApplicationError
 
 with workflow.unsafe.imports_passed_through():
     from am_support_agent.orchestrator.activities.incident import (
+        agent_reasoning,
         apply_alert_silence,
         assign_ticket,
         check_parity,
@@ -759,13 +760,46 @@ class AlertIncidentWorkflow:
                     actions = [dict(proposed.get("candidate"))]
 
             if not actions:
-                planned = await self._act(
-                    plan_investigation,
-                    {"tracking_id": self._tracking_id, "alert": self._state.get("alert")},
-                    timeout_s=120,
-                )
-                self._steps["plan_investigation"] = planned
-                actions = list(planned.get("actions") or [])
+                # Full Agentic Loop (ReAct)
+                investigation_history: list[dict[str, Any]] = []
+                for step in range(5):
+                    reasoning = await self._act(
+                        agent_reasoning,
+                        {
+                            "tracking_id": self._tracking_id,
+                            "alert": self._state.get("alert"),
+                            "history": investigation_history,
+                        },
+                        timeout_s=120,
+                    )
+                    action = reasoning.get("action")
+                    if not action:
+                        break
+                    
+                    effect = str(action.get("effect") or "")
+                    if effect == "resolve":
+                        break
+                        
+                    # Execute the single action
+                    action_result = await self._act(
+                        execute_actions,
+                        {
+                            "tracking_id": self._tracking_id,
+                            "actions": [action],
+                        },
+                        timeout_s=120,
+                    )
+                    
+                    results = action_result.get("results") or []
+                    investigation_history.append({"action": action, "result": results[0] if results else None})
+                    
+                    if effect == "remediation":
+                        actions = [action]
+                        break
+                
+                self._steps["investigation_loop"] = investigation_history
+                # If we didn't end up with a remediation action, actions remains empty
+                # which will trigger ticket creation but no automated fix.
 
             self._state["actions"] = actions
             await self._ticket_and_notify(actions)

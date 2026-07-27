@@ -62,6 +62,20 @@ class ToolAgentCapabilityClient:
             self._client = httpx.AsyncClient(timeout=60.0)
         return self._client
 
+    async def list_capabilities(self) -> dict[str, Any]:
+        client = await self._http()
+        headers: dict[str, str] = {"Accept": "application/json"}
+        inject_trace_headers(headers)
+        try:
+            resp = await client.get(f"{self.url}/api/v1/tools/capabilities", headers=headers, timeout=10.0)
+            if resp.status_code == 200:
+                data = _json_or_text(resp)
+                return data.get("capabilities", {}) if isinstance(data, dict) else {}
+        except Exception:
+            pass
+        return {}
+
+
     async def close(self) -> None:
         if self._owns_client and self._client is not None:
             await self._client.aclose()
@@ -185,6 +199,15 @@ class FakeCapabilityClient:
 
     def status(self) -> dict[str, Any]:
         return {"name": self.name, "wired": True, "mode": "fake"}
+
+    async def list_capabilities(self) -> dict[str, Any]:
+        return {
+            "k8s": {
+                "operations": {
+                    "get_pods": {"mcp_tool": "k8s_get_pods"}
+                }
+            }
+        }
 
     async def call(self, call: CapabilityCall) -> CapabilityResult:
         self.calls.append(call)
