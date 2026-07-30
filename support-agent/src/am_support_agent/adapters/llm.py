@@ -76,6 +76,9 @@ class GatedLlmClient:
             prompt_source=prompt_source,
         )
 
+    async def get_prompt_compiled(self, prompt_key: str, **kwargs: Any) -> str | None:
+        return None
+
 
 class HttpLlmClient:
     """Live LLM client via LiteLLM proxy with Langfuse tracing.
@@ -133,6 +136,17 @@ class HttpLlmClient:
             "model": self.model,
             "langfuse_client": self._langfuse is not None,
         }
+
+    async def get_prompt_compiled(self, prompt_key: str, **kwargs: Any) -> str | None:
+        if self._langfuse is not None:
+            try:
+                # Synchronous operation behind the scenes, but uses caching
+                prompt = self._langfuse.get_prompt(prompt_key)
+                return prompt.compile(**kwargs)
+            except Exception as e:
+                import logging
+                logging.warning(f"Failed to fetch prompt {prompt_key} from Langfuse: {e}")
+        return None
 
     async def complete(
         self,
@@ -342,6 +356,9 @@ class FakeLlmClient:
             prompt_version=prompt_version,
             prompt_source=prompt_source,
         )
+
+    async def get_prompt_compiled(self, prompt_key: str, **kwargs: Any) -> str | None:
+        return None
 
 
 def llm_status() -> dict[str, Any]:

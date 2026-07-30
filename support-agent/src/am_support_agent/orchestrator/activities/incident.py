@@ -455,10 +455,16 @@ async def agent_reasoning(payload: dict[str, Any]) -> dict[str, Any]:
     
     from am_support_agent.orchestrator.prompts import INVESTIGATE_SYSTEM_PROMPT
     
-    system_prompt = INVESTIGATE_SYSTEM_PROMPT.format(
+    system_prompt = await runtime.llm.get_prompt_compiled(
+        "support_agent.agent_reasoning",
         capabilities=capabilities_str,
         history=history_str
     )
+    if not system_prompt:
+        system_prompt = INVESTIGATE_SYSTEM_PROMPT.format(
+            capabilities=capabilities_str,
+            history=history_str
+        )
     
     llm_res = await runtime.llm.complete(
         system=system_prompt,
