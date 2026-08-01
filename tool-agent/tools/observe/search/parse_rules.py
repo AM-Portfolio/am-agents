@@ -5,11 +5,11 @@ from app.models.intent import IntentDocument
 _KEYWORDS = ['observe', 'metrics', 'logs', 'timeseries', 'grafana']
 
 
-def parse_rules(query: str, *, tool_name: str) -> IntentDocument | None:
+def parse_rules(query: str, *, tool_name: str, backend_hint: str | None = None) -> IntentDocument | None:
     q = (query or "").lower()
     if not any(k in q for k in _KEYWORDS):
         return None
-    operation = "get"
+    operation = "metrics.query"
     read_only = True
     for candidate in ('metrics.query', 'logs.query', 'timeseries.query'):
         if candidate.replace(".", " ") in q or candidate in q:

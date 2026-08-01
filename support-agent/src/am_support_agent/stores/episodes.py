@@ -253,35 +253,48 @@ def _backend(name: str, fallback_env: str = "SUPPORT_AGENT_RUNSTORE") -> str:
     return os.getenv(fallback_env, "memory").strip().lower() or "memory"
 
 
+_cached_episode_store: EpisodeStore | None = None
+_cached_feedback_store: FeedbackStore | None = None
+_store_lock = threading.RLock()
+
+
 def build_episode_store() -> EpisodeStore:
+    global _cached_episode_store
     backend = _backend("SUPPORT_AGENT_EPISODE_STORE")
     if backend == "memory":
         return MemoryEpisodeStore()
     if backend == "postgres":
-        dsn = _dsn()
-        if not dsn:
-            raise RuntimeError(
-                "SUPPORT_AGENT_EPISODE_STORE=postgres requires SUPPORT_AGENT_DATABASE_URL"
-            )
-        from am_support_agent.stores.postgres_episodes import PostgresEpisodeStore
+        with _store_lock:
+            if _cached_episode_store is None:
+                dsn = _dsn()
+                if not dsn:
+                    raise RuntimeError(
+                        "SUPPORT_AGENT_EPISODE_STORE=postgres requires SUPPORT_AGENT_DATABASE_URL"
+                    )
+                from am_support_agent.stores.postgres_episodes import PostgresEpisodeStore
 
-        return PostgresEpisodeStore(dsn)
+                _cached_episode_store = PostgresEpisodeStore(dsn)
+            return _cached_episode_store
     raise ValueError(f"unsupported SUPPORT_AGENT_EPISODE_STORE: {backend}")
 
 
 def build_feedback_store() -> FeedbackStore:
+    global _cached_feedback_store
     backend = _backend("SUPPORT_AGENT_FEEDBACK_STORE")
     if backend == "memory":
         return MemoryFeedbackStore()
     if backend == "postgres":
-        dsn = _dsn()
-        if not dsn:
-            raise RuntimeError(
-                "SUPPORT_AGENT_FEEDBACK_STORE=postgres requires SUPPORT_AGENT_DATABASE_URL"
-            )
-        from am_support_agent.stores.postgres_episodes import PostgresFeedbackStore
+        with _store_lock:
+            if _cached_feedback_store is None:
+                dsn = _dsn()
+                if not dsn:
+                    raise RuntimeError(
+                        "SUPPORT_AGENT_FEEDBACK_STORE=postgres requires SUPPORT_AGENT_DATABASE_URL"
+                    )
+                from am_support_agent.stores.postgres_episodes import PostgresFeedbackStore
 
-        return PostgresFeedbackStore(dsn)
+                _cached_feedback_store = PostgresFeedbackStore(dsn)
+            return _cached_feedback_store
     raise ValueError(f"unsupported SUPPORT_AGENT_FEEDBACK_STORE: {backend}")
 
 

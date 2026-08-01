@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 from typing import Any
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy
+from temporalio.exceptions import ApplicationError
 
 with workflow.unsafe.imports_passed_through():
     from am_support_agent.orchestrator.activities.incident import (
+        agent_reasoning,
         apply_alert_silence,
         assign_ticket,
         check_parity,
@@ -58,7 +61,7 @@ _ACTIVITY_RETRY = RetryPolicy(
     initial_interval=timedelta(seconds=1),
     backoff_coefficient=2.0,
     maximum_interval=timedelta(seconds=30),
-    maximum_attempts=5,
+    maximum_attempts=10,
 )
 
 _MAX_REFIRES = 20
@@ -412,19 +415,35 @@ class AlertIncidentWorkflow:
         *,
         reason: str,
         approval_purpose: str,
-    ) -> dict[str, Any]:
-        """Assign an open ticket to a human and complete this workflow run."""
+    ) -> None:
+        """Complete all side-effects then raise ApplicationError so Temporal marks
+        this workflow run as FAILED (not Completed). The non_retryable flag tells
+        Temporal not to retry — this is an intentional terminal state."""
         self._state["human_required"] = {
             "reason": reason,
             "approval_purpose": approval_purpose,
         }
-        await self._ticket_and_notify(
-            [],
-            comment_body=(
-                f"Human action required for {self._tracking_id}. "
-                f"Purpose: {approval_purpose}. Reason: {reason}"
-            ),
-        )
+        if self._state.get("work_item"):
+            await self._act(
+                comment_ticket,
+                {
+                    "tracking_id": self._tracking_id,
+                    "work_item": self._state.get("work_item"),
+                    "body": (
+                        f"Human action required for {self._tracking_id}. "
+                        f"Purpose: {approval_purpose}. Reason: {reason}"
+                    ),
+                    "idempotency_key": f"{self._tracking_id}:wi-comment-hitl",
+                },
+            )
+        else:
+            await self._ticket_and_notify(
+                [],
+                comment_body=(
+                    f"Human action required for {self._tracking_id}. "
+                    f"Purpose: {approval_purpose}. Reason: {reason}"
+                ),
+            )
         await self._persist(outcome="human_required", actions=[])
         recorded = await self._act(
             record_hitl,
@@ -451,18 +470,15 @@ class AlertIncidentWorkflow:
             attributes={"reason": reason[:200]},
         )
         await self._finalize("human_required")
-        return {
-            "status": "human_required",
-            "tracking_id": self._tracking_id,
-            "phase": self._phase,
-            "steps": self._steps,
-            "owner": self._state.get("owner"),
-            "work_item": self._state.get("work_item"),
-            "episode_id": self._state.get("episode_id"),
-            "approval_purpose": approval_purpose,
-            "reason": reason,
-            "hitl": self._hitl.as_dict(),
-        }
+        # Raise so Temporal marks the workflow run as FAILED, not Completed.
+        # Callers (run()) do not catch this — it propagates to the Temporal worker.
+        raise ApplicationError(
+            f"human_required:{approval_purpose} — {reason}",
+            approval_purpose,
+            reason,
+            type="human_required",
+            non_retryable=True,
+        )
 
     async def _persist(self, *, outcome: str, actions: list[dict[str, Any]] | None = None) -> None:
         ep = await self._act(
@@ -689,7 +705,7 @@ class AlertIncidentWorkflow:
                     "alert": self._state["alert"],
                     "observations": observations,
                 },
-                timeout_s=30,
+                timeout_s=120,
             )
             self._steps["intelligence_gate"] = gate
             self._state["validation"] = gate.get("validation")
@@ -734,24 +750,56 @@ class AlertIncidentWorkflow:
                     "tracking_id": self._tracking_id,
                     "known_fix": self._state.get("known_fix"),
                 },
-                timeout_s=30,
+                timeout_s=120,
             )
             self._steps["propose_known_fix"] = proposed
             if proposed.get("matched"):
                 self._state["proposed_known_fix"] = proposed
-                candidate = str(proposed.get("candidate_id") or "matched remediation")
-                return await self._handoff_to_human(
-                    reason=f"Known fix {candidate} requires approval before execution",
-                    approval_purpose="known_fix",
-                )
-            else:
-                planned = await self._act(
-                    plan_investigation,
-                    {"tracking_id": self._tracking_id, "alert": self._state.get("alert")},
-                    timeout_s=30,
-                )
-                self._steps["plan_investigation"] = planned
-                actions = list(planned.get("actions") or [])
+                actions = list(proposed.get("actions") or [])
+                if not actions and isinstance(proposed.get("candidate"), dict):
+                    actions = [dict(proposed.get("candidate"))]
+
+            if not actions:
+                # Full Agentic Loop (ReAct)
+                investigation_history: list[dict[str, Any]] = []
+                for step in range(5):
+                    reasoning = await self._act(
+                        agent_reasoning,
+                        {
+                            "tracking_id": self._tracking_id,
+                            "alert": self._state.get("alert"),
+                            "history": investigation_history,
+                        },
+                        timeout_s=120,
+                    )
+                    action = reasoning.get("action")
+                    if not action:
+                        break
+                    
+                    effect = str(action.get("effect") or "")
+                    if effect == "resolve":
+                        break
+                        
+                    # Execute the single action
+                    action_result = await self._act(
+                        execute_actions,
+                        {
+                            "tracking_id": self._tracking_id,
+                            "actions": [action],
+                        },
+                        timeout_s=120,
+                    )
+                    
+                    results = action_result.get("results") or []
+                    investigation_history.append({"action": action, "result": results[0] if results else None})
+                    
+                    if effect == "remediation":
+                        actions = [action]
+                        break
+                
+                self._steps["investigation_loop"] = investigation_history
+                # If we didn't end up with a remediation action, actions remains empty
+                # which will trigger ticket creation but no automated fix.
 
             self._state["actions"] = actions
             await self._ticket_and_notify(actions)
@@ -763,14 +811,71 @@ class AlertIncidentWorkflow:
         )
         self._phase = "awaiting_resolved_or_refired"
         await self._persist_lifecycle(final_status="open")
+
+        policy = dict(self._state.get("policy") or {})
+        max_rounds = int(policy.get("max_verify_rounds") or _MAX_VERIFY_ROUNDS)
+        interval_mins = int(policy.get("observation_interval_minutes") or 2)
+
         while True:
             self._phase = "awaiting_resolved_or_refired"
-            await workflow.wait_condition(
-                lambda: self._hitl.resolved
-                or self._hitl.refired
-                or self._hitl.pending_feedback is not None
-                or self._hitl.closed
-            )
+            try:
+                await workflow.wait_condition(
+                    lambda: self._hitl.resolved
+                    or self._hitl.refired
+                    or self._hitl.pending_feedback is not None
+                    or self._hitl.closed,
+                    timeout=timedelta(minutes=interval_mins),
+                )
+            except asyncio.TimeoutError:
+                self._verify_rounds += 1
+                # Gather recovery evidence batch for this observation round
+                batch = await self._gather_evidence(recovery=True)
+                sample_batches.append(batch)
+                self._state["recovery_batches"] = sample_batches
+
+                # Automated fallback: check PromQL metrics for recovery before human handoff
+                if await self._close_if_recovered(sample_batches):
+                    self._hitl.closed = True
+                    self._phase = "recovered"
+                    await self._emit(
+                        "incident.recovered",
+                        status="passed",
+                        outcome="recovered",
+                        terminal=True,
+                    )
+                    await self._finalize("recovered")
+                    return {
+                        "status": "recovered",
+                        "tracking_id": self._tracking_id,
+                        "steps": self._steps,
+                        "episode_id": self._state.get("episode_id"),
+                        "learned_fix": self._state.get("learned_fix"),
+                        "silence": self._state.get("silence"),
+                        "hitl": self._hitl.as_dict(),
+                    }
+
+                if self._verify_rounds < max_rounds:
+                    await self._act(
+                        comment_ticket,
+                        {
+                            "tracking_id": self._tracking_id,
+                            "work_item": self._state.get("work_item"),
+                            "body": (
+                                f"Observation round {self._verify_rounds}/{max_rounds}: "
+                                f"service still recovering/unconfirmed, continuing automated observation..."
+                            ),
+                            "idempotency_key": f"{self._tracking_id}:verify:{self._verify_rounds}",
+                        },
+                    )
+                    continue
+
+                return await self._handoff_to_human(
+                    reason=(
+                        f"Observation deadline reached after {self._verify_rounds} rounds "
+                        f"without resolution signal; metrics remained unconfirmed."
+                    ),
+                    approval_purpose="investigation",
+                )
 
             if self._hitl.pending_feedback is not None:
                 await self._handle_pending_feedback()
@@ -858,38 +963,13 @@ class AlertIncidentWorkflow:
                     }
 
                 if self._verify_rounds >= _MAX_VERIFY_ROUNDS:
-                    self._phase = "continue_as_new"
-                    workflow.continue_as_new(
-                        {
-                            "tracking_id": self._tracking_id,
-                            "_continued": {
-                                "tracking_id": self._tracking_id,
-                                "refire_count": self._refire_count,
-                                "verify_rounds": 0,
-                                "state": {
-                                    **{
-                                        k: self._state.get(k)
-                                        for k in (
-                                            "alert",
-                                            "run_ref",
-                                            "policy",
-                                            "owner",
-                                            "work_item",
-                                            "episode_id",
-                                            "actions",
-                                            "executed_actions",
-                                            "decision",
-                                            "validation",
-                                            "known_fix",
-                                        )
-                                    },
-                                    "recovery_batches": sample_batches[-2:],
-                                },
-                                "steps": {},
-                            },
-                        }
+                    return await self._handoff_to_human(
+                        reason=f"Recovery verification unconfirmed after {_MAX_VERIFY_ROUNDS} rounds; metrics remained unhealthy.",
+                        approval_purpose="investigation",
                     )
-                # Remain open — wait again.
+                # Re-arm resolution flag so workflow re-verifies instead of hanging indefinitely
+                self._hitl.resolved = True
+                await workflow.sleep(timedelta(seconds=10))
                 continue
 
             if self._hitl.closed:

@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "am-fin-agent"
+version = "2.0.0"
+description = "AI-powered financial intelligence agent with multi-domain OpenAPI tool integration"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "AM Development Team"}
+]
+dependencies = [
+    "fastapi==0.110.0",
+    "uvicorn==0.27.1",
+    "langchain-core==0.1.27",
+    "langchain-community==0.0.24",
+    "langgraph==0.0.26",
+    "together==0.2.11",
+    "httpx==0.27.0",
+    "python-dotenv==1.0.1",
+    "pydantic==2.6.3",
+    "structlog==24.1.0",
+    "requests==2.31.0",
+    "google-genai==0.3.0",
+    "duckduckgo-search==5.3.0",
+    "motor==3.3.2",
+    "pymongo==4.6.2",
+    "openapi-pydantic>=0.4.0",
+    "chromadb>=0.5.0",
+    "sentence-transformers>=3.0.0",
+    "mcp>=1.0.0"
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest==8.1.1",
+    "pytest-asyncio==0.23.6",
+    "pytest-mock==3.14.0"
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

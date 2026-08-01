@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     AM_MCP_CLIENT_SECRET: str | None = Field(default=None)
     KEYCLOAK_TOKEN_URL: str | None = Field(default=None)
     LLM_PLANNER_MODEL: str = Field(
-        default="together_ai/meta-llama/Meta-Llama-3-8B-Instruct-Lite"
+        default="together_ai/Prism-ML/Ternary-Bonsai-27B"
     )
     LLM_TEMPERATURE: float = Field(default=0.1)
     LLM_MAX_TOKENS: int = Field(default=1024)

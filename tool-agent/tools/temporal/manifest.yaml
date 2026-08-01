@@ -1,0 +1,27 @@
+name: temporal
+display_name: Temporal
+enabled: true
+version: "0.1.0"
+
+infer_keywords: [temporal, workflow, run_id, execution, signal, task_queue]
+
+vault:
+  path_template: "apps/data/{env}/infra/temporal"
+env_prefix: TEMPORAL_
+
+supports_mcp: true
+mcp_server: toolbox
+has_entities: true
+health_check: skip
+
+prompts:
+  intent:
+    source: file
+    name: tool-agent/intent/temporal
+    label: "{{APP_ENV}}"
+    fallback: prompts/intent.yaml
+  examples:
+    source: file
+    name: tool-agent/intent/temporal/examples
+    fallback: prompts/examples.yaml
+    optional: true

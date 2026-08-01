@@ -23,11 +23,11 @@ def _collection_from_query(query: str) -> str | None:
 
 def parse_rules(query: str, *, tool_name: str, backend_hint: str | None = None) -> IntentDocument | None:
     q = query.lower()
-    if not (tool_name == "qdrant" or backend_hint == "qdrant" or "qdrant" in q or "vector" in q):
-        if not (_collection_from_query(query) and ("search" in q or "similar" in q)):
-            return None
-
+    if backend_hint and backend_hint != tool_name:
+        return None
     coll = _collection_from_query(query)
+    if not (backend_hint == tool_name or "qdrant" in q or "vector" in q or coll is not None):
+        return None
 
     if re.search(r"\bsearch\b|\bsimilar\b|\bfind\b.*\blike\b", q):
         return IntentDocument(

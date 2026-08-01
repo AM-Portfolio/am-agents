@@ -1,0 +1,68 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Simple Stock API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/quote": {
+      "get": {
+        "operationId": "get_quote",
+        "summary": "Get a stock quote",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "price": { "type": "number" },
+                    "symbol": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/order": {
+      "post": {
+        "operationId": "create_order",
+        "summary": "Create a new order",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["symbol", "quantity", "side"],
+                "properties": {
+                  "symbol": { "type": "string" },
+                  "quantity": { "type": "integer" },
+                  "side": { "type": "string", "enum": ["buy", "sell"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    }
+  }
+}

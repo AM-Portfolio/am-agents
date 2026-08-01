@@ -19,18 +19,36 @@ logger = logging.getLogger(__name__)
 
 
 def _parse_llm_json(raw: str) -> dict[str, Any]:
-    cleaned = raw.strip()
-    if cleaned.startswith("```"):
-        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
-        cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+    cleaned = (raw or "").strip()
+    cleaned = re.sub(r"<(think|thought)>.*?</\1>", "", cleaned, flags=re.DOTALL | re.IGNORECASE).strip()
+    
+    # 1. Try finding markdown JSON block first
+    md_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, re.DOTALL)
+    if md_match:
+        try:
+            data = json.loads(md_match.group(1))
+            if isinstance(data, dict) and "backend" in data:
+                return data
+        except Exception:
+            pass
+
+    # 2. Extract JSON objects from end to beginning (reasoning models output JSON at the end)
+    matches = list(re.finditer(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", cleaned, re.DOTALL))
+    for m in reversed(matches):
+        try:
+            data = json.loads(m.group(0))
+            if isinstance(data, dict) and ("backend" in data or "operation" in data):
+                return data
+        except Exception:
+            continue
+
+    # 3. Fallback search for outer braces
     start = cleaned.find("{")
     end = cleaned.rfind("}")
     if start != -1 and end > start:
-        cleaned = cleaned[start : end + 1]
-    data = json.loads(cleaned)
-    if not isinstance(data, dict):
-        raise ValueError("Expected JSON object")
-    return data
+        return json.loads(cleaned[start:end + 1])
+
+    return json.loads(cleaned)
 
 
 def _normalize_intent(data: dict[str, Any], backend_hint: str | None) -> IntentDocument:
@@ -159,6 +177,7 @@ async def parse_intent_node(state: ToolAgentState) -> ToolAgentState:
             }
         tool.validate_intent(intent)
     except Exception as exc:
+        logger.error(f"Failed to parse JSON from LLM content: {llm_result.content!r}")
         return {
             **state,
             "error": f"Invalid LLM intent JSON: {exc}",

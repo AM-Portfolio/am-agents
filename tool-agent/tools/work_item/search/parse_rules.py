@@ -5,16 +5,31 @@ from app.models.intent import IntentDocument
 _KEYWORDS = ['work-item', 'work item', 'ticket', 'openproject', 'workpackage']
 
 
-def parse_rules(query: str, *, tool_name: str) -> IntentDocument | None:
+def parse_rules(query: str, *, tool_name: str, backend_hint: str | None = None) -> IntentDocument | None:
     q = (query or "").lower()
-    if not any(k in q for k in _KEYWORDS):
+    if backend_hint and backend_hint != tool_name:
         return None
-    operation = "get"
-    read_only = True
+    if not backend_hint == tool_name and not any(k in q for k in _KEYWORDS):
+        return None
+
+    # Check for explicit keywords
+    operation = "search"
+    matched = False
     for candidate in ('search', 'get', 'create', 'comment', 'assign', 'transition'):
-        if candidate.replace(".", " ") in q or candidate in q:
+        if candidate in q:
             operation = candidate
+            matched = True
             break
+
+    if not matched:
+        # Fallback if no explicit operation keyword:
+        # If there's a reference to a specific ticket number/ID or view words, assume "get"
+        import re
+        if re.search(r'\b\d+\b|op:wp:', q) or any(w in q for w in ("get", "show", "view", "ticket")):
+            operation = "get"
+        else:
+            operation = "search"
+
     op_read = {'search': True, 'get': True, 'create': False, 'comment': False, 'assign': False, 'transition': False}
     read_only = bool(op_read.get(operation, True))
     return IntentDocument(

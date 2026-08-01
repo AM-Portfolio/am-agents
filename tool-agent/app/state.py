@@ -10,6 +10,8 @@ from app.models.intent import (
     ToolsQueryRequest,
     ToolsQueryResponse,
     ToolsWriteConfirmation,
+    ReactRequest,
+    ReactHistoryItem,
 )
 from app.observability.usage import UsageLedger
 
@@ -35,3 +37,19 @@ class ToolAgentState(TypedDict, total=False):
     plan_hash: str | None
     idempotency_key: str | None
     is_plan_path: bool
+    god_mode: bool
+
+
+class ReactAgentState(TypedDict, total=False):
+    request: ReactRequest
+    request_id: str
+    query: str
+    history: list[ReactHistoryItem]
+    loop_count: int
+    intent: IntentDocument
+    tool_result: ToolResult
+    final_answer: str
+    error: str
+    usage_ledger: UsageLedger
+    agent_caller: str | None
+

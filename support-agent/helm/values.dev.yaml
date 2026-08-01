@@ -12,3 +12,5 @@ vault:
 env:
   DEPLOYMENT_ENVIRONMENT: "dev"
   SUPPORT_AGENT_RUNTIME_MODE: "dev"
+  LANGFUSE_ENABLED: "true"
+  LANGFUSE_HOST: "http://langfuse-web.am-ai.svc.cluster.local:3000"

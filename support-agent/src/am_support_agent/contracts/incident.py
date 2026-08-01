@@ -38,6 +38,8 @@ class IncidentEvidencePolicy(BaseModel):
     recovery_stability_samples: int = 2
     recovery_stability_seconds: int = 60
     healthy_when_firing: bool = False
+    max_verify_rounds: int = 10
+    observation_interval_minutes: int = 2
 
 
 class EvidencePredicateResult(BaseModel):

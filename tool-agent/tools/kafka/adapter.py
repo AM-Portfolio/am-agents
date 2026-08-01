@@ -35,7 +35,30 @@ def _kafka_conf(*, group_id: str | None = None) -> dict[str, Any]:
     return conf
 
 
+def _list_topics_via_ui_sync(*, max_rows: int) -> dict[str, Any]:
+    base = settings.KAFKA_UI_URL.rstrip("/")
+    cluster = settings.KAFKA_UI_CLUSTER
+    url = f"{base}/api/clusters/{cluster}/topics"
+    with httpx.Client(timeout=settings.TOOL_AGENT_TIMEOUT_SECONDS, follow_redirects=True) as client:
+        r = client.get(url)
+        r.raise_for_status()
+        data = r.json()
+        topics = []
+        for t in data:
+            name = t.get("name", "")
+            if name.startswith("_"):
+                continue
+            topics.append({"name": name, "partitions": t.get("partitionCount", 1)})
+        return {"topics": topics[:max_rows], "count": len(topics), "source": "kafka-ui"}
+
+
 def _list_topics_sync(*, max_rows: int) -> dict[str, Any]:
+    if _kafka_ui_configured():
+        try:
+            return _list_topics_via_ui_sync(max_rows=max_rows)
+        except Exception as exc:
+            logger.warning("Kafka UI list_topics failed, falling back to native: %s", exc)
+
     from confluent_kafka.admin import AdminClient
 
     admin = AdminClient(_kafka_conf())
@@ -53,7 +76,30 @@ def _list_topics_sync(*, max_rows: int) -> dict[str, Any]:
     return {"topics": topics[:max_rows], "count": len(topics)}
 
 
+def _describe_topic_via_ui_sync(topic: str) -> dict[str, Any]:
+    base = settings.KAFKA_UI_URL.rstrip("/")
+    cluster = settings.KAFKA_UI_CLUSTER
+    url = f"{base}/api/clusters/{cluster}/topics/{topic}"
+    with httpx.Client(timeout=settings.TOOL_AGENT_TIMEOUT_SECONDS, follow_redirects=True) as client:
+        r = client.get(url)
+        r.raise_for_status()
+        data = r.json()
+        return {
+            "topic": data.get("name"),
+            "partitions": data.get("partitions", []),
+            "partition_count": data.get("partitionCount", 0),
+            "replication_factor": data.get("replicationFactor", 1),
+            "source": "kafka-ui"
+        }
+
+
 def _describe_topic_sync(topic: str) -> dict[str, Any]:
+    if _kafka_ui_configured():
+        try:
+            return _describe_topic_via_ui_sync(topic)
+        except Exception as exc:
+            logger.warning("Kafka UI describe_topic failed, falling back to native: %s", exc)
+
     from confluent_kafka.admin import AdminClient
 
     admin = AdminClient(_kafka_conf())
@@ -249,12 +295,43 @@ def _peek_messages(topic: str, *, limit: int, from_tail: bool) -> dict[str, Any]
         return _peek_messages_via_ui_sync(topic, limit=limit, from_tail=from_tail)
 
 
+def _consumer_lag_via_ui_sync(topic: str | None, group: str | None, max_rows: int) -> dict[str, Any]:
+    base = settings.KAFKA_UI_URL.rstrip("/")
+    cluster = settings.KAFKA_UI_CLUSTER
+    with httpx.Client(timeout=settings.TOOL_AGENT_TIMEOUT_SECONDS, follow_redirects=True) as client:
+        if group:
+            url = f"{base}/api/clusters/{cluster}/consumer-groups/{group}"
+            r = client.get(url)
+            if r.status_code == 200:
+                data = r.json()
+                return {
+                    "group": group,
+                    "state": data.get("state"),
+                    "members": data.get("members", [])[:max_rows],
+                    "member_count": data.get("membersCount", 0),
+                    "source": "kafka-ui"
+                }
+        url = f"{base}/api/clusters/{cluster}/consumer-groups"
+        r = client.get(url)
+        if r.status_code == 200:
+            data = r.json()
+            names = [g.get("groupId") or g.get("name") for g in data if isinstance(g, dict)][:max_rows]
+            return {"consumer_groups": [n for n in names if n], "count": len(names), "source": "kafka-ui"}
+    raise RuntimeError("Failed to fetch consumer lag via Kafka UI")
+
+
 def _consumer_lag_sync(
     *,
     topic: str | None,
     group: str | None,
     max_rows: int,
 ) -> dict[str, Any]:
+    if _kafka_ui_configured():
+        try:
+            return _consumer_lag_via_ui_sync(topic, group, max_rows)
+        except Exception as exc:
+            logger.warning("Kafka UI consumer_lag failed, falling back to native: %s", exc)
+
     from confluent_kafka.admin import AdminClient
 
     admin = AdminClient(_kafka_conf())

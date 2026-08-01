@@ -5,7 +5,7 @@ from app.models.intent import IntentDocument
 _KEYWORDS = ['spt', 'synthetic', 'performance', 'load test', 'k6']
 
 
-def parse_rules(query: str, *, tool_name: str) -> IntentDocument | None:
+def parse_rules(query: str, *, tool_name: str, backend_hint: str | None = None) -> IntentDocument | None:
     q = (query or "").lower()
     if not any(k in q for k in _KEYWORDS):
         return None

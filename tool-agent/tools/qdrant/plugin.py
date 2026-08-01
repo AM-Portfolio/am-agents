@@ -18,7 +18,7 @@ class QdrantTool(BaseIntegrationTool):
     def parse_rules(self, query: str, backend_hint: str | None) -> IntentDocument | None:
         if backend_hint and backend_hint != self.name:
             return None
-        return parse_rules.parse_rules(query, tool_name=self.name)
+        return parse_rules.parse_rules(query, tool_name=self.name, backend_hint=backend_hint)
 
     def resolve(self, intent: IntentDocument, query: str) -> tuple[IntentDocument, str | None]:
         return resolve.resolve(intent, query)

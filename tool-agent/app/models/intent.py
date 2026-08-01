@@ -105,3 +105,24 @@ class SafetyError(Exception):
     def __init__(self, message: str) -> None:
         super().__init__(message)
         self.message = message
+
+
+class ReactRequest(BaseModel):
+    query: str
+    backend: str | None = None
+    environment: str | None = None
+    read_only: bool = True
+    max_loops: int = Field(default=5, ge=1, le=10)
+
+
+class ReactHistoryItem(BaseModel):
+    action: IntentDocument
+    result: ToolResult | None = None
+
+
+class ReactResponse(BaseModel):
+    request_id: str
+    final_answer: str
+    history: list[ReactHistoryItem]
+    usage: dict[str, Any] = Field(default_factory=dict)
+
