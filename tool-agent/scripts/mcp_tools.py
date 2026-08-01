@@ -9,7 +9,7 @@ from typing import Any
 
 import httpx
 
-DEFAULT_BASE_URL = "http://am-tool-agent.am-apps-preprod.svc.cluster.local:8141"
+DEFAULT_BASE_URL = "https://am-dev.asrax.in/tools"
 TIMEOUT_SECONDS = 120.0
 MCP_CONTRACT_VERSION = "1.0.0"
 
@@ -23,6 +23,9 @@ def headers() -> dict[str, str]:
     caller = os.environ.get("TOOL_AGENT_CALLER", "").strip()
     if caller:
         h["X-Agent-Caller"] = caller
+    api_key = os.environ.get("TOOL_AGENT_API_KEY", "").strip()
+    if api_key:
+        h["X-Tool-Api-Key"] = api_key
     return h
 
 

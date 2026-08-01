@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.query import router as query_router
 from app.api.prompts import router as prompts_router
+from app.auth import ApiKeyMiddleware
 from app.config import settings
 from app.llm_client import get_llm_client
 from app.observability.tracer import start_worker, stop_worker
@@ -51,6 +52,9 @@ app = FastAPI(
 
 from app.plane_a import setup_plane_a
 setup_plane_a(app, application="am-tool-agent")
+
+# Outer auth (added last = runs first): require TOOL_AGENT_API_KEY when configured.
+app.add_middleware(ApiKeyMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
