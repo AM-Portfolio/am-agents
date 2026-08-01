@@ -393,8 +393,22 @@ async def plan_investigation(payload: dict[str, Any]) -> dict[str, Any]:
     from am_support_agent.orchestrator.prompts import PLAN_INVESTIGATION_SYSTEM_PROMPT
 
     runtime = build_runtime()
+    
+    # Dynamically fetch capabilities
+    capabilities_dict = await runtime.capability.list_capabilities()
+    capabilities_str = json.dumps(capabilities_dict, indent=2)
+    
+    system_prompt = await runtime.llm.get_prompt_compiled(
+        "support_agent.plan_investigation",
+        capabilities=capabilities_str,
+    )
+    if not system_prompt:
+        system_prompt = PLAN_INVESTIGATION_SYSTEM_PROMPT.format(
+            capabilities=capabilities_str
+        )
+
     llm_res = await runtime.llm.complete(
-        system=PLAN_INVESTIGATION_SYSTEM_PROMPT,
+        system=system_prompt,
         user=f"Alert JSON: {json.dumps(alert)}",
         prompt_key="support_agent.plan_investigation",
         prompt_version="1.0",
