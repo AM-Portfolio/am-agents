@@ -36,6 +36,7 @@ am-support-agent-worker = "am_support_agent.orchestrator.worker_main:main"
 am-support-agent-retention = "am_support_agent.stores.retention:main"
 am-support-agent-offline-eval = "am_support_agent.learning.offline:main"
 am-support-agent-telemetry-dispatcher = "am_support_agent.observability.outbox_dispatcher:main"
+am-support-agent-mcp = "am_support_agent.orchestrator.mcp_server:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -36,6 +36,8 @@ kubectl port-forward -n infra svc/redis 6379:6379 &
 PIDS+=($!)
 kubectl port-forward -n infra svc/kafka 9092:9092 &
 PIDS+=($!)
+kubectl port-forward -n infra svc/kafka-ui 8080:8080 &
+PIDS+=($!)
 kubectl port-forward -n am-ai svc/qdrant 6333:6333 &
 PIDS+=($!)
 kubectl port-forward -n kagent svc/kagent-grafana-mcp 8000:8000 &
@@ -56,6 +58,9 @@ export KAFKA_USERNAME="kafkaUser"
 export KAFKA_PASSWORD="${KAFKA_PASS}"
 export KAFKA_SECURITY_PROTOCOL="SASL_PLAINTEXT"
 export KAFKA_SASL_MECHANISM="SCRAM-SHA-256"
+export KAFKA_UI_URL="http://localhost:8080/kafka-ui"
+export KAFKA_UI_CLUSTER="shared"
+export KAFKA_PEEK_MODE="kafka_ui"
 export QDRANT_URL="http://localhost:6333"
 export GRAFANA_MCP_URL="http://localhost:8000/mcp"
 export VAULT_MCP_URL="http://localhost:8180/mcp"

@@ -612,9 +612,14 @@ class SqliteWorkflowLedger:
         )
 
 
+_cached_workflow_ledger: WorkflowLedger | None = None
+_ledger_lock = threading.RLock()
+
+
 def build_workflow_ledger() -> WorkflowLedger:
     import os
 
+    global _cached_workflow_ledger
     backend = os.getenv("SUPPORT_AGENT_WORKFLOW_STORE", "").strip().lower()
     if not backend:
         # Default: share task-store backend when set, else memory.
@@ -631,18 +636,21 @@ def build_workflow_ledger() -> WorkflowLedger:
             path = path.replace("support-agent-runs.db", "support-agent-workflows.db")
         return SqliteWorkflowLedger(path)
     if backend == "postgres":
-        dsn = (
-            os.getenv("SUPPORT_AGENT_DATABASE_URL", "").strip()
-            or os.getenv("DATABASE_URL", "").strip()
-        )
-        if not dsn:
-            raise RuntimeError(
-                "SUPPORT_AGENT_WORKFLOW_STORE=postgres requires "
-                "SUPPORT_AGENT_DATABASE_URL (or DATABASE_URL)."
-            )
-        from am_support_agent.stores.postgres_workflow import PostgresWorkflowLedger
+        with _ledger_lock:
+            if _cached_workflow_ledger is None:
+                dsn = (
+                    os.getenv("SUPPORT_AGENT_DATABASE_URL", "").strip()
+                    or os.getenv("DATABASE_URL", "").strip()
+                )
+                if not dsn:
+                    raise RuntimeError(
+                        "SUPPORT_AGENT_WORKFLOW_STORE=postgres requires "
+                        "SUPPORT_AGENT_DATABASE_URL (or DATABASE_URL)."
+                    )
+                from am_support_agent.stores.postgres_workflow import PostgresWorkflowLedger
 
-        return PostgresWorkflowLedger(dsn)
+                _cached_workflow_ledger = PostgresWorkflowLedger(dsn)
+            return _cached_workflow_ledger
     raise ValueError(f"unsupported SUPPORT_AGENT_WORKFLOW_STORE: {backend}")
 
 

@@ -16,6 +16,11 @@ from app.runner_stream import stream_tools_execute, stream_tools_plan, stream_to
 
 router = APIRouter()
 
+@router.get("/capabilities")
+async def list_capabilities():
+    from app.registry import get_registry
+    return {"capabilities": get_registry().backends}
+
 
 def _agent_caller(x_agent_caller: str | None) -> str | None:
     return x_agent_caller.strip() if x_agent_caller else None

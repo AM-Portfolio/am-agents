@@ -1,0 +1,34 @@
+name: k8s
+display_name: Kubernetes
+enabled: true
+version: "0.1.0"
+
+infer_keywords:
+  - kubernetes
+  - k8s
+  - pod
+  - deployment
+  - restart
+  - rollout
+  - scale
+  - crashloop
+  - namespace
+  - container
+  - kube
+
+env_prefix: K8S_
+vault:
+  path_template: ""
+
+supports_mcp: true
+mcp_server: kagent-tool-server
+has_entities: false
+health_check: skip
+
+prompts:
+  intent:
+    source: file
+    name: tool-agent/intent/k8s
+    label: "{{APP_ENV}}"
+    fallback: prompts/intent.yaml
+    optional: true

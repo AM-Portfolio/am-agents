@@ -103,6 +103,7 @@ class AlertIncidentStartBody(BaseModel):
     tracking_id: str
     alert: dict[str, Any] = Field(default_factory=dict)
     run_ref: str | None = None
+    status: str | None = None
 
 
 class SptStartBody(BaseModel):
@@ -584,6 +585,17 @@ def create_app(
         except Exception:  # noqa: BLE001
             pass
         try:
+            status = (body.status or (body.alert or {}).get("status") or "").strip().lower()
+            if status == "resolved":
+                res = await tapi.signal_workflow(workflow_id=workflow_id, signal_name="alert.resolved")
+                workflow_ledger.update_run(
+                    run.run_ref,
+                    status=WorkflowRunStatus.COMPLETED,
+                    workflow_id=workflow_id,
+                    summary={"status": "resolved_signaled"},
+                )
+                return {**res, "module": "support-agent"}
+
             result = await tapi.start_alert_incident(
                 workflow_id=workflow_id,
                 tracking_id=tracking_id,
@@ -603,12 +615,19 @@ def create_app(
                 try:
                     metrics.observe_agent_work(
                         work_kind="alert_incident",
-                        status="failed",
-                        outcome="failed",
+                        status="accepted",
+                        outcome="refired",
                         event_name="incident.refired",
                     )
                 except Exception:  # noqa: BLE001
                     pass
+                return {
+                    "action": "refired",
+                    "workflow_id": workflow_id,
+                    "run_ref": run.run_ref,
+                    "deduplicated": True,
+                    "module": "support-agent",
+                }
             raise HTTPException(status_code=502, detail=detail) from exc
         workflow_ledger.update_run(
             run.run_ref,

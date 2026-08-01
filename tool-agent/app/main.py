@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.query import router as query_router
+from app.api.agent import router as agent_router
 from app.api.prompts import router as prompts_router
 from app.auth import ApiKeyMiddleware
 from app.config import settings
@@ -65,6 +66,7 @@ app.add_middleware(
 )
 
 app.include_router(query_router, prefix="/api/v1/tools")
+app.include_router(agent_router, prefix="/api/v1/agent")
 app.include_router(prompts_router, prefix="/api/v1/prompts")
 
 

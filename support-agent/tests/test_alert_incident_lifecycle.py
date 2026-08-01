@@ -20,6 +20,7 @@ async def test_alert_incident_lifecycle_smoke(monkeypatch):
 
     from am_support_agent.orchestrator.activities.a2a import execute_plan
     from am_support_agent.orchestrator.activities.incident import INCIDENT_ACTIVITIES
+    from am_support_agent.orchestrator.activities.telemetry import TELEMETRY_ACTIVITIES
     from am_support_agent.orchestrator.activities.spt import bootstrap_spt, resolve_spt_catalog
     from am_support_agent.orchestrator.workflows.alert_incident import AlertIncidentWorkflow
     from am_support_agent.orchestrator.workflows.a2a_run import SupportA2AWorkflow
@@ -35,6 +36,7 @@ async def test_alert_incident_lifecycle_smoke(monkeypatch):
             activities=[
                 execute_plan,
                 *INCIDENT_ACTIVITIES,
+                *TELEMETRY_ACTIVITIES,
                 bootstrap_spt,
                 resolve_spt_catalog,
             ],

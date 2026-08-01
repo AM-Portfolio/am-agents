@@ -1,0 +1,34 @@
+adapter: k8s
+operations:
+  rollout:
+    mcp_tool: k8s_rollout
+    adapter_method: rollout
+    read_only: false
+  scale:
+    mcp_tool: k8s_scale
+    adapter_method: scale
+    read_only: false
+  get_resources:
+    mcp_tool: k8s_get_resources
+    adapter_method: get_resources
+    read_only: true
+  get_pod_logs:
+    mcp_tool: k8s_get_pod_logs
+    adapter_method: get_pod_logs
+    read_only: true
+  describe_resource:
+    mcp_tool: k8s_describe_resource
+    adapter_method: describe_resource
+    read_only: true
+  get_events:
+    mcp_tool: k8s_get_events
+    adapter_method: get_events
+    read_only: true
+  delete_resource:
+    mcp_tool: k8s_delete_resource
+    adapter_method: delete_resource
+    read_only: false
+  patch_resource:
+    mcp_tool: k8s_patch_resource
+    adapter_method: patch_resource
+    read_only: false

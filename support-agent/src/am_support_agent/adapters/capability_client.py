@@ -43,7 +43,8 @@ class ToolAgentCapabilityClient:
             base_url
             or os.getenv("TOOL_AGENT_BASE_URL", "").strip()
             or os.getenv("SUPPORT_AGENT_TOOL_AGENT_URL", "").strip()
-            or "http://127.0.0.1:8141"
+            or os.getenv("AM_TOOL_AGENT_URL", "").strip()
+            or "http://am-tool-agent:8141"
         ).rstrip("/")
         self._client = client
         self._owns_client = client is None
@@ -60,6 +61,20 @@ class ToolAgentCapabilityClient:
         if self._client is None:
             self._client = httpx.AsyncClient(timeout=60.0)
         return self._client
+
+    async def list_capabilities(self) -> dict[str, Any]:
+        client = await self._http()
+        headers: dict[str, str] = {"Accept": "application/json"}
+        inject_trace_headers(headers)
+        try:
+            resp = await client.get(f"{self.url}/api/v1/tools/capabilities", headers=headers, timeout=10.0)
+            if resp.status_code == 200:
+                data = _json_or_text(resp)
+                return data.get("capabilities", {}) if isinstance(data, dict) else {}
+        except Exception:
+            pass
+        return {}
+
 
     async def close(self) -> None:
         if self._owns_client and self._client is not None:
@@ -184,6 +199,15 @@ class FakeCapabilityClient:
 
     def status(self) -> dict[str, Any]:
         return {"name": self.name, "wired": True, "mode": "fake"}
+
+    async def list_capabilities(self) -> dict[str, Any]:
+        return {
+            "k8s": {
+                "operations": {
+                    "get_pods": {"mcp_tool": "k8s_get_pods"}
+                }
+            }
+        }
 
     async def call(self, call: CapabilityCall) -> CapabilityResult:
         self.calls.append(call)

@@ -32,6 +32,7 @@ from am_support_agent.orchestrator.activities.incident import (
     retrieve_memory,
     verify_logs,
     verify_metrics,
+    agent_reasoning,
 )
 from am_support_agent.orchestrator.activities.spt import (
     bootstrap_spt,
@@ -56,6 +57,7 @@ __all__ = [
     "intelligence_gate",
     "propose_known_fix",
     "plan_investigation",
+    "agent_reasoning",
     "resolve_owner",
     "create_ticket",
     "assign_ticket",
