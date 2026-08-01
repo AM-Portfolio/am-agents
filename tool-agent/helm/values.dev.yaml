@@ -23,6 +23,9 @@ vault:
     # OpenProject / Cliq / Grafana for capability plugins (shared with support-agent).
     am-agents-ops:
       path: "apps/data/dev/services/am-agents"
+      mappings:
+        TOOL_AGENT_API_KEY: "TOOL_AGENT_API_KEY"
+        # also used by capability plugins from this KV when present
 
 ingress:
   hosts:
@@ -47,3 +50,5 @@ env:
   DIRECTORY_PROVIDER: "openproject"
   OBSERVE_PROVIDER: "grafana"
   QDRANT_URL: "http://qdrant.am-ai.svc.cluster.local:6333"
+  # Prefer Vault am-agents-ops mapping. Kept until KV seeded.
+  TOOL_AGENT_API_KEY: "tool_sk_WXXfSFm993lV7aHuGrbLNGM_JWtFF0RL"

@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     TOOL_AGENT_TIMEOUT_SECONDS: int = Field(default=30)
     TOOL_AGENT_INTENT_MIN_CONFIDENCE: float = Field(default=0.75, ge=0.0, le=1.0)
     TOOL_AGENT_REQUIRE_BACKEND_FOR_AGENTS: bool = Field(default=True)
+    # When set, require X-Tool-Api-Key / Bearer on non-public routes
+    TOOL_AGENT_API_KEY: str | None = Field(default=None)
 
     MCP_DEPLOYMENT_MODE: Literal["self_hosted", "managed", "hybrid"] = Field(
         default="self_hosted"

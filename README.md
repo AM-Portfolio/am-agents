@@ -6,12 +6,11 @@ Unified home for AM AI agents and the Agent Platform.
 |-----------|----------|--------------|--------|
 | **tool-agent** | [`tool-agent/`](tool-agent/) | HTTP `:8141` | **Active** — preferred data/tool executor |
 | **db-agent** | [`db-agent/`](db-agent/) | HTTP `:8140` | **Legacy** — compatibility; prefer tool-agent |
-| **ui-test-agent** | [`ui-test-agent/`](ui-test-agent/) | HTTP `:8130` | **Active** — Playwright / UI testing |
+| **support-agent** | [`support-agent/`](support-agent/) | Gateway v2 `:8091` · queue `support-agent-v2` | **Active** |
+| **fin-portfolio-agent** | [`fin-portfolio-agent/`](fin-portfolio-agent/) | — | **Active** |
 | **Agent Platform (legacy path)** | [`gateway/`](gateway/) + [`platform_worker/`](platform_worker/) | Gateway `:8090` · Temporal queue `agent-platform` | **Keep until replacement proven** |
-| **support-agent** | [`support-agent/`](support-agent/) | Gateway v2 `:8091` · queue `support-agent-v2` | **Parallel replacement** — delete legacy only after prod gates |
-| UI test (repo-root legacy) | [`../am-ui-test-agent/`](../am-ui-test-agent/) | HTTP `:8130` | Frozen — use `ui-test-agent/` |
-| Finance | [`../am-fin-agent/`](../am-fin-agent/) | HTTP `:8100` | Legacy |
-| Dev CLI | [`../am-dev-agent/`](../am-dev-agent/) | `am-dev` CLI | Legacy |
+
+QA Specs / UI evidence / SPT moved to **[am-qa-agents](https://github.com/AM-Portfolio/am-qa-agents)** (`qa-agent/specs`, `qa-agent/ui_evidence`).
 
 ## Documentation
 
@@ -28,7 +27,7 @@ Unified home for AM AI agents and the Agent Platform.
 1. **Markdown / design first** for the new module (current).
 2. Build **complete** `support-agent/` **alongside** existing gateway/worker — do not edit specialist agents.
 3. Shadow → canary → soak in production with rollback to legacy.
-4. **Delete** legacy platform code only after [production gates](docs/architecture/production-gates.md) + explicit approvals. Never delete Tool / DB / UI Test agents.
+4. **Delete** legacy platform code only after [production gates](docs/architecture/production-gates.md) + explicit approvals. Never delete Tool / DB / support specialists.
 
 ## Platform ports (legacy SDK)
 
@@ -58,9 +57,16 @@ pip install -r db-agent/requirements.txt
 npm run start:preprod
 ```
 
-### ui-test-agent
+### support-agent
 
 ```bash
-cd ui-test-agent
-# see ui-test-agent/README.md
+cd support-agent
+# see support-agent/README.md
+```
+
+### fin-portfolio-agent
+
+```bash
+cd fin-portfolio-agent
+# see fin-portfolio-agent/README.md
 ```

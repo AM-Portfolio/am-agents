@@ -49,3 +49,4 @@ env:
   VAULT_MCP_MOUNT: "apps"
   VAULT_MCP_WRITES_ENABLED: "false"
   KEYCLOAK_TOKEN_URL: "http://auth.munish.org/auth/realms/am-preprod-realm/protocol/openid-connect/token"
+  # TOOL_AGENT_API_KEY from Vault (map under secretPaths when seeded)
