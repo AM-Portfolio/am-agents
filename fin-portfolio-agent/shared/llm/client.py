@@ -4,13 +4,14 @@ import logging
 import json
 import time
 import os
-import asyncio
-from typing import Any, AsyncIterator, Literal, Protocol, List, Dict, Optional
+from typing import Any, List, Dict, Optional, Literal
 
 import httpx
 from pydantic import BaseModel, Field
 
 from shared.core.config import settings
+from shared.observability import tracer as lf
+from shared.observability.context import get_obs_context
 
 logger = logging.getLogger(__name__)
 
@@ -24,100 +25,25 @@ class LlmCallResult(BaseModel):
     gateway_trace_id: str | None = None
 
 
-async def _emit_langfuse(
-    prompt_key: str,
-    messages: List[Dict[str, str]],
+def _resolve_request_id(request_id: str) -> str:
+    ctx = get_obs_context()
+    if ctx and ctx.request_id:
+        return ctx.request_id
+    return request_id
+
+
+def _record_generation(
+    name: str,
+    messages: List[Dict[str, Any]],
     output: str,
     model: str,
+    *,
     error: str | None = None,
+    usage: dict[str, int] | None = None,
 ) -> None:
-    if not settings.LANGFUSE_ENABLED:
-        return
-    pk = settings.LANGFUSE_PUBLIC_KEY
-    sk = settings.LANGFUSE_SECRET_KEY
-    host = settings.LANGFUSE_HOST.rstrip("/")
-    if not pk or not sk or not host:
-        logger.warning("LANGFUSE_ENABLED but public/secret keys or host are missing")
-        return
-    
-    import base64
-    import uuid
-    from datetime import datetime, timezone
-    
-    auth = base64.b64encode(f"{pk}:{sk}".encode()).decode()
-    trace_id = str(uuid.uuid4())
-    gen_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
-    max_chars = settings.LANGFUSE_TRACE_MAX_OUTPUT_CHARS
-    
-    # Format system/user inputs for Langfuse
-    system = ""
-    user = []
-    for msg in messages:
-        role = msg.get("role")
-        content = msg.get("content") or ""
-        if role == "system":
-            system = content
-        else:
-            user.append(f"{role.capitalize()}: {content}")
-    user_str = "\n".join(user)
-    
-    meta = {
-        "source": "fin-agent",
-        "prompt_key": prompt_key,
-    }
-    
-    batch = [
-        {
-            "id": str(uuid.uuid4()),
-            "type": "trace-create",
-            "timestamp": now,
-            "body": {
-                "id": trace_id,
-                "name": f"llm.{prompt_key}",
-                "userId": "fin-agent",
-                "sessionId": trace_id,
-                "tags": ["fin-agent", "llm", prompt_key],
-                "metadata": meta,
-                "input": {"system": system[:max_chars], "user": user_str[:max_chars]},
-                "output": (error or output)[:max_chars],
-            },
-        },
-        {
-            "id": str(uuid.uuid4()),
-            "type": "generation-create",
-            "timestamp": now,
-            "body": {
-                "id": gen_id,
-                "traceId": trace_id,
-                "name": prompt_key,
-                "model": model,
-                "input": [
-                    {"role": "system", "content": system[:max_chars]},
-                    {"role": "user", "content": user_str[:max_chars]},
-                ],
-                "output": (error or output)[:max_chars],
-                "metadata": meta,
-                "level": "ERROR" if error else "DEFAULT",
-                "statusMessage": error,
-            },
-        },
-    ]
-    
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.post(
-                f"{host}/api/public/ingestion",
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Basic {auth}",
-                },
-                json={"batch": batch}
-            )
-            if resp.status_code not in {200, 207}:
-                logger.warning(f"Langfuse ingestion returned status {resp.status_code}")
-    except Exception as e:
-        logger.warning(f"Langfuse ingestion failed: {e}")
+    """Nest a generation under the active turn span (fail-open)."""
+    with lf.generation(name, model=model, input=messages) as gen:
+        lf.end_generation(gen, output=output or error or "", usage=usage, error=error)
 
 
 class DirectLiteLLMClient:
@@ -175,6 +101,7 @@ class DirectLiteLLMClient:
         tool_choice: Optional[str] = None,
         request_id: str = "fin-request",
     ) -> Any:
+        request_id = _resolve_request_id(request_id)
         url = f"{self.base_url}/chat/completions"
         payload = {
             "model": self.model,
@@ -193,14 +120,20 @@ class DirectLiteLLMClient:
             resp = await client.post(url, headers=self._headers(), json=payload)
             if resp.status_code != 200:
                 err_text = resp.text[:500]
-                asyncio.create_task(_emit_langfuse("fin.chat", messages, "", self.model, err_text))
+                _record_generation("fin.chat", messages, "", self.model, error=err_text)
                 raise RuntimeError(f"LiteLLM failed [{resp.status_code}]: {err_text}")
             data = resp.json()
 
         message = data["choices"][0]["message"]
         content = message.get("content") or message.get("reasoning_content") or ""
         output_str = json.dumps(message.get("tool_calls")) if message.get("tool_calls") else content
-        asyncio.create_task(_emit_langfuse("fin.chat", messages, output_str, self.model))
+        usage_raw = data.get("usage") or {}
+        usage = {
+            "prompt_tokens": int(usage_raw.get("prompt_tokens") or 0),
+            "completion_tokens": int(usage_raw.get("completion_tokens") or 0),
+            "total_tokens": int(usage_raw.get("total_tokens") or 0),
+        }
+        _record_generation("fin.chat", messages, output_str, self.model, usage=usage)
 
         if message.get("tool_calls"):
             return message
@@ -216,6 +149,7 @@ class DirectLiteLLMClient:
         generation_name: str = "fin-agent",
         temperature: float | None = None,
     ) -> LlmCallResult:
+        request_id = _resolve_request_id(request_id)
         messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
@@ -234,22 +168,23 @@ class DirectLiteLLMClient:
             resp = await client.post(url, headers=self._headers(), json=payload)
             if resp.status_code != 200:
                 err_text = resp.text[:500]
-                asyncio.create_task(_emit_langfuse(generation_name, messages, "", self.model, err_text))
+                _record_generation(generation_name, messages, "", self.model, error=err_text)
                 raise RuntimeError(f"LiteLLM failed [{resp.status_code}]: {err_text}")
             data = resp.json()
 
         content = data["choices"][0]["message"].get("content") or data["choices"][0]["message"].get("reasoning_content") or ""
-        asyncio.create_task(_emit_langfuse(generation_name, messages, content, self.model))
-
         usage_raw = data.get("usage") or {}
+        usage = {
+            "prompt_tokens": int(usage_raw.get("prompt_tokens") or 0),
+            "completion_tokens": int(usage_raw.get("completion_tokens") or 0),
+            "total_tokens": int(usage_raw.get("total_tokens") or 0),
+        }
+        _record_generation(generation_name, messages, content, self.model, usage=usage)
+
         return LlmCallResult(
             content=content,
             model=str(data.get("model") or self.model),
-            usage={
-                "prompt_tokens": int(usage_raw.get("prompt_tokens") or 0),
-                "completion_tokens": int(usage_raw.get("completion_tokens") or 0),
-                "total_tokens": int(usage_raw.get("total_tokens") or 0),
-            },
+            usage=usage,
             latency_ms=int((time.perf_counter() - started) * 1000),
         )
 
@@ -264,6 +199,7 @@ class DirectLiteLLMClient:
         temperature: float | None = None,
         on_token: Any | None = None,
     ) -> LlmCallResult:
+        request_id = _resolve_request_id(request_id)
         messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
@@ -286,7 +222,7 @@ class DirectLiteLLMClient:
             async with client.stream("POST", url, headers=self._headers(), json=payload) as resp:
                 if resp.status_code != 200:
                     err_text = f"LiteLLM stream status {resp.status_code}"
-                    asyncio.create_task(_emit_langfuse(generation_name, messages, "", self.model, err_text))
+                    _record_generation(generation_name, messages, "", self.model, error=err_text)
                     raise RuntimeError(f"LiteLLM stream failed [{resp.status_code}]")
                 async for line in resp.aiter_lines():
                     if not line or not line.startswith("data: "):
@@ -314,7 +250,7 @@ class DirectLiteLLMClient:
                         if on_token:
                             await on_token(token)
         content = "".join(parts)
-        asyncio.create_task(_emit_langfuse(generation_name, messages, content, model))
+        _record_generation(generation_name, messages, content, model, usage=usage_raw)
 
         return LlmCallResult(
             content=content,
@@ -388,6 +324,7 @@ class GatewayLLMClient:
         tool_choice: Optional[str] = None,
         request_id: str = "fin-request",
     ) -> Any:
+        request_id = _resolve_request_id(request_id)
         url = f"{self.base_url}/api/v1/agent/llm/completions"
         payload = {
             "messages": messages,
@@ -408,13 +345,15 @@ class GatewayLLMClient:
             resp = await client.post(url, headers=self._headers(token), json=payload)
             if resp.status_code != 200:
                 err_text = resp.text[:500]
-                asyncio.create_task(_emit_langfuse("fin.chat", messages, "", settings.LLM_PLANNER_MODEL, err_text))
+                _record_generation(
+                    "fin.chat", messages, "", settings.LLM_PLANNER_MODEL, error=err_text
+                )
                 raise RuntimeError(f"Gateway LLM failed [{resp.status_code}]: {err_text}")
             data = resp.json()
 
         content = data.get("content") or ""
         output_str = json.dumps(data.get("tool_calls")) if data.get("tool_calls") else content
-        asyncio.create_task(_emit_langfuse("fin.chat", messages, output_str, settings.LLM_PLANNER_MODEL))
+        _record_generation("fin.chat", messages, output_str, settings.LLM_PLANNER_MODEL)
 
         if data.get("tool_calls"):
             return data
@@ -430,6 +369,7 @@ class GatewayLLMClient:
         generation_name: str = "fin-agent",
         temperature: float | None = None,
     ) -> LlmCallResult:
+        request_id = _resolve_request_id(request_id)
         messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
@@ -450,22 +390,27 @@ class GatewayLLMClient:
             resp = await client.post(url, headers=self._headers(token), json=payload)
             if resp.status_code != 200:
                 err_text = resp.text[:500]
-                asyncio.create_task(_emit_langfuse(generation_name, messages, "", settings.LLM_PLANNER_MODEL, err_text))
+                _record_generation(
+                    generation_name, messages, "", settings.LLM_PLANNER_MODEL, error=err_text
+                )
                 raise RuntimeError(f"Gateway LLM failed [{resp.status_code}]: {err_text}")
             data = resp.json()
 
         content = data["content"]
-        asyncio.create_task(_emit_langfuse(generation_name, messages, content, settings.LLM_PLANNER_MODEL))
-
         usage = data.get("usage") or {}
+        usage_norm = {
+            "prompt_tokens": int(usage.get("prompt_tokens") or 0),
+            "completion_tokens": int(usage.get("completion_tokens") or 0),
+            "total_tokens": int(usage.get("total_tokens") or 0),
+        }
+        _record_generation(
+            generation_name, messages, content, settings.LLM_PLANNER_MODEL, usage=usage_norm
+        )
+
         return LlmCallResult(
             content=content,
             model=settings.LLM_PLANNER_MODEL,
-            usage={
-                "prompt_tokens": int(usage.get("prompt_tokens") or 0),
-                "completion_tokens": int(usage.get("completion_tokens") or 0),
-                "total_tokens": int(usage.get("total_tokens") or 0),
-            },
+            usage=usage_norm,
             latency_ms=int((time.perf_counter() - started) * 1000),
         )
 

@@ -1,3 +1,4 @@
+# Slim runtime deps for chat/eval (no chromadb/torch — tool_index falls back gracefully)
 fastapi
 uvicorn
 langchain-core
@@ -13,13 +14,8 @@ google-genai
 duckduckgo-search
 motor
 pymongo
-pytest
-pytest-asyncio
-pytest-mock
-openapi-pydantic
-chromadb
-sentence-transformers
-mcp
-PyJWT[crypto]>=2.8.0
 PyYAML>=6.0
 langfuse>=2.0.0
+openapi-pydantic
+mcp
+PyJWT[crypto]>=2.8.0

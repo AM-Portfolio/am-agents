@@ -30,10 +30,24 @@ class Config:
     AM_MCP_CLIENT_ID = os.getenv("AM_MCP_CLIENT_ID", "am-mcp-service")
     AM_MCP_CLIENT_SECRET = os.getenv("AM_MCP_CLIENT_SECRET")
     KEYCLOAK_TOKEN_URL = os.getenv("KEYCLOAK_TOKEN_URL")
+    # Java am-mcp-server (data plane)
+    AM_MCP_SERVER_URL = os.getenv(
+        "AM_MCP_SERVER_URL",
+        "http://am-mcp-server.am-apps-dev.svc.cluster.local:8080",
+    ).rstrip("/")
+    MCP_TOOL_CACHE_TTL_SECONDS = int(os.getenv("MCP_TOOL_CACHE_TTL_SECONDS", "120"))
+    MCP_TOOL_BLOCKLIST = os.getenv("MCP_TOOL_BLOCKLIST", "ask_finance_agent")
+    MCP_CLIENT_TIMEOUT_SECONDS = float(os.getenv("MCP_CLIENT_TIMEOUT_SECONDS", "30"))
+    MCP_SSE_READ_TIMEOUT_SECONDS = float(os.getenv("MCP_SSE_READ_TIMEOUT_SECONDS", "60"))
+    # Keep REST code out of the default path; MCP failure must surface as error.
+    DATA_FALLBACK_REST = os.getenv("DATA_FALLBACK_REST", "false").lower() in {
+        "1", "true", "yes", "on",
+    }
     LLM_PLANNER_MODEL = os.getenv("LLM_MODEL", os.getenv("LLM_PLANNER_MODEL", "meta-llama/Llama-3.3-70B-Instruct-Turbo"))
     LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.7"))
     LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "1000"))
     LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "60.0"))
+    MCP_TOOL_TIMEOUT_SECONDS = float(os.getenv("MCP_TOOL_TIMEOUT_SECONDS", "45"))
 
     # Langfuse Observability Configurations
     LANGFUSE_ENABLED = os.getenv("LANGFUSE_ENABLED", "false").lower() in {"1", "true", "yes", "on"}
@@ -41,5 +55,13 @@ class Config:
     LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY")
     LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY")
     LANGFUSE_TRACE_MAX_OUTPUT_CHARS = int(os.getenv("LANGFUSE_TRACE_MAX_OUTPUT_CHARS", "8000"))
+    LANGFUSE_ENV = os.getenv("LANGFUSE_ENV", os.getenv("APP_ENV", "dev")).strip() or "dev"
+    # full = include tool payloads (dev); summary = redact raw tool bodies (preprod/prod)
+    LANGFUSE_TOOL_PAYLOAD_MODE = os.getenv("LANGFUSE_TOOL_PAYLOAD_MODE", "full").strip().lower()
+
+    # Prompt management — file locally; langfuse in cluster
+    PROMPT_SOURCE = os.getenv("PROMPT_SOURCE", "file").strip().lower()  # langfuse | file
+    PROMPT_LABEL = os.getenv("PROMPT_LABEL", "production").strip() or "production"
+    PROMPT_CACHE_TTL_SECONDS = int(os.getenv("PROMPT_CACHE_TTL_SECONDS", "60"))
 
 settings = Config()

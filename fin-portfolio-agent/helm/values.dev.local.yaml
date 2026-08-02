@@ -1,0 +1,101 @@
+# Local/laptop Helm overlay for am-apps-dev (kind load + IfNotPresent).
+# Does not replace Vault; adds Langfuse + new entrypoint for rebuilt image.
+
+fullnameOverride: am-fin-agent
+
+global:
+  image:
+    registry: ghcr.io/am-portfolio
+    pullPolicy: IfNotPresent
+    # tag set by deploy script via --set
+  vault:
+    enabled: true
+    authPath: auth/kubernetes
+    role: am-backend-role
+    serviceAccountName: am-backend-sa
+
+image:
+  repository: am-fin-agent
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+language: python
+port: 8080
+
+service:
+  port: 8080
+
+entrypoint: "exec uvicorn am_fin_portfolio_analysis.api:app --host 0.0.0.0 --port 8080"
+
+env:
+  ENVIRONMENT: dev
+  AUTH_REQUIRED: "false"
+  AM_MCP_SERVER_URL: "http://am-mcp-server.am-apps-dev.svc.cluster.local:8080"
+  DATA_FALLBACK_REST: "false"
+  MCP_TOOL_BLOCKLIST: "ask_finance_agent"
+  LANGFUSE_ENABLED: "true"
+  LANGFUSE_HOST: "http://langfuse-web.am-ai.svc.cluster.local:3000"
+  LANGFUSE_ENV: "dev"
+  LANGFUSE_TRACE_MAX_OUTPUT_CHARS: "8000"
+  LANGFUSE_TOOL_PAYLOAD_MODE: "full"
+  PROMPT_SOURCE: "langfuse"
+  PROMPT_LABEL: "dev"
+  PROMPT_CACHE_TTL_SECONDS: "60"
+  CORS_ORIGINS: "https://am.asrax.in,https://am-dev.asrax.in,http://localhost:9000"
+
+probes:
+  port: 8080
+  liveness:
+    path: /health
+    initialDelaySeconds: 30
+    periodSeconds: 30
+  readiness:
+    path: /health
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  startup:
+    path: /health
+    failureThreshold: 30
+    periodSeconds: 10
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1024Mi
+  requests:
+    cpu: 250m
+    memory: 512Mi
+
+hostAliases:
+  - ip: 203.174.22.129
+    hostnames:
+      - redis.asrax.in
+      - mongodb.asrax.in
+      - kafka.asrax.in
+
+security:
+  automountServiceAccountToken: true
+
+ingress:
+  enabled: false
+
+vault:
+  enabled: true
+  secretPaths:
+    mongodb:
+      path: apps/data/preprod/infra/mongodb
+      template: |
+        {{- with secret "apps/data/preprod/infra/mongodb" -}}
+        export MONGODB_URI="mongodb://{{ .Data.data.username }}:{{ .Data.data.password }}@mongodb.infra.svc.cluster.local:27017/fin_agent?authSource=admin"
+        export DB_NAME="fin_agent"
+        {{- end }}
+    together:
+      path: apps/data/preprod/infra/shared-api
+      template: |
+        {{- with secret "apps/data/preprod/infra/shared-api" -}}
+        {{- range $sk, $sv := .Data.data }}
+        export {{ $sk | toUpper }}="{{ $sv }}"
+        {{- end }}
+        {{- end }}
+    identity:
+      path: apps/data/dev/services/am-identity

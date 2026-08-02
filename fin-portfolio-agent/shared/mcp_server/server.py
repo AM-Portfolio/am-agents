@@ -31,8 +31,7 @@ Claude Desktop config (~/.config/claude/claude_desktop_config.json)
 
 SSE transport (for browser-based MCP clients)
 ---------------------------------------------
-Set the env var MCP_TRANSPORT=sse and start as a regular FastAPI app alongside
-the main api.py.  The SSE endpoint will be available at /mcp/sse.
+The main FastAPI app mounts authenticated SSE transport at /ai/mcp.
 """
 
 from __future__ import annotations
@@ -54,10 +53,9 @@ if _project_root not in sys.path:
 
 
 # ─── Bootstrap: trigger @register_tool decorators ────────────────────────────
-import shared.tools.portfolio_tools   # noqa: F401
-import shared.tools.analysis_tools    # noqa: F401
-import shared.tools.trade_tools       # noqa: F401
-import shared.tools.meta_tools        # noqa: F401
+import am_fin_portfolio_analysis.tools.portfolio_tools   # noqa: F401
+import am_fin_portfolio_analysis.tools.analysis_tools    # noqa: F401
+import am_fin_portfolio_analysis.tools.trade_tools       # noqa: F401
 
 
 # ─── MCP Server ───────────────────────────────────────────────────────────────
@@ -80,12 +78,24 @@ except ImportError as e:
 if _MCP_AVAILABLE:
     from shared.tools.registry import TOOL_REGISTRY, execute_tool
     from shared.tools.tool_index import retrieve_tools, tool_count
+    from shared.context.request_context import auth_token_var, user_id_var
+    from shared.middleware.auth_middleware import (
+        AUTH_JWKS_URL,
+        subject_from_claims,
+        verify_jwt_claims,
+    )
+    from mcp.server.sse import SseServerTransport
+    from starlette.responses import JSONResponse
 
     server = Server("am-fin-agent")
+    if not hasattr(server, "list_tools"):
+        raise AttributeError(
+            "mcp Server has no list_tools (SDK mismatch); disable local /ai/mcp"
+        )
 
     # ── list_tools: expose a single smart meta-tool ──────────────────────────
     @server.list_tools()
-    async def list_tools() -> list[Tool]:
+    async def list_tools() -> list[types.Tool]:
         """
         Smart-scale mode: expose one `call_api` meta-tool.
         Internally uses ChromaDB to route to the right endpoint.
@@ -159,6 +169,8 @@ if _MCP_AVAILABLE:
     async def _handle_call_api(arguments: dict) -> list[types.TextContent]:
         query = arguments.get("query", "")
         args = arguments.get("args", {}) or {}
+        args.pop("userId", None)
+        args.pop("user_id", None)
         top_k = int(arguments.get("top_k", 3))
 
         if not query:
@@ -178,7 +190,7 @@ if _MCP_AVAILABLE:
         logger.info("MCP call_api: query=%r → selected tool=%s", query, op_id)
 
         # Execute
-        result_str = execute_tool(op_id, args)
+        result_str = await execute_tool(op_id, args)
 
         try:
             result = json.loads(result_str)
@@ -206,6 +218,77 @@ if _MCP_AVAILABLE:
         text = f"Found {len(candidates)} tools matching '{query}':\n\n" + "\n".join(lines)
         return [types.TextContent(type="text", text=text)]
 
+    _sse_transport = SseServerTransport("/messages")
+
+    def _bearer_from_scope(scope: dict) -> str | None:
+        for raw_name, raw_value in scope.get("headers", []):
+            if raw_name.lower() == b"authorization":
+                value = raw_value.decode("latin-1")
+                if value.lower().startswith("bearer "):
+                    return value.split(" ", 1)[1].strip()
+        return None
+
+    class AuthenticatedMcpSseApp:
+        """ASGI SSE transport that establishes verified per-session auth context."""
+
+        async def __call__(self, scope, receive, send):
+            if scope["type"] != "http":
+                await JSONResponse({"detail": "HTTP transport required"}, status_code=400)(
+                    scope, receive, send
+                )
+                return
+
+            token = _bearer_from_scope(scope)
+            if not token:
+                await JSONResponse({"detail": "Bearer token required"}, status_code=401)(
+                    scope, receive, send
+                )
+                return
+            if not AUTH_JWKS_URL:
+                await JSONResponse(
+                    {"detail": "AUTH_JWKS_URL is required for MCP"},
+                    status_code=503,
+                )(scope, receive, send)
+                return
+            claims = verify_jwt_claims(token)
+            subject = subject_from_claims(claims or {})
+            if not subject:
+                await JSONResponse({"detail": "Invalid Bearer token"}, status_code=401)(
+                    scope, receive, send
+                )
+                return
+
+            path = scope.get("path", "").rstrip("/") or "/"
+            if scope["method"] == "POST" and path == "/messages":
+                await _sse_transport.handle_post_message(scope, receive, send)
+                return
+            if scope["method"] != "GET" or path != "/":
+                await JSONResponse({"detail": "Not found"}, status_code=404)(
+                    scope, receive, send
+                )
+                return
+
+            auth_context = auth_token_var.set(token)
+            user_context = user_id_var.set(subject)
+            try:
+                async with _sse_transport.connect_sse(scope, receive, send) as streams:
+                    await server.run(
+                        streams[0],
+                        streams[1],
+                        InitializationOptions(
+                            server_name="am-fin-agent",
+                            server_version="1.0.0",
+                            capabilities=types.ServerCapabilities(
+                                tools=types.ToolsCapability(listChanged=True)
+                            ),
+                        ),
+                    )
+            finally:
+                auth_token_var.reset(auth_context)
+                user_id_var.reset(user_context)
+
+    mcp_sse_app = AuthenticatedMcpSseApp()
+
 
 # ─── Entry points ─────────────────────────────────────────────────────────────
 
@@ -217,19 +300,35 @@ async def run_stdio():
 
     from mcp.server.stdio import stdio_server
 
+    token = os.getenv("ASRAX_ACCESS_TOKEN", "").strip()
+    if not token:
+        raise RuntimeError("ASRAX_ACCESS_TOKEN is required for MCP stdio transport")
+    if not AUTH_JWKS_URL:
+        raise RuntimeError("AUTH_JWKS_URL is required for MCP stdio transport")
+    claims = verify_jwt_claims(token)
+    subject = subject_from_claims(claims or {})
+    if not subject:
+        raise RuntimeError("ASRAX_ACCESS_TOKEN is invalid")
+
     logger.info("Starting MCP server (stdio transport)...")
-    async with stdio_server() as (read_stream, write_stream):
-        await server.run(
-            read_stream,
-            write_stream,
-            InitializationOptions(
-                server_name="am-fin-agent",
-                server_version="1.0.0",
-                capabilities=types.ServerCapabilities(
-                    tools=types.ToolsCapability(listChanged=True)
+    auth_context = auth_token_var.set(token)
+    user_context = user_id_var.set(subject)
+    try:
+        async with stdio_server() as (read_stream, write_stream):
+            await server.run(
+                read_stream,
+                write_stream,
+                InitializationOptions(
+                    server_name="am-fin-agent",
+                    server_version="1.0.0",
+                    capabilities=types.ServerCapabilities(
+                        tools=types.ToolsCapability(listChanged=True)
+                    ),
                 ),
-            ),
-        )
+            )
+    finally:
+        auth_token_var.reset(auth_context)
+        user_id_var.reset(user_context)
 
 
 def main():

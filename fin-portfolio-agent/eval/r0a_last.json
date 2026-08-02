@@ -1,0 +1,57 @@
+﻿{
+    "results":  [
+                    {
+                        "message":  "portfolio summary",
+                        "http":  200,
+                        "artifactType":  "error.v1",
+                        "toolsUsed":  [
+
+                                      ],
+                        "hasData":  true,
+                        "ask_finance_blocked":  true,
+                        "expectArtifact":  "portfolio.summary.v1",
+                        "pass":  false
+                    },
+                    {
+                        "message":  "show my holdings",
+                        "http":  200,
+                        "artifactType":  "error.v1",
+                        "toolsUsed":  [
+
+                                      ],
+                        "hasData":  true,
+                        "ask_finance_blocked":  true,
+                        "expectArtifact":  "holdings.list.v1",
+                        "pass":  false
+                    },
+                    {
+                        "message":  "top movers",
+                        "http":  200,
+                        "artifactType":  "error.v1",
+                        "toolsUsed":  [
+
+                                      ],
+                        "hasData":  true,
+                        "ask_finance_blocked":  true,
+                        "expectArtifact":  "portfolio.movers.v1",
+                        "pass":  false
+                    },
+                    {
+                        "message":  "hello",
+                        "http":  200,
+                        "artifactType":  "error.v1",
+                        "toolsUsed":  [
+
+                                      ],
+                        "hasData":  true,
+                        "ask_finance_blocked":  true,
+                        "expectArtifact":  "text.v1",
+                        "pass":  true
+                    }
+                ],
+    "gateway":  "https://am-dev.asrax.in/ai/api/v1/ai/chat",
+    "sub":  "af30e0e6-6a98-40ba-875e-a1490c0c8a11",
+    "sessionId":  "p3-smoke-d0a6e5ab",
+    "image":  "ghcr.io/am-portfolio/am-fin-agent:local-202608030207",
+    "userId":  "ssd2658@gmail.com"
+}

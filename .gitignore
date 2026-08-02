@@ -29,6 +29,9 @@ kubeconfig*
 # Local FakeMail E2E dumps (do not commit)
 docs/samples/e2e_mail/
 
+# Fin-agent eval run artifacts
+fin-portfolio-agent/eval/last_eval_result.json
+
 # SPT local runtime / secrets
 poc/spt/data/
 poc/spt/.venv/

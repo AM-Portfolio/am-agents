@@ -7,8 +7,13 @@ Unified home for AM AI agents and the Agent Platform.
 | **tool-agent** | [`tool-agent/`](tool-agent/) | HTTP `:8141` | **Active** — preferred data/tool executor |
 | **db-agent** | [`db-agent/`](db-agent/) | HTTP `:8140` | **Legacy** — compatibility; prefer tool-agent |
 | **support-agent** | [`support-agent/`](support-agent/) | Gateway v2 `:8091` · queue `support-agent-v2` | **Active** |
-| **fin-portfolio-agent** | [`fin-portfolio-agent/`](fin-portfolio-agent/) | — | **Active** |
+| **fin-portfolio-agent** | [`fin-portfolio-agent/`](fin-portfolio-agent/) | HTTP `:8101` — finance L3 AI chat | **Active** |
 | **Agent Platform (legacy path)** | [`gateway/`](gateway/) + [`platform_worker/`](platform_worker/) | Gateway `:8090` · Temporal queue `agent-platform` | **Keep until replacement proven** |
+
+**AI chat layout:** finance L3 stays in this repo (`fin-portfolio-agent`). The L2 AI
+gateway lives in **`am-gateways/mcp-gateway`** (deploy **am-ai-gateway**) — do not redefine
+`api-gateway` / asrax. Tool SoT is Java **am-mcp-server** (`list_tools`); see
+[`catalog/finance/`](catalog/finance/) (docs only) and [`docs/AI_CHAT_L3.md`](docs/AI_CHAT_L3.md).
 
 QA Specs / UI evidence / SPT moved to **[am-qa-agents](https://github.com/AM-Portfolio/am-qa-agents)** (`qa-agent/specs`, `qa-agent/ui_evidence`).
 
@@ -68,5 +73,6 @@ cd support-agent
 
 ```bash
 cd fin-portfolio-agent
-# see fin-portfolio-agent/README.md
+pip install -r requirements.txt
+# see fin-portfolio-agent/README.md — chat on :8101
 ```

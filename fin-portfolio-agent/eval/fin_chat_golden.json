@@ -1,0 +1,66 @@
+{
+  "dataset": "fin-chat-golden",
+  "version": 1,
+  "description": "Deterministic golden cases for finance AI chat via am-ai-gateway. Upload mirror to Langfuse dataset fin-chat-golden.",
+  "items": [
+    {
+      "id": "portfolio-summary",
+      "input": {
+        "message": "Give me my portfolio summary"
+      },
+      "expected": {
+        "widgetId": "PORTFOLIO_SUMMARY",
+        "requiredWidgetParams": ["userId"],
+        "requireToolsUsed": true,
+        "requiredToolsAny": ["get_portfolio_summary"]
+      }
+    },
+    {
+      "id": "holdings",
+      "input": {
+        "message": "Show my holdings"
+      },
+      "expected": {
+        "widgetId": "HOLDINGS_TABLE",
+        "requiredWidgetParams": ["userId"],
+        "requireToolsUsed": true,
+        "requiredToolsAny": ["get_holdings_list", "get_holding_details"]
+      }
+    },
+    {
+      "id": "top-movers",
+      "input": {
+        "message": "What are my top movers today?"
+      },
+      "expected": {
+        "widgetId": "TOP_MOVERS",
+        "requiredWidgetParams": ["userId"],
+        "requireToolsUsed": true,
+        "requiredToolsAny": ["get_top_movers"]
+      }
+    },
+    {
+      "id": "sector-allocation",
+      "input": {
+        "message": "Show my sector allocation"
+      },
+      "expected": {
+        "widgetId": "ALLOCATION_PIE_CHART",
+        "requiredWidgetParams": ["userId"],
+        "requireToolsUsed": true,
+        "requiredToolsAny": ["get_sector_allocation"]
+      }
+    },
+    {
+      "id": "hello-text",
+      "input": {
+        "message": "hello"
+      },
+      "expected": {
+        "widgetId": "TEXT_RESPONSE",
+        "requiredWidgetParams": [],
+        "requireToolsUsed": false
+      }
+    }
+  ]
+}

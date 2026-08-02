@@ -1,124 +1,97 @@
 """
 FinanceAgent — LangGraph ReAct agent.
-Replaces the monolithic ChatAgent in chatbot/bot.py with:
-  - Tool registry integration (all tools loaded dynamically)
-  - Parallel tool execution via asyncio.gather
-  - Circuit breaker (timeout per tool)
-  - ContextVar aware (userId/traceId available in all tools)
-  - Intent formatting via deterministic IntentFormatter
+Tools are discovered and executed via am-mcp-server (no local data-tool registry).
 """
 import json
 import logging
 import asyncio
-import contextvars
+import re
+import uuid
 from typing import TypedDict, Annotated, List, Dict, Any, Optional
 import operator
 
 from langchain_core.messages import (
-    HumanMessage, SystemMessage, BaseMessage, ToolMessage, AIMessage
+    HumanMessage, BaseMessage, ToolMessage, AIMessage
 )
 from langgraph.graph import StateGraph, END
 
 from shared.llm.client import llm_client
-from shared.tools.registry import TOOL_REGISTRY, execute_tool
-from shared.formatters.intent_formatter import resolve_intent
-from shared.schemas.intent import AiIntentResponse, WidgetId
+from shared.clients.am_mcp_client import am_mcp_client
+from shared.formatters.artifact_resolver import resolve_artifact
+from shared.schemas.intent import AiIntentResponse
 from shared.context.request_context import user_id_var, trace_id_var, session_id_var
 from shared.core.config import settings
+from shared.prompts import get_system_prompt
+from shared.observability import tracer as lf
+from shared.observability.context import get_obs_context, set_obs_context
+from shared.observability.sanitize import sanitize_payload
 
 logger = logging.getLogger(__name__)
 
-# ─── Dynamic Module Loading ──────────────────────────────────────────────────
-
-if settings.ENABLE_PORTFOLIO_ANALYSIS:
-    try:
-        import am_fin_portfolio_analysis.tools.portfolio_tools  # noqa
-        import am_fin_portfolio_analysis.tools.analysis_tools   # noqa
-        import am_fin_portfolio_analysis.tools.trade_tools      # noqa
-        logger.info("✅ Portfolio Analysis module loaded.")
-    except ImportError as e:
-        logger.error(f"❌ Failed to load Portfolio Analysis module: {e}")
-
+# Optional API-testing tools only (not portfolio data).
 if settings.ENABLE_API_TESTING:
     try:
         import am_fin_api_testing.tools.meta_tools       # noqa
-        logger.info("✅ API Testing module loaded.")
+        logger.info("API Testing module loaded.")
     except ImportError as e:
-        logger.error(f"❌ Failed to load API Testing module: {e}")
+        logger.error("Failed to load API Testing module: %s", e)
 
-TOOL_TIMEOUT_SECONDS = 5.0
+TOOL_TIMEOUT_SECONDS = settings.MCP_TOOL_TIMEOUT_SECONDS
+
+_API_TESTING_APPENDIX = """
+2. **API Testing (Meta-Tools)**: You can explore and test any API registry (Swagger/OpenAPI).
+   - Use `register_api_spec` if you need to load a new Swagger JSON file from the filesystem.
+   - Use `search_apis` to find relevant endpoints.
+   - Use `get_api_workflow` to understand dependencies.
+   - Use `generate_payload` to see how to structure a request.
+   - Use `execute_api` to perform the test.
+   - Use `validate_response` to ensure the API meets its schema.
+"""
 
 
-# ─── LangGraph State ─────────────────────────────────────────────────────────
+def resolve_system_prompt() -> str:
+    """Load system prompt via PROMPT_SOURCE (langfuse|file); append API-testing if enabled."""
+    template = get_system_prompt()
+    ctx = get_obs_context()
+    if ctx is not None:
+        ctx.prompt_name = template.name
+        ctx.prompt_version = template.version
+        ctx.prompt_source = template.source
+        ctx.prompt_label = template.label
+        set_obs_context(ctx)
+    content = template.content
+    if settings.ENABLE_API_TESTING and "search_apis" not in content:
+        content = content.rstrip() + "\n" + _API_TESTING_APPENDIX
+    return content
+
 
 class AgentState(TypedDict):
     messages: Annotated[List[BaseMessage], operator.add]
-    tools_called: List[str]          # accumulates tool names executed this turn
+    tools_called: List[str]
     final_response: Optional[str]
 
 
-# ─── System Prompt ────────────────────────────────────────────────────────────
-
-def _build_system_prompt() -> str:
-    capabilities = []
-    if settings.ENABLE_PORTFOLIO_ANALYSIS:
-        capabilities.append("1. **Portfolio Analysis**: Use tools like get_portfolio_summary, analyze_etf_overlap, and count_etfs to answer financial questions.")
+async def _mcp_openai_tools() -> List[Dict[str, Any]]:
+    tools = await am_mcp_client.list_tools_openai()
     if settings.ENABLE_API_TESTING:
-        capabilities.append("2. **API Testing (Meta-Tools)**: You can explore and test any API registry (Swagger/OpenAPI).\n   - Use `register_api_spec` if you need to load a new Swagger JSON file from the filesystem.\n   - Use `search_apis` to find relevant endpoints.\n   - Use `get_api_workflow` to understand dependencies.\n   - Use `generate_payload` to see how to structure a request.\n   - Use `execute_api` to perform the test.\n   - Use `validate_response` to ensure the API meets its schema.")
+        from shared.tools.registry import TOOL_REGISTRY
+        for t in TOOL_REGISTRY:
+            name = (t.get("function") or {}).get("name")
+            if name and name not in am_mcp_client.blocklist:
+                tools.append(t)
+    return tools
 
-    prompt = f"""You are an advanced Financial Intelligence Agent for the AM Portfolio platform.
-You have access to the user's real portfolio data and an API testing "Meta-Tool" system.
-
-DOMAIN CAPABILITIES:
-{chr(10).join(capabilities)}
-3. **Market News**: Use web_search for real-time market sentiment and stock news.
-
-PRINCIPLES:
-1. Always check the portfolio before giving advice — use get_portfolio_summary first if you don't have context.
-2. **API Testing Lifecycle**: When asked to test an endpoint, follow these steps in your response:
-   - **Step 1: Discovery**: Confirm that you have found the correct endpoint(s) and their requirements.
-   - **Step 2: Execution**: State that you are calling the tool with specific parameters.
-   - **Step 3: Status**: Immediately after tool execution, clearly state if it was a **PASS** (2xx status) or **FAIL** (non-2xx).
-   - **Step 4: Analysis**: Provide a brief explanation of the result, especially if it failed.
-3. Answer concisely with data-backed insights. Use beautiful markdown tables for complex data.
-
-CRITICAL RULES:
-- DO NOT say "I will now call...". Just call the tool immediately.
-- If multiple tools are needed, call them all in the same turn.
-- Never return generic answers. Always ground in the actual tool data.
-- Ensure all important values are **bolded** for readability.
-"""
-    return prompt
-
-SYSTEM_PROMPT = _build_system_prompt()
-
-
-# ─── Agent Node ───────────────────────────────────────────────────────────────
 
 async def agent_node(state: AgentState) -> Dict[str, Any]:
     """LLM decides what tools to call next based on current state."""
     messages = state["messages"]
 
-    # ── Dynamic tool retrieval via vector search ──────────────────────────────
-    # Extract the last few messages to use as retrieval context.
-    # This ensures that "execute now" or "go ahead" still find the relevant tools.
-    search_context = []
-    msgs_for_context = messages[-3:]  # Last 3 messages for context
-    for m in msgs_for_context:
-        if isinstance(m, (HumanMessage, AIMessage)):
-            search_context.append(str(m.content))
-    
-    retrieval_query = "\n".join(search_context)
+    with lf.span("retrieve_tools", input={"source": "am-mcp-server"}) as retrieve_obs:
+        relevant_tools = await _mcp_openai_tools()
+        lf.end_span(retrieve_obs, output={"tool_count": len(relevant_tools)})
 
-    try:
-        from shared.tools.tool_index import retrieve_tools
-        relevant_tools = retrieve_tools(retrieval_query, top_k=10) if retrieval_query else TOOL_REGISTRY
-    except Exception:
-        # Fallback to full registry if retrieval fails
-        relevant_tools = TOOL_REGISTRY
-
-    # Build message payload
-    payload = [{"role": "system", "content": SYSTEM_PROMPT}]
+    system_prompt = resolve_system_prompt()
+    payload = [{"role": "system", "content": system_prompt}]
     for m in messages:
         if isinstance(m, HumanMessage):
             payload.append({"role": "user", "content": m.content})
@@ -135,11 +108,14 @@ async def agent_node(state: AgentState) -> Dict[str, Any]:
                 "name": m.name
             })
 
+    ctx = get_obs_context()
+    request_id = ctx.request_id if ctx else "fin-request"
     response = await llm_client.chat(
         messages=payload,
         temperature=0.0,
-        tools=relevant_tools,       # ← only top-k relevant tools, not all of them
-        tool_choice="auto"
+        tools=relevant_tools or None,
+        tool_choice="auto" if relevant_tools else None,
+        request_id=request_id,
     )
 
     if isinstance(response, dict) and response.get("tool_calls"):
@@ -150,16 +126,70 @@ async def agent_node(state: AgentState) -> Dict[str, Any]:
         return {"messages": [ai_msg], "tools_called": state.get("tools_called", [])}
 
     text = str(response)
-    return {"messages": [AIMessage(content=text)], "final_response": text, "tools_called": state.get("tools_called", [])}
+    synthetic = _parse_text_tool_calls(text, relevant_tools)
+    if synthetic:
+        ai_msg = AIMessage(content="", additional_kwargs={"tool_calls": synthetic})
+        return {"messages": [ai_msg], "tools_called": state.get("tools_called", [])}
+
+    return {
+        "messages": [AIMessage(content=text)],
+        "final_response": text,
+        "tools_called": state.get("tools_called", []),
+    }
 
 
-# ─── Tools Node (Parallel + Circuit Breaker) ──────────────────────────────────
+_TEXT_TOOL_RE = re.compile(
+    r"(?m)^\s*([a-zA-Z_][a-zA-Z0-9_]*)\((.*)\)\s*$"
+)
+
+
+def _parse_text_tool_calls(text: str, available_tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    if not text or not available_tools:
+        return []
+    known = {
+        t.get("function", {}).get("name")
+        for t in available_tools
+        if t.get("type") == "function" and t.get("function", {}).get("name")
+    }
+    calls: List[Dict[str, Any]] = []
+    for line in text.strip().splitlines():
+        m = _TEXT_TOOL_RE.match(line.strip())
+        if not m:
+            continue
+        name, raw_args = m.group(1), m.group(2).strip()
+        if name not in known:
+            continue
+        args_obj: Dict[str, Any] = {}
+        if raw_args:
+            if raw_args.startswith("{"):
+                try:
+                    args_obj = json.loads(raw_args)
+                except json.JSONDecodeError:
+                    args_obj = {}
+            else:
+                for part in re.findall(
+                    r'([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*("([^"]*)"|\'([^\']*)\'|[^,]+)',
+                    raw_args,
+                ):
+                    key, _full, dq, sq = part[0], part[1], part[2], part[3]
+                    val = dq if dq else (sq if sq else part[1].strip().strip("\"'"))
+                    args_obj[key] = val
+        calls.append(
+            {
+                "id": f"call_{uuid.uuid4().hex[:12]}",
+                "type": "function",
+                "function": {"name": name, "arguments": json.dumps(args_obj)},
+            }
+        )
+    return calls
+
 
 async def tools_node(state: AgentState) -> Dict[str, Any]:
-    """Execute all requested tool calls in parallel with per-call timeout."""
+    """Execute tool calls via am-mcp-server."""
     last_msg = state["messages"][-1]
     tool_calls = last_msg.additional_kwargs.get("tool_calls", [])
     tools_executed = list(state.get("tools_called", []))
+    summary_mode = settings.LANGFUSE_TOOL_PAYLOAD_MODE != "full"
 
     async def run_one(call) -> ToolMessage:
         func = call["function"]
@@ -172,18 +202,29 @@ async def tools_node(state: AgentState) -> Dict[str, Any]:
             "tool_call",
             extra={"tool": name, "args": args, "trace_id": trace_id_var.get()}
         )
-        try:
-            # We no longer need run_in_executor because execute_tool is now async
-            # and handles both sync/async tools internally.
-            result = await asyncio.wait_for(
-                execute_tool(name, args),
-                timeout=TOOL_TIMEOUT_SECONDS
-            )
-        except asyncio.TimeoutError:
-            result = json.dumps({"error": f"Tool '{name}' timed out after {TOOL_TIMEOUT_SECONDS}s", "fallback": True})
-        except Exception as e:
-            logger.error(f"Error executing tool {name}: {e}")
-            result = json.dumps({"error": str(e), "fallback": True})
+        span_input = {"tool": name, "args": args if not summary_mode else list(args.keys())}
+        with lf.span(f"tool.{name}", input=span_input) as tool_obs:
+            try:
+                result_obj = await asyncio.wait_for(
+                    am_mcp_client.call_tool(name, args),
+                    timeout=TOOL_TIMEOUT_SECONDS,
+                )
+                result = result_obj if isinstance(result_obj, str) else json.dumps(result_obj)
+                out = (
+                    {"tool": name, "ok": True, "chars": len(str(result))}
+                    if summary_mode
+                    else sanitize_payload({"tool": name, "result": result_obj})
+                )
+                lf.end_span(tool_obs, output=out)
+            except asyncio.TimeoutError:
+                result = json.dumps({
+                    "error": f"Tool '{name}' timed out after {TOOL_TIMEOUT_SECONDS}s",
+                })
+                lf.end_span(tool_obs, error=f"timeout after {TOOL_TIMEOUT_SECONDS}s")
+            except Exception as e:
+                logger.error("Error executing tool %s: %s", name, e)
+                result = json.dumps({"error": str(e)})
+                lf.end_span(tool_obs, error=str(e))
 
         return ToolMessage(tool_call_id=call["id"], content=str(result), name=name)
 
@@ -191,16 +232,12 @@ async def tools_node(state: AgentState) -> Dict[str, Any]:
     return {"messages": list(results), "tools_called": tools_executed}
 
 
-# ─── Routing ──────────────────────────────────────────────────────────────────
-
 def should_continue(state: AgentState) -> str:
     last = state["messages"][-1]
     if isinstance(last, AIMessage) and last.additional_kwargs.get("tool_calls"):
         return "tools"
     return END
 
-
-# ─── Graph ────────────────────────────────────────────────────────────────────
 
 def _build_graph():
     wf = StateGraph(AgentState)
@@ -215,8 +252,6 @@ def _build_graph():
 _graph = _build_graph()
 
 
-# ─── Public Interface ─────────────────────────────────────────────────────────
-
 class FinanceAgent:
 
     async def run(
@@ -227,15 +262,10 @@ class FinanceAgent:
         session_id: str,
         trace_id: str,
     ) -> AiIntentResponse:
-        """
-        Process a user message end-to-end and return a structured AiIntentResponse.
-        """
-        # Set context vars — all tools will read from these
         user_id_var.set(user_id)
         session_id_var.set(session_id)
         trace_id_var.set(trace_id)
 
-        # Build LangChain message list from session history
         lc_messages: List[BaseMessage] = []
         for msg in history[-10:]:
             if msg["role"] == "user":
@@ -251,13 +281,15 @@ class FinanceAgent:
         }
 
         try:
+            with lf.span("intent_resolve", input={"message": message[:500]}) as _prep:
+                lf.end_span(_prep, output={"history_len": len(history)})
             final_state = await _graph.ainvoke(initial_state, config={"recursion_limit": 50})
         except Exception as e:
-            logger.error(f"Agent error: {e}", extra={"trace_id": trace_id, "userId": user_id})
+            logger.error("Agent error: %s", e, extra={"trace_id": trace_id, "userId": user_id})
             return AiIntentResponse(
-                message=f"I ran into an issue processing your request. Please try again.",
-                widgetId=WidgetId.ERROR,
-                widgetParams={"error": str(e), "userId": user_id},
+                message="I ran into an issue processing your request. Please try again.",
+                artifactType="error.v1",
+                data={"error": str(e), "userId": user_id},
                 sessionId=session_id,
                 toolsUsed=[],
                 traceId=trace_id,
@@ -266,7 +298,6 @@ class FinanceAgent:
         tools_called = final_state.get("tools_called", [])
         answer = final_state.get("final_response") or "I couldn't find a specific answer for that."
 
-        # Collect ToolMessage return values so widgetParams can carry real data.
         tool_data: dict = {}
         for msg in final_state.get("messages", []):
             msg_type = getattr(msg, "type", None)
@@ -278,12 +309,14 @@ class FinanceAgent:
                 except (ValueError, TypeError):
                     tool_data[msg_name] = {"raw": str(content)}
 
-        widget_id, widget_params = resolve_intent(tools_called, user_id, tool_data)
+        with lf.span("artifact_resolve", input={"tools": tools_called}) as intent_obs:
+            artifact_type, data = resolve_artifact(tools_called, tool_data)
+            lf.end_span(intent_obs, output={"artifactType": artifact_type})
 
         return AiIntentResponse(
             message=answer,
-            widgetId=widget_id,
-            widgetParams=widget_params,
+            artifactType=artifact_type,
+            data=data,
             sessionId=session_id,
             toolsUsed=tools_called,
             traceId=trace_id,
@@ -297,9 +330,6 @@ class FinanceAgent:
         session_id: str,
         trace_id: str,
     ):
-        """
-        Streaming version of run(). Yields JSON events for status and tokens.
-        """
         user_id_var.set(user_id)
         session_id_var.set(session_id)
         trace_id_var.set(trace_id)
@@ -319,43 +349,37 @@ class FinanceAgent:
         }
 
         tokens_yielded = False
-        # Use astream_events for granular tracking
         async for event in _graph.astream_events(initial_state, version="v1", config={"recursion_limit": 50}):
             kind = event["event"]
-            
+
             if kind == "on_chat_model_stream":
-                # Raw token streaming
                 content = event["data"]["chunk"].content
                 if content:
                     tokens_yielded = True
                     yield json.dumps({"type": "token", "content": content})
-            
+
             elif kind == "on_tool_start":
-                # Tool execution started
-                yield json.dumps({"type": "status", "content": f"⚙️ Executing {event['name']}..."})
-            
+                yield json.dumps({"type": "status", "content": f"Executing {event['name']}..."})
+
             elif kind == "on_tool_end":
-                # Tool execution finished
-                yield json.dumps({"type": "status", "content": f"✅ {event['name']} completed."})
-            
+                yield json.dumps({"type": "status", "content": f"{event['name']} completed."})
+
             elif kind == "on_chain_end":
-                # Final state after graph completion or node completion
                 final_state = event["data"].get("output")
                 if isinstance(final_state, dict):
                     tools_called = final_state.get("tools_called", [])
-                    
-                    # If this is the main graph ending (has final_response)
+
                     if "final_response" in final_state:
                         yield json.dumps({
-                            "type": "final", 
+                            "type": "final",
                             "tools_used": tools_called,
                             "trace_id": trace_id,
                             "answer": final_state.get("final_response")
                         })
-                        
-                        # If we didn't stream any tokens, send the full answer now
+
                         if not tokens_yielded and final_state.get("final_response"):
                             yield json.dumps({"type": "token", "content": final_state["final_response"]})
-                            tokens_yielded = True # prevent double yield if multiple chains end
+                            tokens_yielded = True
+
 
 finance_agent = FinanceAgent()

@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.nameOverride | default .Chart.Name }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.nameOverride | default .Chart.Name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Values.nameOverride | default .Chart.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Values.nameOverride | default .Chart.Name }}
+    spec:
+      containers:
+        - name: fin-portfolio-agent
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+          env:
+            - name: AUTH_REQUIRED
+              value: {{ .Values.env.AUTH_REQUIRED | quote }}
+            - name: AUTH_JWKS_URL
+              value: {{ .Values.env.AUTH_JWKS_URL | default "" | quote }}
+            - name: AUTH_ISSUER
+              value: {{ .Values.env.AUTH_ISSUER | default "" | quote }}
+            - name: AUTH_AUDIENCE
+              value: {{ .Values.env.AUTH_AUDIENCE | default "" | quote }}
+            - name: AM_MCP_SERVER_URL
+              value: {{ .Values.env.AM_MCP_SERVER_URL | default "http://am-mcp-server.am-apps-dev.svc.cluster.local:8080" | quote }}
+            - name: DATA_FALLBACK_REST
+              value: {{ .Values.env.DATA_FALLBACK_REST | default "false" | quote }}
+            - name: MCP_TOOL_BLOCKLIST
+              value: {{ .Values.env.MCP_TOOL_BLOCKLIST | default "ask_finance_agent" | quote }}
+            - name: CORS_ORIGINS
+              value: {{ .Values.env.CORS_ORIGINS | quote }}
+            - name: LANGFUSE_ENABLED
+              value: {{ .Values.env.LANGFUSE_ENABLED | default "false" | quote }}
+            - name: LANGFUSE_HOST
+              value: {{ .Values.env.LANGFUSE_HOST | default "https://langfuse.munish.org" | quote }}
+            - name: LANGFUSE_ENV
+              value: {{ .Values.env.LANGFUSE_ENV | default "dev" | quote }}
+            - name: LANGFUSE_TRACE_MAX_OUTPUT_CHARS
+              value: {{ .Values.env.LANGFUSE_TRACE_MAX_OUTPUT_CHARS | default "8000" | quote }}
+            - name: LANGFUSE_TOOL_PAYLOAD_MODE
+              value: {{ .Values.env.LANGFUSE_TOOL_PAYLOAD_MODE | default "full" | quote }}
+            - name: PROMPT_SOURCE
+              value: {{ .Values.env.PROMPT_SOURCE | default "file" | quote }}
+            - name: PROMPT_LABEL
+              value: {{ .Values.env.PROMPT_LABEL | default "production" | quote }}
+            - name: PROMPT_CACHE_TTL_SECONDS
+              value: {{ .Values.env.PROMPT_CACHE_TTL_SECONDS | default "60" | quote }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.nameOverride | default .Chart.Name }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.nameOverride | default .Chart.Name }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app.kubernetes.io/name: {{ .Values.nameOverride | default .Chart.Name }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http

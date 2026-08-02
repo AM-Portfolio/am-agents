@@ -1,0 +1,18 @@
+# Vault secret mappings for fin-portfolio-agent (am-fin-agent).
+# Wire LANGFUSE_* keys via observability path (same as tool-agent).
+vault:
+  secretPaths:
+    observability:
+      mappings:
+        LANGFUSE_PUBLIC_KEY: "LANGFUSE_PUBLIC_KEY"
+        LANGFUSE_SECRET_KEY: "LANGFUSE_SECRET_KEY"
+    llm-api-keys:
+      mappings:
+        LITELLM_MASTER_KEY: "LITELLM_MASTER_KEY"
+    mongodb:
+      mappings:
+        MONGODB_URI: "url"
+    identity:
+      mappings:
+        AUTH_JWKS_URL: "OIDC_JWKS_URL"
+        AUTH_ISSUER: "OIDC_ISSUER"

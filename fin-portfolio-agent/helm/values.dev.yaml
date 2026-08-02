@@ -1,0 +1,47 @@
+# Dev environment overrides for am-fin-agent (universal-chart via amctl).
+environment: dev
+
+fullnameOverride: am-fin-agent
+
+vault:
+  enabled: true
+  secretPaths:
+    observability:
+      path: "apps/data/dev/services/am-agents-mcp-gateway"
+    llm-api-keys:
+      path: "apps/data/dev/services/am-agents-mcp-gateway"
+    mongodb:
+      path: "apps/data/preprod/infra/mongodb"
+      template: |
+        {{- with secret "apps/data/preprod/infra/mongodb" -}}
+        export MONGODB_URI="mongodb://{{ .Data.data.username }}:{{ .Data.data.password }}@mongodb.infra.svc.cluster.local:27017/fin_agent?authSource=admin"
+        export DB_NAME="fin_agent"
+        {{- end }}
+    together:
+      path: "apps/data/preprod/infra/shared-api"
+      template: |
+        {{- with secret "apps/data/preprod/infra/shared-api" -}}
+        {{- range $sk, $sv := .Data.data }}
+        export {{ $sk | toUpper }}="{{ $sv }}"
+        {{- end }}
+        {{- end }}
+    identity:
+      path: "apps/data/dev/services/am-identity"
+
+env:
+  AUTH_REQUIRED: "false"
+  AM_MCP_SERVER_URL: "http://am-mcp-server.am-apps-dev.svc.cluster.local:8080"
+  DATA_FALLBACK_REST: "false"
+  MCP_TOOL_BLOCKLIST: "ask_finance_agent"
+  LLM_ROUTING: "direct"
+  LITELLM_BASE_URL: "http://litellm.am-ai.svc.cluster.local:4000"
+  LLM_MODEL: "together_ai/meta-llama/Meta-Llama-3-8B-Instruct-Lite"
+  LANGFUSE_ENABLED: "true"
+  LANGFUSE_HOST: "https://langfuse.munish.org"
+  LANGFUSE_ENV: "dev"
+  LANGFUSE_TRACE_MAX_OUTPUT_CHARS: "8000"
+  LANGFUSE_TOOL_PAYLOAD_MODE: "full"
+  PROMPT_SOURCE: "langfuse"
+  PROMPT_LABEL: "dev"
+  PROMPT_CACHE_TTL_SECONDS: "60"
+  CORS_ORIGINS: "https://am.asrax.in,https://am-dev.asrax.in,http://localhost:9000"

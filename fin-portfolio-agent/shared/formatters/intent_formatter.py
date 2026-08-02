@@ -5,10 +5,12 @@ and maps them to the correct Flutter widget using a priority table.
 """
 from typing import Dict, List, Optional, Tuple
 from shared.schemas.intent import WidgetId
+from shared.formatters.catalog_loader import catalog_priority_rows
 
 
 # Priority table: (tool_name_substring, widgetId, default_widget_params)
 # First match wins. More specific tools should be listed first.
+# Chat path uses artifact_resolver; this table is legacy-only.
 _INTENT_PRIORITY: List[Tuple[str, str, dict]] = [
     ("get_top_movers",           WidgetId.TOP_MOVERS,        {"limit": 10}),
     ("analyze_etf_overlap",      WidgetId.ETF_ANALYSIS,      {}),
@@ -30,6 +32,16 @@ _INTENT_PRIORITY: List[Tuple[str, str, dict]] = [
 ]
 
 
+def _priority_table() -> List[Tuple[str, str, dict]]:
+    catalog_rows = catalog_priority_rows()
+    if not catalog_rows:
+        return _INTENT_PRIORITY
+    # Catalog first, then hardcoded fallbacks for tools not listed
+    seen = {t[0] for t in catalog_rows}
+    rest = [row for row in _INTENT_PRIORITY if row[0] not in seen]
+    return [*catalog_rows, *rest]
+
+
 def resolve_intent(
     tools_called: List[str],
     user_id: str,
@@ -48,7 +60,7 @@ def resolve_intent(
     """
     resolved_tool_data = tool_data or {}
 
-    for tool_name, widget_id, default_params in _INTENT_PRIORITY:
+    for tool_name, widget_id, default_params in _priority_table():
         if any(tool_name in called for called in tools_called):
             params: dict = {**default_params, "userId": user_id}
             if tool_name in resolved_tool_data:
