@@ -4,6 +4,8 @@
 
 Runtime under test: **am-ai-gateway** (`mcp-gateway/`) → **fin-portfolio-agent** (`am-fin-agent`). Do **not** use `am-asrax-proxy` / product API gateway for AI chat.
 
+CI: `.github/workflows/am-fin-agent.yml` (PR/branch test + publish) and `deploy-am-fin-agent.yml` (manual deploy). Path filter: `fin-portfolio-agent/**`.
+
 ---
 
 ## Fixture user
