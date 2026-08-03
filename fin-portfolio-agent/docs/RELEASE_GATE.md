@@ -10,10 +10,10 @@ Runtime under test: **am-ai-gateway** (`mcp-gateway/`) → **fin-portfolio-agent
 
 | Variable | Value | Notes |
 |----------|-------|-------|
-| `EVAL_USER_ID` | `<SET_ME_DEV_FIXTURE_USER>` | Known portfolio user in am-apps-dev. Replace before R0a. |
-| JWT (if `AUTH_REQUIRED=true`) | Keycloak token for same subject | Bearer must match body `userId` |
+| JWT | Keycloak / api-key access token | Identity = JWT `sub`. Body `userId` optional and ignored when Bearer present. |
+| `AUTH_REQUIRED=true` | Bearer required | Missing/invalid token → 401 |
 
-Obtain fixture id from portfolio / analysis test data owners. Never use literal `fin-agent` as `userId`.
+Never use literal `fin-agent` as identity. Do not rely on stale fixture UUIDs in the chat body.
 
 ---
 
@@ -59,7 +59,7 @@ curl -sS -X POST "$GW/api/v1/ai/chat" \
   -H "Content-Type: application/json" \
   -H "X-Request-Id: $(uuidgen)" \
   -H "Authorization: Bearer $TOKEN" \
-  -d "{\"message\":\"portfolio summary\",\"userId\":\"$EVAL_USER_ID\",\"sessionId\":\"r0a-smoke\"}"
+  -d '{"message":"portfolio summary","sessionId":"r0a-smoke"}'
 ```
 
 Golden file: `eval/fin_chat_golden.json` (v2, artifactType). Runner: `scripts/eval_fin_chat.py`.
@@ -73,7 +73,7 @@ Date / operator / notes: _
 
 - [ ] Multi-turn same `sessionId` → one Langfuse session, N turn traces
 - [ ] Each response `traceId` matches Langfuse turn / `X-Trace-Id`
-- [ ] `userId` = fixture (not `fin-agent`); tags include `fin-agent`, `env:dev`, `surface:chat`
+- [ ] Langfuse `userId` = JWT `sub` (not `fin-agent`); tags include `fin-agent`, `env:dev`, `surface:chat`
 - [ ] Spans: at least one generation; data turns include tool span
 - [ ] Sent `X-Request-Id` appears in trace metadata as `requestId`
 

@@ -23,7 +23,6 @@ from shared.schemas.intent import ChatRequest, AiIntentResponse
 from shared.session.store import session_store
 from shared.middleware.logging_middleware import LoggingMiddleware
 from shared.middleware.auth_middleware import (
-    AUTH_REQUIRED,
     JwtUserMiddleware,
     cors_origins,
 )
@@ -97,20 +96,13 @@ async def chat(request: ChatRequest, http_request: Request, response: Response) 
     token_user = getattr(http_request.state, "token_user_id", None)
     user_id = request.userId
     if token_user:
-        if AUTH_REQUIRED and user_id and user_id != token_user:
-            raise HTTPException(
-                status_code=403,
-                detail="userId does not match authenticated subject",
-            )
-        if not user_id:
-            user_id = token_user
-        elif user_id != token_user:
+        if user_id and user_id != token_user:
             logger.warning(
                 "Body userId=%s differs from token subject=%s; using token",
                 user_id,
                 token_user,
             )
-            user_id = token_user
+        user_id = token_user
 
     if not user_id or user_id.strip() in {"", "fin-agent"}:
         # Never use literal "fin-agent" as userId

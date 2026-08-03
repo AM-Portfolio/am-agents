@@ -1,9 +1,10 @@
 """
 Optional JWT gate for fin-portfolio-agent.
 
-AUTH_REQUIRED=false (default): if Bearer is present, use token `sub` as userId
-when the body userId is empty; never block.
-AUTH_REQUIRED=true: reject missing/invalid Bearer; require body userId to match token subject.
+AUTH_REQUIRED=false (default): if Bearer is present, use token `sub` as identity;
+body userId is ignored when a token subject exists.
+AUTH_REQUIRED=true: reject missing/invalid Bearer. Identity is always JWT `sub`;
+body userId is optional and never required to match.
 """
 
 from __future__ import annotations
