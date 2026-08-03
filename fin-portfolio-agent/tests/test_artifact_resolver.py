@@ -41,3 +41,29 @@ class TestResolveArtifact:
         artifact, payload = resolve_artifact(["custom_tool"], data)
         assert artifact == "data.generic.v1"
         assert payload == {"x": 1}
+
+    def test_holdings_slim_payload(self):
+        data = {
+            "get_holdings": {
+                "count": 2,
+                "truncated": False,
+                "holdings": [
+                    {"symbol": "RELIANCE", "currentValue": 100},
+                    {"symbol": "TCS", "currentValue": 90},
+                ],
+            }
+        }
+        artifact, payload = resolve_artifact(["get_holdings"], data)
+        assert artifact == "holdings.list.v1"
+        assert payload["count"] == 2
+        assert len(payload["holdings"]) == 2
+
+    def test_trades_and_quote_artifacts(self):
+        assert resolve_artifact(
+            ["get_recent_activity"],
+            {"get_recent_activity": {"activities": [], "count": 0}},
+        )[0] == "trades.recent.v1"
+        assert resolve_artifact(
+            ["get_stock_quote"],
+            {"get_stock_quote": {"symbol": "RELIANCE", "ltp": 1}},
+        )[0] == "market.quote.v1"

@@ -1,7 +1,7 @@
 {
   "dataset": "fin-chat-golden",
-  "version": 2,
-  "description": "Golden cases for finance AI chat via am-ai-gateway. Asserts artifactType + MCP tool names.",
+  "version": 3,
+  "description": "Golden cases for finance AI chat via am-ai-gateway. Asserts artifactType + MCP tool names + data keys.",
   "items": [
     {
       "id": "portfolio-summary",
@@ -12,7 +12,8 @@
         "artifactType": "portfolio.summary.v1",
         "requireToolsUsed": true,
         "requiredToolsAny": ["get_portfolio_summary"],
-        "forbidTools": ["ask_finance_agent"]
+        "forbidTools": ["ask_finance_agent"],
+        "requiredDataKeys": ["currentValue", "investmentValue"]
       }
     },
     {
@@ -24,7 +25,8 @@
         "artifactType": "holdings.list.v1",
         "requireToolsUsed": true,
         "requiredToolsAny": ["get_holdings"],
-        "forbidTools": ["ask_finance_agent"]
+        "forbidTools": ["ask_finance_agent"],
+        "requiredDataKeys": ["holdings", "count"]
       }
     },
     {
@@ -36,7 +38,8 @@
         "artifactType": "portfolio.movers.v1",
         "requireToolsUsed": true,
         "requiredToolsAny": ["get_top_movers"],
-        "forbidTools": ["ask_finance_agent"]
+        "forbidTools": ["ask_finance_agent"],
+        "requiredDataKeysAny": ["gainers", "movers"]
       }
     },
     {
@@ -48,6 +51,32 @@
         "artifactType": "portfolio.sector_allocation.v1",
         "requireToolsUsed": true,
         "requiredToolsAny": ["get_sector_allocation"],
+        "forbidTools": ["ask_finance_agent"],
+        "requiredDataKeysAny": ["sectorAllocation", "sectors"]
+      }
+    },
+    {
+      "id": "recent-activity",
+      "input": {
+        "message": "Show my recent trades"
+      },
+      "expected": {
+        "artifactType": "trades.recent.v1",
+        "requireToolsUsed": true,
+        "requiredToolsAny": ["get_recent_activity"],
+        "forbidTools": ["ask_finance_agent"],
+        "requiredDataKeys": ["activities", "count"]
+      }
+    },
+    {
+      "id": "market-quote",
+      "input": {
+        "message": "What is the price of RELIANCE?"
+      },
+      "expected": {
+        "artifactType": "market.quote.v1",
+        "requireToolsUsed": true,
+        "requiredToolsAny": ["get_stock_quote"],
         "forbidTools": ["ask_finance_agent"]
       }
     },

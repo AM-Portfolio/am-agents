@@ -162,7 +162,7 @@ _TOOL_CODE_NAME_RE = re.compile(
     re.IGNORECASE,
 )
 _MARKDOWN_TOOL_JSON_RE = re.compile(
-    r"```(?:json)?\s*(\{\s*\"name\"\s*:.*?\})\s*```",
+    r"```(?:json)?\s*(\{(?:[^{}]|\{[^{}]*\})*\})\s*```",
     re.DOTALL | re.IGNORECASE,
 )
 
@@ -203,18 +203,24 @@ def _calls_from_tool_json_blobs(text: str, known: set[str]) -> List[Dict[str, An
     for match in _MARKDOWN_TOOL_JSON_RE.finditer(text):
         blobs.append(match.group(1))
     stripped = text.strip()
-    if stripped.startswith("{") and '"name"' in stripped:
+    if stripped.startswith("{") and (
+        '"name"' in stripped or '"tool"' in stripped
+    ):
         blobs.append(stripped)
     for raw in blobs:
         try:
             obj = json.loads(raw)
         except json.JSONDecodeError:
             continue
-        name = obj.get("name") if isinstance(obj, dict) else None
+        if not isinstance(obj, dict):
+            continue
+        name = obj.get("name") or obj.get("tool")
         if not name or name not in known:
             logger.warning("Rejected unknown tool json name: %s", name)
             continue
         args_obj = obj.get("arguments") if isinstance(obj.get("arguments"), dict) else {}
+        if not args_obj and isinstance(obj.get("parameters"), dict):
+            args_obj = obj["parameters"]
         calls.append(
             {
                 "id": f"call_{uuid.uuid4().hex[:12]}",

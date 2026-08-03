@@ -93,6 +93,21 @@ def evaluate_item(
     if got_artifact == "error.v1" and want_artifact not in (None, "error.v1"):
         failures.append("artifactType=error.v1 unexpected")
 
+    data = body.get("data")
+    required_data_keys = expected.get("requiredDataKeys") or []
+    required_data_any = expected.get("requiredDataKeysAny") or []
+    if required_data_keys or required_data_any:
+        if not isinstance(data, dict):
+            failures.append("data missing or not an object")
+        else:
+            for key in required_data_keys:
+                if key not in data or not _non_empty(data.get(key)):
+                    failures.append(f"data[{key!r}] missing or empty")
+            if required_data_any and not any(
+                k in data and _non_empty(data.get(k)) for k in required_data_any
+            ):
+                failures.append(f"data missing any of {required_data_any!r}")
+
     if not body.get("traceId"):
         failures.append("traceId missing")
     if not body.get("sessionId"):

@@ -83,3 +83,54 @@ class TestEvaluateItem:
             expected={"artifactType": "text.v1"},
         )
         assert any("http_status" in f for f in failures)
+
+    def test_required_data_keys(self):
+        failures = evaluate_item(
+            status_code=200,
+            body={
+                "artifactType": "holdings.list.v1",
+                "data": {"holdings": [{"symbol": "X"}], "count": 1},
+                "toolsUsed": ["get_holdings"],
+                "traceId": "t",
+                "sessionId": "s",
+            },
+            expected={
+                "artifactType": "holdings.list.v1",
+                "requiredDataKeys": ["holdings", "count"],
+            },
+        )
+        assert failures == []
+
+    def test_required_data_keys_missing(self):
+        failures = evaluate_item(
+            status_code=200,
+            body={
+                "artifactType": "holdings.list.v1",
+                "data": {},
+                "toolsUsed": ["get_holdings"],
+                "traceId": "t",
+                "sessionId": "s",
+            },
+            expected={
+                "artifactType": "holdings.list.v1",
+                "requiredDataKeys": ["holdings", "count"],
+            },
+        )
+        assert any("data[" in f for f in failures)
+
+    def test_required_data_keys_any(self):
+        failures = evaluate_item(
+            status_code=200,
+            body={
+                "artifactType": "portfolio.movers.v1",
+                "data": {"movers": [{"symbol": "A"}]},
+                "toolsUsed": ["get_top_movers"],
+                "traceId": "t",
+                "sessionId": "s",
+            },
+            expected={
+                "artifactType": "portfolio.movers.v1",
+                "requiredDataKeysAny": ["gainers", "movers"],
+            },
+        )
+        assert failures == []
