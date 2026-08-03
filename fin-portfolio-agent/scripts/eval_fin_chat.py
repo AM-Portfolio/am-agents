@@ -60,14 +60,19 @@ def evaluate_item(
     if want_widget and got_widget != want_widget:
         failures.append(f"widgetId={got_widget!r} expected={want_widget!r}")
 
-    params = body.get("widgetParams") or {}
-    if not isinstance(params, dict):
-        failures.append("widgetParams is not an object")
+    want_artifact = expected.get("artifactType")
+    got_artifact = body.get("artifactType")
+    if want_artifact and got_artifact != want_artifact:
+        failures.append(f"artifactType={got_artifact!r} expected={want_artifact!r}")
+
+    params = body.get("widgetParams") or body.get("data") or {}
+    if want_widget and not isinstance(params, dict):
+        failures.append("widgetParams/data is not an object")
         params = {}
 
     for key in expected.get("requiredWidgetParams") or []:
-        if key not in params or not _non_empty(params.get(key)):
-            failures.append(f"widgetParams[{key!r}] missing or empty")
+        if not isinstance(params, dict) or key not in params or not _non_empty(params.get(key)):
+            failures.append(f"params[{key!r}] missing or empty")
 
     tools = body.get("toolsUsed") or []
     if not isinstance(tools, list):
@@ -79,7 +84,14 @@ def evaluate_item(
             failures.append("toolsUsed empty but requireToolsUsed=true")
         any_tools = expected.get("requiredToolsAny") or []
         if any_tools and not any(t in tools for t in any_tools):
-            failures.append(f"toolsUsed={tools} missing any of {any_tools}")
+            failures.append(f"toolsUsed={tools!r} missing any of {any_tools!r}")
+
+    for banned in expected.get("forbidTools") or []:
+        if banned in tools:
+            failures.append(f"forbidden tool used: {banned}")
+
+    if got_artifact == "error.v1" and want_artifact not in (None, "error.v1"):
+        failures.append("artifactType=error.v1 unexpected")
 
     if not body.get("traceId"):
         failures.append("traceId missing")

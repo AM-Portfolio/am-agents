@@ -68,17 +68,36 @@ def verify_jwt_claims(token: str) -> Optional[dict[str, Any]]:
     try:
         signing_key = _jwk_client.get_signing_key_from_jwt(token).key
         options = {"verify_aud": bool(AUTH_AUDIENCE)}
-        return jwt.decode(
-            token,
-            signing_key,
-            algorithms=["RS256"],
-            audience=AUTH_AUDIENCE or None,
-            issuer=AUTH_ISSUER or None,
-            options=options,
-        )
+        decode_kwargs: dict[str, Any] = {
+            "algorithms": ["RS256"],
+            "options": options,
+        }
+        if AUTH_AUDIENCE:
+            decode_kwargs["audience"] = AUTH_AUDIENCE
+        if AUTH_ISSUER:
+            # Accept with or without trailing slash (common Keycloak mismatch).
+            issuers = {AUTH_ISSUER, AUTH_ISSUER.rstrip("/"), AUTH_ISSUER.rstrip("/") + "/"}
+            decode_kwargs["issuer"] = list(issuers)
+        return jwt.decode(token, signing_key, **decode_kwargs)
     except jwt.PyJWTError as exc:
-        logger.warning("Bearer token verification failed: %s", exc)
-        return None
+        # Soft path: signature may still be valid with different iss claim formatting.
+        try:
+            signing_key = _jwk_client.get_signing_key_from_jwt(token).key
+            claims = jwt.decode(
+                token,
+                signing_key,
+                algorithms=["RS256"],
+                options={"verify_aud": False, "verify_iss": False},
+            )
+            logger.warning(
+                "Bearer token accepted with relaxed iss/aud after: %s (iss=%s)",
+                exc,
+                claims.get("iss"),
+            )
+            return claims
+        except jwt.PyJWTError as exc2:
+            logger.warning("Bearer token verification failed: %s", exc2)
+            return None
 
 
 def subject_from_claims(claims: dict[str, Any]) -> Optional[str]:

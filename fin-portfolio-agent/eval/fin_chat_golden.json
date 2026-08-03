@@ -1,7 +1,7 @@
 {
   "dataset": "fin-chat-golden",
-  "version": 1,
-  "description": "Deterministic golden cases for finance AI chat via am-ai-gateway. Upload mirror to Langfuse dataset fin-chat-golden.",
+  "version": 2,
+  "description": "Golden cases for finance AI chat via am-ai-gateway. Asserts artifactType + MCP tool names.",
   "items": [
     {
       "id": "portfolio-summary",
@@ -9,10 +9,10 @@
         "message": "Give me my portfolio summary"
       },
       "expected": {
-        "widgetId": "PORTFOLIO_SUMMARY",
-        "requiredWidgetParams": ["userId"],
+        "artifactType": "portfolio.summary.v1",
         "requireToolsUsed": true,
-        "requiredToolsAny": ["get_portfolio_summary"]
+        "requiredToolsAny": ["get_portfolio_summary"],
+        "forbidTools": ["ask_finance_agent"]
       }
     },
     {
@@ -21,10 +21,10 @@
         "message": "Show my holdings"
       },
       "expected": {
-        "widgetId": "HOLDINGS_TABLE",
-        "requiredWidgetParams": ["userId"],
+        "artifactType": "holdings.list.v1",
         "requireToolsUsed": true,
-        "requiredToolsAny": ["get_holdings_list", "get_holding_details"]
+        "requiredToolsAny": ["get_holdings"],
+        "forbidTools": ["ask_finance_agent"]
       }
     },
     {
@@ -33,10 +33,10 @@
         "message": "What are my top movers today?"
       },
       "expected": {
-        "widgetId": "TOP_MOVERS",
-        "requiredWidgetParams": ["userId"],
+        "artifactType": "portfolio.movers.v1",
         "requireToolsUsed": true,
-        "requiredToolsAny": ["get_top_movers"]
+        "requiredToolsAny": ["get_top_movers"],
+        "forbidTools": ["ask_finance_agent"]
       }
     },
     {
@@ -45,10 +45,10 @@
         "message": "Show my sector allocation"
       },
       "expected": {
-        "widgetId": "ALLOCATION_PIE_CHART",
-        "requiredWidgetParams": ["userId"],
+        "artifactType": "portfolio.sector_allocation.v1",
         "requireToolsUsed": true,
-        "requiredToolsAny": ["get_sector_allocation"]
+        "requiredToolsAny": ["get_sector_allocation"],
+        "forbidTools": ["ask_finance_agent"]
       }
     },
     {
@@ -57,9 +57,9 @@
         "message": "hello"
       },
       "expected": {
-        "widgetId": "TEXT_RESPONSE",
-        "requiredWidgetParams": [],
-        "requireToolsUsed": false
+        "artifactType": "text.v1",
+        "requireToolsUsed": false,
+        "forbidTools": ["ask_finance_agent"]
       }
     }
   ]

@@ -131,6 +131,18 @@ async def agent_node(state: AgentState) -> Dict[str, Any]:
         ai_msg = AIMessage(content="", additional_kwargs={"tool_calls": synthetic})
         return {"messages": [ai_msg], "tools_called": state.get("tools_called", [])}
 
+    if _looks_like_invented_tools_only(text, relevant_tools):
+        fixed = (
+            "I can only use the finance MCP tools available in this session "
+            "(for example get_portfolio_summary, get_holdings, get_top_movers, get_market_movers). "
+            "Please rephrase your question and I will call the correct tool."
+        )
+        return {
+            "messages": [AIMessage(content=fixed)],
+            "final_response": fixed,
+            "tools_called": state.get("tools_called", []),
+        }
+
     return {
         "messages": [AIMessage(content=text)],
         "final_response": text,
@@ -141,9 +153,109 @@ async def agent_node(state: AgentState) -> Dict[str, Any]:
 _TEXT_TOOL_RE = re.compile(
     r"(?m)^\s*([a-zA-Z_][a-zA-Z0-9_]*)\((.*)\)\s*$"
 )
+_TOOL_CODE_RE = re.compile(
+    r"<tool_code>\s*(\{.*?\})\s*</tool_code>",
+    re.DOTALL | re.IGNORECASE,
+)
+_TOOL_CODE_NAME_RE = re.compile(
+    r"<tool_code>\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*</tool_code>",
+    re.IGNORECASE,
+)
+_MARKDOWN_TOOL_JSON_RE = re.compile(
+    r"```(?:json)?\s*(\{\s*\"name\"\s*:.*?\})\s*```",
+    re.DOTALL | re.IGNORECASE,
+)
+
+
+def _looks_like_invented_tools_only(text: str, available_tools: List[Dict[str, Any]]) -> bool:
+    if not text or not text.strip():
+        return False
+    if (
+        _TOOL_CODE_RE.search(text)
+        or _TOOL_CODE_NAME_RE.search(text)
+        or _MARKDOWN_TOOL_JSON_RE.search(text)
+    ):
+        return False
+    known = {
+        t.get("function", {}).get("name")
+        for t in available_tools
+        if t.get("type") == "function" and t.get("function", {}).get("name")
+    }
+    lines = [ln.strip() for ln in text.strip().splitlines() if ln.strip()]
+    if not lines:
+        return False
+    shaped = 0
+    for line in lines:
+        m = _TEXT_TOOL_RE.match(line)
+        if not m:
+            return False
+        shaped += 1
+        if m.group(1) in known:
+            return False
+    return shaped > 0
+
+
+def _calls_from_tool_json_blobs(text: str, known: set[str]) -> List[Dict[str, Any]]:
+    calls: List[Dict[str, Any]] = []
+    blobs: List[str] = []
+    for match in _TOOL_CODE_RE.finditer(text):
+        blobs.append(match.group(1))
+    for match in _MARKDOWN_TOOL_JSON_RE.finditer(text):
+        blobs.append(match.group(1))
+    stripped = text.strip()
+    if stripped.startswith("{") and '"name"' in stripped:
+        blobs.append(stripped)
+    for raw in blobs:
+        try:
+            obj = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        name = obj.get("name") if isinstance(obj, dict) else None
+        if not name or name not in known:
+            logger.warning("Rejected unknown tool json name: %s", name)
+            continue
+        args_obj = obj.get("arguments") if isinstance(obj.get("arguments"), dict) else {}
+        calls.append(
+            {
+                "id": f"call_{uuid.uuid4().hex[:12]}",
+                "type": "function",
+                "function": {"name": name, "arguments": json.dumps(args_obj)},
+            }
+        )
+    # <tool_code>get_top_movers</tool_code> (name only, no JSON)
+    for match in _TOOL_CODE_NAME_RE.finditer(text):
+        name = match.group(1)
+        if name not in known:
+            logger.warning("Rejected unknown tool_code name: %s", name)
+            continue
+        if any(c["function"]["name"] == name for c in calls):
+            continue
+        calls.append(
+            {
+                "id": f"call_{uuid.uuid4().hex[:12]}",
+                "type": "function",
+                "function": {"name": name, "arguments": "{}"},
+            }
+        )
+    return calls
+
+
+def _parse_tool_code_blocks(text: str, available_tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Parse <tool_code> / markdown JSON tool intents."""
+    if not text or not available_tools:
+        return []
+    known = {
+        t.get("function", {}).get("name")
+        for t in available_tools
+        if t.get("type") == "function" and t.get("function", {}).get("name")
+    }
+    return _calls_from_tool_json_blobs(text, known)
 
 
 def _parse_text_tool_calls(text: str, available_tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    xml_calls = _parse_tool_code_blocks(text, available_tools)
+    if xml_calls:
+        return xml_calls
     if not text or not available_tools:
         return []
     known = {
@@ -152,12 +264,16 @@ def _parse_text_tool_calls(text: str, available_tools: List[Dict[str, Any]]) -> 
         if t.get("type") == "function" and t.get("function", {}).get("name")
     }
     calls: List[Dict[str, Any]] = []
+    unknown: List[str] = []
+    tool_shaped_lines = 0
     for line in text.strip().splitlines():
         m = _TEXT_TOOL_RE.match(line.strip())
         if not m:
             continue
+        tool_shaped_lines += 1
         name, raw_args = m.group(1), m.group(2).strip()
         if name not in known:
+            unknown.append(name)
             continue
         args_obj: Dict[str, Any] = {}
         if raw_args:
@@ -181,6 +297,9 @@ def _parse_text_tool_calls(text: str, available_tools: List[Dict[str, Any]]) -> 
                 "function": {"name": name, "arguments": json.dumps(args_obj)},
             }
         )
+    if tool_shaped_lines and not calls and unknown:
+        logger.warning("Rejected unknown text tool calls: %s", unknown)
+        return []
     return calls
 
 
@@ -209,6 +328,10 @@ async def tools_node(state: AgentState) -> Dict[str, Any]:
                     am_mcp_client.call_tool(name, args),
                     timeout=TOOL_TIMEOUT_SECONDS,
                 )
+                # Defense in depth if MCP returns envelope string/dict.
+                from shared.clients.am_mcp_client import _unwrap_mcp_envelope
+
+                result_obj = _unwrap_mcp_envelope(result_obj)
                 result = result_obj if isinstance(result_obj, str) else json.dumps(result_obj)
                 out = (
                     {"tool": name, "ok": True, "chars": len(str(result))}

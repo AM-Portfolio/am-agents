@@ -17,11 +17,21 @@ TOOL_ARTIFACT_TYPES: dict[str, str] = {
     "get_recent_activity": "trades.recent.v1",
     "get_trade_history": "trades.history.v1",
     "get_unrealised_pnl": "trades.unrealised_pnl.v1",
+    "filter_trades": "trades.filter.v1",
+    "get_trades_by_date_range": "trades.date_range.v1",
+    "get_trade_metrics": "trades.metrics.v1",
+    "get_trade_portfolio_summaries": "trades.portfolio_summary.v1",
     "get_stock_quote": "market.quote.v1",
     "search_instruments": "market.search.v1",
+    "get_historical_data": "market.history.v1",
     "get_market_movers": "market.movers.v1",
     "get_sector_performance": "market.sector.v1",
     "get_indices_data": "market.indices.v1",
+    "get_basket_opportunities": "basket.opportunities.v1",
+    "get_basket_exposure": "basket.exposure.v1",
+    "get_basket_allocations": "basket.allocations.v1",
+    "get_basket_preview": "basket.preview.v1",
+    "calculate_basket_quantities": "basket.quantities.v1",
 }
 
 
@@ -39,7 +49,7 @@ def resolve_artifact(
 
     for name in reversed(tools_called):
         payload = data_map.get(name)
-        if isinstance(payload, dict) and payload.get("error"):
+        if isinstance(payload, dict) and (payload.get("error") or payload.get("ok") is False):
             return "error.v1", payload
         artifact = TOOL_ARTIFACT_TYPES.get(name)
         if artifact:
@@ -47,6 +57,6 @@ def resolve_artifact(
 
     last = tools_called[-1]
     payload = data_map.get(last)
-    if isinstance(payload, dict) and payload.get("error"):
+    if isinstance(payload, dict) and (payload.get("error") or payload.get("ok") is False):
         return "error.v1", payload
     return "data.generic.v1", payload

@@ -42,17 +42,17 @@ kubectl -n am-apps-dev port-forward svc/am-ai-gateway 8120:8120
 
 ## R0a — HTTP smoke (via gateway)
 
-Target: `https://am-dev.asrax.in/ai/api/v1/ai/chat` with `EVAL_USER_ID`.
+Target: `https://am-dev.asrax.in/ai/api/v1/ai/chat` with fixture JWT (`AUTH_REQUIRED=true`).
 
-| # | message | Expect `widgetId` | Also |
-|---|---------|-------------------|------|
-| 1 | portfolio summary | `PORTFOLIO_SUMMARY` | `widgetParams.userId` non-empty; toolsUsed non-empty |
-| 2 | show my holdings | `HOLDINGS_TABLE` | same |
-| 3 | top movers | `TOP_MOVERS` | same |
-| 4 | sector allocation | `ALLOCATION_PIE_CHART` | same |
-| 5 | hello | `TEXT_RESPONSE` | HTTP 200, no 5xx |
+| # | message | Expect `artifactType` | Also |
+|---|---------|----------------------|------|
+| 1 | portfolio summary | `portfolio.summary.v1` | `toolsUsed` includes `get_portfolio_summary`; `data` present |
+| 2 | show my holdings | `holdings.list.v1` | `get_holdings` |
+| 3 | top movers | `portfolio.movers.v1` | `get_top_movers` |
+| 4 | sector allocation | `portfolio.sector_allocation.v1` | `get_sector_allocation` |
+| 5 | hello | `text.v1` | HTTP 200; no `ask_finance_agent` |
 
-Auth (if required): no Bearer → 401; with Bearer → 200.
+Auth: no Bearer → 401; with Bearer → 200.
 
 ```bash
 curl -sS -X POST "$GW/api/v1/ai/chat" \
@@ -61,6 +61,8 @@ curl -sS -X POST "$GW/api/v1/ai/chat" \
   -H "Authorization: Bearer $TOKEN" \
   -d "{\"message\":\"portfolio summary\",\"userId\":\"$EVAL_USER_ID\",\"sessionId\":\"r0a-smoke\"}"
 ```
+
+Golden file: `eval/fin_chat_golden.json` (v2, artifactType). Runner: `scripts/eval_fin_chat.py`.
 
 **R0a result:** _pending_  
 Date / operator / notes: _

@@ -8,83 +8,78 @@ from eval_fin_chat import evaluate_item  # noqa: E402
 
 
 class TestEvaluateItem:
-    def test_pass_portfolio_summary(self):
+    def test_pass_portfolio_summary_artifact(self):
         failures = evaluate_item(
             status_code=200,
             body={
-                "widgetId": "PORTFOLIO_SUMMARY",
-                "widgetParams": {"userId": "u1", "data": {"total": 1}},
+                "artifactType": "portfolio.summary.v1",
+                "data": {"total": 1},
                 "toolsUsed": ["get_portfolio_summary"],
                 "traceId": "abc",
                 "sessionId": "s1",
             },
             expected={
-                "widgetId": "PORTFOLIO_SUMMARY",
-                "requiredWidgetParams": ["userId"],
+                "artifactType": "portfolio.summary.v1",
                 "requireToolsUsed": True,
                 "requiredToolsAny": ["get_portfolio_summary"],
+                "forbidTools": ["ask_finance_agent"],
             },
         )
         assert failures == []
 
-    def test_fail_wrong_widget(self):
+    def test_fail_wrong_artifact(self):
         failures = evaluate_item(
             status_code=200,
             body={
-                "widgetId": "TEXT_RESPONSE",
-                "widgetParams": {"userId": "u1"},
+                "artifactType": "text.v1",
                 "toolsUsed": ["get_portfolio_summary"],
                 "traceId": "abc",
                 "sessionId": "s1",
             },
             expected={
-                "widgetId": "PORTFOLIO_SUMMARY",
-                "requiredWidgetParams": ["userId"],
+                "artifactType": "portfolio.summary.v1",
                 "requireToolsUsed": True,
             },
         )
-        assert any("widgetId" in f for f in failures)
+        assert any("artifactType" in f for f in failures)
 
-    def test_fail_empty_userid(self):
+    def test_fail_forbidden_tool(self):
         failures = evaluate_item(
             status_code=200,
             body={
-                "widgetId": "HOLDINGS_TABLE",
-                "widgetParams": {"userId": ""},
-                "toolsUsed": ["get_holdings_list"],
+                "artifactType": "portfolio.summary.v1",
+                "toolsUsed": ["get_portfolio_summary", "ask_finance_agent"],
                 "traceId": "abc",
                 "sessionId": "s1",
             },
             expected={
-                "widgetId": "HOLDINGS_TABLE",
-                "requiredWidgetParams": ["userId"],
+                "artifactType": "portfolio.summary.v1",
                 "requireToolsUsed": True,
+                "forbidTools": ["ask_finance_agent"],
             },
         )
-        assert any("userId" in f for f in failures)
+        assert any("forbidden" in f for f in failures)
 
     def test_hello_no_tools(self):
         failures = evaluate_item(
             status_code=200,
             body={
-                "widgetId": "TEXT_RESPONSE",
-                "widgetParams": {},
+                "artifactType": "text.v1",
                 "toolsUsed": [],
                 "traceId": "abc",
                 "sessionId": "s1",
             },
             expected={
-                "widgetId": "TEXT_RESPONSE",
-                "requiredWidgetParams": [],
+                "artifactType": "text.v1",
                 "requireToolsUsed": False,
             },
         )
         assert failures == []
 
-    def test_http_error(self):
+    def test_fail_http(self):
         failures = evaluate_item(
             status_code=500,
             body={},
-            expected={"widgetId": "PORTFOLIO_SUMMARY"},
+            expected={"artifactType": "text.v1"},
         )
         assert any("http_status" in f for f in failures)

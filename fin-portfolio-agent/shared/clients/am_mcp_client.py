@@ -14,6 +14,14 @@ logger = logging.getLogger(__name__)
 _DEFAULT_BLOCKLIST = frozenset({"ask_finance_agent"})
 
 
+def _looks_like_subject(user_id: str) -> bool:
+    """Keycloak sub is typically a UUID; emails must not override JWT resolution."""
+    s = user_id.strip()
+    if "@" in s:
+        return False
+    return len(s) >= 8
+
+
 def _sse_url(base: str) -> str:
     root = base.rstrip("/")
     if root.endswith("/sse"):
@@ -30,9 +38,29 @@ def _parse_tool_result(result: Any) -> Any:
     if text is None:
         return result
     try:
-        return json.loads(text)
+        parsed = json.loads(text)
     except json.JSONDecodeError:
         return text
+    return _unwrap_mcp_envelope(parsed)
+
+
+def _unwrap_mcp_envelope(parsed: Any) -> Any:
+    """Normalize am-mcp-server v1 envelope {ok,data|error} for the agent."""
+    if isinstance(parsed, str):
+        try:
+            parsed = json.loads(parsed)
+        except json.JSONDecodeError:
+            return parsed
+    if not isinstance(parsed, dict) or "ok" not in parsed:
+        return parsed
+    if parsed.get("ok") is True:
+        return parsed.get("data", parsed)
+    return {
+        "error": parsed.get("error") or "TOOL_FAILED",
+        "detail": parsed.get("message") or parsed.get("hint") or "MCP tool failed",
+        "retry": parsed.get("retry"),
+        "tool": parsed.get("tool"),
+    }
 
 
 def _mcp_tool_to_openai(tool: Any) -> dict[str, Any]:
@@ -132,8 +160,15 @@ class AmMcpClient:
             }
 
         args = dict(arguments or {})
+        # Prefer JWT identity on the server; only pass userId when it looks like a subject
+        # (UUID), never inject email preferred_username into analysis/trade tools.
         user_id = user_id_var.get()
-        if user_id and user_id != "anonymous" and "userId" not in args:
+        if (
+            user_id
+            and user_id != "anonymous"
+            and "userId" not in args
+            and _looks_like_subject(user_id)
+        ):
             args.setdefault("userId", user_id)
 
         url = _sse_url(self.base_url)

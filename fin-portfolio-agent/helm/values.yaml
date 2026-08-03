@@ -28,7 +28,7 @@ service:
 entrypoint: "exec uvicorn am_fin_portfolio_analysis.api:app --host 0.0.0.0 --port 8080"
 
 env:
-  AUTH_REQUIRED: "false"
+  AUTH_REQUIRED: "true"
   AM_MCP_SERVER_URL: "http://am-mcp-server.am-apps-dev.svc.cluster.local:8080"
   DATA_FALLBACK_REST: "false"
   MCP_TOOL_BLOCKLIST: "ask_finance_agent"

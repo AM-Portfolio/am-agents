@@ -29,7 +29,7 @@ vault:
       path: "apps/data/dev/services/am-identity"
 
 env:
-  AUTH_REQUIRED: "false"
+  AUTH_REQUIRED: "true"
   AM_MCP_SERVER_URL: "http://am-mcp-server.am-apps-dev.svc.cluster.local:8080"
   DATA_FALLBACK_REST: "false"
   MCP_TOOL_BLOCKLIST: "ask_finance_agent"
