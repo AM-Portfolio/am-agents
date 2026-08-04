@@ -1066,6 +1066,49 @@ async def evaluate_learning(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+@activity.defn(name="support_agent.incident.generate_failure_summary")
+async def generate_failure_summary(payload: dict[str, Any]) -> str:
+    tracking_id = str(payload.get("tracking_id") or "")
+    if not incident_parity_enabled():
+        return "Failure summary gated."
+        
+    alert = dict(payload.get("alert") or {})
+    history = list(payload.get("history") or [])
+    reason = str(payload.get("reason") or "Unknown reason.")
+    
+    import json
+    alert_str = json.dumps(alert, indent=2)
+    history_str = json.dumps(history, indent=2)
+    
+    runtime = build_runtime()
+    
+    system_prompt = await runtime.llm.get_prompt_compiled(
+        "support_agent.failure_summary",
+        alert=alert_str,
+        history=history_str,
+        reason=reason
+    )
+    if not system_prompt:
+        from am_support_agent.orchestrator.prompts import FAILURE_SUMMARY_SYSTEM_PROMPT
+        system_prompt = FAILURE_SUMMARY_SYSTEM_PROMPT.format(
+            alert=alert_str,
+            history=history_str,
+            reason=reason
+        )
+        
+    llm_res = await runtime.llm.complete(
+        system=system_prompt,
+        user="Please generate the failure summary now.",
+        prompt_key="support_agent.failure_summary",
+        prompt_version="1.0",
+        prompt_source="runtime",
+    )
+    
+    if not llm_res.gated and llm_res.text:
+        return llm_res.text.strip()
+    return f"Failed to generate summary. Raw reason: {reason}"
+
+
 @activity.defn(name="support_agent.incident.parse_alert_feedback")
 async def parse_alert_feedback(payload: dict[str, Any]) -> dict[str, Any]:
     tracking_id = str(payload.get("tracking_id") or "")

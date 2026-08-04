@@ -470,10 +470,24 @@ class AlertIncidentWorkflow:
             attributes={"reason": reason[:200]},
         )
         await self._finalize("human_required")
+        
+        # Generate a human-readable failure summary from the LLM
+        from am_support_agent.orchestrator.activities.incident import generate_failure_summary
+        summary = await self._act(
+            generate_failure_summary,
+            {
+                "tracking_id": self._tracking_id,
+                "alert": self._alert,
+                "history": self._history,
+                "reason": f"human_required:{approval_purpose} - {reason}"
+            },
+            timeout_s=30
+        )
+        
         # Raise so Temporal marks the workflow run as FAILED, not Completed.
         # Callers (run()) do not catch this — it propagates to the Temporal worker.
         raise ApplicationError(
-            f"human_required:{approval_purpose} — {reason}",
+            summary,
             approval_purpose,
             reason,
             type="human_required",
