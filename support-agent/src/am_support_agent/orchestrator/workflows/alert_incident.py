@@ -423,26 +423,34 @@ class AlertIncidentWorkflow:
             "reason": reason,
             "approval_purpose": approval_purpose,
         }
+        
+        # Generate a human-readable failure summary from the LLM
+        from am_support_agent.orchestrator.activities.incident import generate_failure_summary
+        summary = await self._act(
+            generate_failure_summary,
+            {
+                "tracking_id": self._tracking_id,
+                "alert": self._alert,
+                "history": self._history,
+                "reason": f"human_required:{approval_purpose} - {reason}"
+            },
+            timeout_s=30
+        )
+        
         if self._state.get("work_item"):
             await self._act(
                 comment_ticket,
                 {
                     "tracking_id": self._tracking_id,
                     "work_item": self._state.get("work_item"),
-                    "body": (
-                        f"Human action required for {self._tracking_id}. "
-                        f"Purpose: {approval_purpose}. Reason: {reason}"
-                    ),
+                    "body": summary,
                     "idempotency_key": f"{self._tracking_id}:wi-comment-hitl",
                 },
             )
         else:
             await self._ticket_and_notify(
                 [],
-                comment_body=(
-                    f"Human action required for {self._tracking_id}. "
-                    f"Purpose: {approval_purpose}. Reason: {reason}"
-                ),
+                comment_body=summary,
             )
         await self._persist(outcome="human_required", actions=[])
         recorded = await self._act(
@@ -471,19 +479,7 @@ class AlertIncidentWorkflow:
         )
         await self._finalize("human_required")
         
-        # Generate a human-readable failure summary from the LLM
-        from am_support_agent.orchestrator.activities.incident import generate_failure_summary
-        summary = await self._act(
-            generate_failure_summary,
-            {
-                "tracking_id": self._tracking_id,
-                "alert": self._alert,
-                "history": self._history,
-                "reason": f"human_required:{approval_purpose} - {reason}"
-            },
-            timeout_s=30
-        )
-        
+
         # Raise so Temporal marks the workflow run as FAILED, not Completed.
         # Callers (run()) do not catch this — it propagates to the Temporal worker.
         raise ApplicationError(
