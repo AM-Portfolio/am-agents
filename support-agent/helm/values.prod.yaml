@@ -1,4 +1,4 @@
-# Prod values — durable Postgres memory (deploy still gated off in CI).
+# Prod values â€” durable Postgres memory (deploy still gated off in CI).
 # Vault folder: apps/data/prod/services/am-agents (prod stores the ops secret here).
 environment: prod
 
@@ -14,3 +14,7 @@ env:
   SUPPORT_AGENT_RUNTIME_MODE: "prod"
   LANGFUSE_ENABLED: "true"
   LANGFUSE_HOST: "http://langfuse-web.am-ai.svc.cluster.local:3000"
+
+global:
+  image:
+    tag: "30578874146"

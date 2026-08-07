@@ -40,3 +40,7 @@ env:
   APP_ENV: prod
   QDRANT_URL: "https://qdrant.munish.org"
   TOOL_AGENT_ALLOW_WRITES: "false"
+
+global:
+  image:
+    tag: "30578874163"

@@ -1,0 +1,4 @@
+environment: prod
+global:
+  image:
+    tag: "30833343385"

@@ -1,0 +1,21 @@
+apiVersion: am.argocd/v1
+kind: ServiceDeploy
+service: am-db-agent
+enabled: true
+owners: agents
+source:
+  repo: am-agents
+  path: db-agent/argocd.yaml
+chart:
+  repoURL: https://github.com/AM-Portfolio/am-pipelines.git
+  path: helm/universal-chart
+  targetRevision: main
+helm:
+  releaseName: am-db-agent
+  valuesPath: db-agent/helm
+valuesRepoURL: https://github.com/AM-Portfolio/am-agents.git
+valuesTargetRevision: main
+envs:
+  prod:
+    enabled: true
+    namespace: am-apps-prod
