@@ -1,4 +1,4 @@
-# Production environment — am-db-agent
+# Production environment â€” am-db-agent
 environment: production
 replicaCount: 2
 
@@ -50,3 +50,7 @@ env:
   KAFKA_UI_CLUSTER: am-prod
   KEYCLOAK_TOKEN_URL: "http://auth.munish.org/auth/realms/am-prod-realm/protocol/openid-connect/token"
   DB_AGENT_ALLOW_WRITES: "false"
+
+global:
+  image:
+    tag: "30686842339"
