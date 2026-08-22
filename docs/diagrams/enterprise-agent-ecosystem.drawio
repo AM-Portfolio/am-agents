@@ -870,4 +870,216 @@
             </root>
         </mxGraphModel>
     </diagram>
+    <diagram id="ai-gateway-architecture" name="AI Gateway Architecture">
+        <mxGraphModel dx="967" dy="790" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1100" background="#ffffff" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="ag_title" value="AI Gateway + MCP Architecture (Target State)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=18;fontColor=#0F172A;" parent="1" vertex="1">
+                    <mxGeometry x="350" y="20" width="900" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_sub" value="am-platform/am-mcp-gateway is the L2 AI Gateway from the whiteboard" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=12;fontColor=#64748B;" parent="1" vertex="1">
+                    <mxGeometry x="300" y="55" width="1000" height="24" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_lane_exec" value="Request flow (6 steps)" style="swimlane;horizontal=1;startSize=28;fillColor=#FFF7ED;strokeColor=#F59E0B;fontColor=#92400E;fontStyle=1;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="90" width="1520" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_ex1" value="1 User message" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F59E0B;fontColor=#FFFFFF;strokeColor=#D97706;" parent="ag_lane_exec" vertex="1">
+                    <mxGeometry x="20" y="40" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_ex2" value="2 Auth + RBAC" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F59E0B;fontColor=#FFFFFF;strokeColor=#D97706;" parent="ag_lane_exec" vertex="1">
+                    <mxGeometry x="180" y="40" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_ex3" value="3 Route agent" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F59E0B;fontColor=#FFFFFF;strokeColor=#D97706;" parent="ag_lane_exec" vertex="1">
+                    <mxGeometry x="340" y="40" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_ex4" value="4 Agent run" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F59E0B;fontColor=#FFFFFF;strokeColor=#D97706;" parent="ag_lane_exec" vertex="1">
+                    <mxGeometry x="500" y="40" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_ex5" value="5 MCP execute" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F59E0B;fontColor=#FFFFFF;strokeColor=#D97706;" parent="ag_lane_exec" vertex="1">
+                    <mxGeometry x="660" y="40" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_ex6" value="6 SSE response" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F59E0B;fontColor=#FFFFFF;strokeColor=#D97706;" parent="ag_lane_exec" vertex="1">
+                    <mxGeometry x="820" y="40" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_exe1" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="ag_lane_exec" source="ag_ex1" target="ag_ex2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_exe2" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="ag_lane_exec" source="ag_ex2" target="ag_ex3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_exe3" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="ag_lane_exec" source="ag_ex3" target="ag_ex4" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_exe4" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="ag_lane_exec" source="ag_ex4" target="ag_ex5" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_exe5" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="ag_lane_exec" source="ag_ex5" target="ag_ex6" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_lane_auth" value="Ingress and Auth" style="swimlane;horizontal=1;startSize=28;fillColor=#F1F5F9;strokeColor=#64748B;fontColor=#0F172A;fontStyle=1;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="200" width="1520" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_traefik" value="Traefik&amp;#10;host routing" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#64748B;fontColor=#FFFFFF;strokeColor=#475569;" parent="ag_lane_auth" vertex="1">
+                    <mxGeometry x="400" y="38" width="140" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_keycloak" value="Keycloak JWT&amp;#10;RBAC roles tenant" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#64748B;fontColor=#FFFFFF;strokeColor=#475569;" parent="ag_lane_auth" vertex="1">
+                    <mxGeometry x="580" y="38" width="170" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_guard" value="AI Guardrails&amp;#10;SPT policy" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#64748B;fontColor=#FFFFFF;strokeColor=#475569;" parent="ag_lane_auth" vertex="1">
+                    <mxGeometry x="780" y="38" width="150" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_e_tr_kc" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="ag_lane_auth" source="ag_traefik" target="ag_keycloak" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_e_kc_gd" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="ag_lane_auth" source="ag_keycloak" target="ag_guard" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_lane_l1" value="L1 UI - Web UI, IDE, Mobile" style="swimlane;horizontal=1;startSize=28;fillColor=#EEF2FF;strokeColor=#4F46E5;fontColor=#312E81;fontStyle=1;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="300" width="1520" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_ui" value="Web UI&amp;#10;am-modern-ui Flutter&amp;#10;AI Chat Widgets" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4F46E5;fontColor=#FFFFFF;strokeColor=#312E81;" parent="ag_lane_l1" vertex="1">
+                    <mxGeometry x="120" y="40" width="190" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_ide" value="IDE&amp;#10;Cursor VS Code&amp;#10;MCP client" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4F46E5;fontColor=#FFFFFF;strokeColor=#312E81;" parent="ag_lane_l1" vertex="1">
+                    <mxGeometry x="350" y="40" width="170" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_mobile" value="Mobile&amp;#10;future same API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#818CF8;fontColor=#FFFFFF;strokeColor=#6366F1;" parent="ag_lane_l1" vertex="1">
+                    <mxGeometry x="560" y="40" width="150" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_pb" value="Portal B&amp;#10;ai-bots React" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#059669;fontColor=#FFFFFF;strokeColor=#047857;" parent="ag_lane_l1" vertex="1">
+                    <mxGeometry x="750" y="40" width="170" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_pc" value="Portal C&amp;#10;kagent SRE" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EA580C;fontColor=#FFFFFF;strokeColor=#C2410C;" parent="ag_lane_l1" vertex="1">
+                    <mxGeometry x="960" y="40" width="150" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_lane_l2" value="L2 AI Gateway - am-mcp-gateway :8120 (am-platform repo)" style="swimlane;horizontal=1;startSize=28;fillColor=#F0F9FF;strokeColor=#0284C7;fontColor=#0C4A6E;fontStyle=1;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="430" width="1520" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_gw" value="am-mcp-gateway&amp;#10;POST /api/v1/chat/stream&amp;#10;POST /api/v1/agent/llm/completions" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0284C7;fontColor=#FFFFFF;strokeColor=#0369A1;" parent="ag_lane_l2" vertex="1">
+                    <mxGeometry x="460" y="38" width="240" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_preg" value="Prompt Registry&amp;#10;agents.yaml" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0EA5E9;fontColor=#FFFFFF;strokeColor=#0284C7;" parent="ag_lane_l2" vertex="1">
+                    <mxGeometry x="120" y="95" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_router" value="Intent router" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0EA5E9;fontColor=#FFFFFF;strokeColor=#0284C7;" parent="ag_lane_l2" vertex="1">
+                    <mxGeometry x="280" y="95" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_rbac" value="RBAC check" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0EA5E9;fontColor=#FFFFFF;strokeColor=#0284C7;" parent="ag_lane_l2" vertex="1">
+                    <mxGeometry x="430" y="95" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_sse" value="Unified SSE" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0EA5E9;fontColor=#FFFFFF;strokeColor=#0284C7;" parent="ag_lane_l2" vertex="1">
+                    <mxGeometry x="580" y="95" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_llm" value="LLM proxy" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0EA5E9;fontColor=#FFFFFF;strokeColor=#0284C7;" parent="ag_lane_l2" vertex="1">
+                    <mxGeometry x="730" y="95" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_mcp" value="MCP proxy" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0EA5E9;fontColor=#FFFFFF;strokeColor=#0284C7;" parent="ag_lane_l2" vertex="1">
+                    <mxGeometry x="880" y="95" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_e_gw_r" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="ag_lane_l2" source="ag_gw" target="ag_router" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_e_r_rb" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="ag_lane_l2" source="ag_router" target="ag_rbac" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_e_rb_s" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="ag_lane_l2" source="ag_rbac" target="ag_sse" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_e_s_l" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="ag_lane_l2" source="ag_sse" target="ag_llm" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_e_l_m" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="ag_lane_l2" source="ag_llm" target="ag_mcp" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_lane_l3" value="L3 Domain Agents - am-agents repo" style="swimlane;horizontal=1;startSize=28;fillColor=#F5F3FF;strokeColor=#7C3AED;fontColor=#4C1D95;fontStyle=1;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="580" width="1520" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_fin" value="fin-agent :8100" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DB2777;fontColor=#FFFFFF;strokeColor=#BE185D;" parent="ag_lane_l3" vertex="1">
+                    <mxGeometry x="80" y="40" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_test" value="ui-test-agent :8130" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#7C3AED;fontColor=#FFFFFF;strokeColor=#6D28D9;" parent="ag_lane_l3" vertex="1">
+                    <mxGeometry x="240" y="40" width="140" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_tool" value="tool-agent :8141" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#7C3AED;fontColor=#FFFFFF;strokeColor=#6D28D9;" parent="ag_lane_l3" vertex="1">
+                    <mxGeometry x="410" y="40" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_dev" value="ai-bots dev :5000" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#059669;fontColor=#FFFFFF;strokeColor=#047857;" parent="ag_lane_l3" vertex="1">
+                    <mxGeometry x="570" y="40" width="140" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_scribe" value="scribe planned" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EDE9FE;fontColor=#5B21B6;strokeColor=#7C3AED;" parent="ag_lane_l3" vertex="1">
+                    <mxGeometry x="740" y="40" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_support" value="support planned" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EDE9FE;fontColor=#5B21B6;strokeColor=#7C3AED;" parent="ag_lane_l3" vertex="1">
+                    <mxGeometry x="890" y="40" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_lane_l4" value="L4 MCP Core Services" style="swimlane;horizontal=1;startSize=28;fillColor=#F0FDFA;strokeColor=#0D9488;fontColor=#134E4A;fontStyle=1;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="690" width="1520" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_port" value="Portfolio SDK" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0D9488;fontColor=#FFFFFF;strokeColor=#0F766E;" parent="ag_lane_l4" vertex="1">
+                    <mxGeometry x="80" y="40" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_trade" value="Trade" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0D9488;fontColor=#FFFFFF;strokeColor=#0F766E;" parent="ag_lane_l4" vertex="1">
+                    <mxGeometry x="240" y="40" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_market" value="Market Analysis" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0D9488;fontColor=#FFFFFF;strokeColor=#0F766E;" parent="ag_lane_l4" vertex="1">
+                    <mxGeometry x="370" y="40" width="140" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_vault" value="Vault MCP" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0D9488;fontColor=#FFFFFF;strokeColor=#0F766E;" parent="ag_lane_l4" vertex="1">
+                    <mxGeometry x="540" y="40" width="110" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_k8s" value="K8s MCP" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0D9488;fontColor=#FFFFFF;strokeColor=#0F766E;" parent="ag_lane_l4" vertex="1">
+                    <mxGeometry x="680" y="40" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_db" value="DB MCP Toolbox" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0D9488;fontColor=#FFFFFF;strokeColor=#0F766E;" parent="ag_lane_l4" vertex="1">
+                    <mxGeometry x="810" y="40" width="140" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_lane_obs" value="Platform - LiteLLM Langfuse Vault" style="swimlane;horizontal=1;startSize=28;fillColor=#EEF2FF;strokeColor=#6366F1;fontColor=#312E81;fontStyle=1;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="800" width="520" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_lit" value="LiteLLM" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#6366F1;fontColor=#FFFFFF;strokeColor=#4F46E5;" parent="ag_lane_obs" vertex="1">
+                    <mxGeometry x="30" y="38" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_lf" value="Langfuse" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#6366F1;fontColor=#FFFFFF;strokeColor=#4F46E5;" parent="ag_lane_obs" vertex="1">
+                    <mxGeometry x="180" y="38" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_vlt" value="Vault secrets" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#6366F1;fontColor=#FFFFFF;strokeColor=#4F46E5;" parent="ag_lane_obs" vertex="1">
+                    <mxGeometry x="330" y="38" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_e_ui_gw" value="chat/stream" style="strokeColor=#4F46E5;strokeWidth=2;endArrow=classic;" parent="1" source="ag_ui" target="ag_gw" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_e_pb_gw" value="all agents" style="strokeColor=#059669;strokeWidth=2;endArrow=classic;" parent="1" source="ag_pb" target="ag_gw" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_e_kc_ui" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="ag_keycloak" target="ag_ui" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_e_gd_gw" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="ag_guard" target="ag_gw" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_e_sse_fin" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="ag_sse" target="ag_fin" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_e_sse_test" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="ag_sse" target="ag_test" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_e_fin_port" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="ag_fin" target="ag_port" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_e_tool_vault" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="ag_tool" target="ag_vault" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_e_llm_lit" value="LLM calls" style="strokeColor=#6366F1;strokeWidth=1;endArrow=classic;dashed=1;" parent="1" source="ag_llm" target="ag_lit" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_e_lit_lf" style="strokeColor=#334155;strokeWidth=2;endArrow=classic;" parent="1" source="ag_lit" target="ag_lf" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ag_legend" value="Legend: Blue=Gateway Purple=Agents Teal=MCP Indigo=UI Green=Portal B Orange=Portal C" style="text;html=1;strokeColor=#CBD5E1;fillColor=#FFFFFF;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;fontColor=#0F172A;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="580" y="800" width="520" height="60" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
 </mxfile>
