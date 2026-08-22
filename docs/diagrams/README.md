@@ -9,6 +9,7 @@ Enterprise / portal surfaces only.
 |------|---------|
 | [enterprise-agent-ecosystem.drawio](enterprise-agent-ecosystem.drawio) | Multi-page enterprise master |
 | [01-three-surfaces-overview.drawio](01-three-surfaces-overview.drawio) | Three surfaces overview |
+| [02-ai-gateway-mcp-design.drawio](02-ai-gateway-mcp-design.drawio) | AI Gateway + MCP design — whiteboard mapping, chat flow, LLM/MCP proxy |
 
 ## How to open
 
