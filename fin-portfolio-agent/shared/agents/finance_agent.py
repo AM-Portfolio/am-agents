@@ -1,11 +1,12 @@
-"""
+﻿"""
 FinanceAgent — LangGraph ReAct agent.
-Replaces the monolithic ChatAgent in chatbot/bot.py with:
-  - Tool registry integration (all tools loaded dynamically)
-  - Parallel tool execution via asyncio.gather
-  - Circuit breaker (timeout per tool)
-  - ContextVar aware (userId/traceId available in all tools)
-  - Intent formatting via deterministic IntentFormatter
+Phase 1 upgrades:
+  - Inbound GuardRail before LLM call
+  - ToolResultCompressor on every tool observation
+  - MCP tool catalog loaded on startup (Basket + all 27 tools)
+  - Versioned system prompt from shared.prompts.system
+  - Canonical SSE streaming events
+  - userId-tenanted session history (AI_HISTORY_MAX_TURNS)
 """
 import json
 import logging
@@ -21,103 +22,79 @@ from langgraph.graph import StateGraph, END
 
 from shared.llm.client import llm_client
 from shared.tools.registry import TOOL_REGISTRY, execute_tool
-from shared.formatters.intent_formatter import resolve_intent
+from shared.formatters.intent_formatter import resolve_intent, parse_agent_result
 from shared.schemas.intent import AiIntentResponse, WidgetId
 from shared.context.request_context import user_id_var, trace_id_var, session_id_var
 from shared.core.config import settings
+from shared.guardrail.inbound import check_inbound
+from shared.tools.compressor import compress
+from shared.streaming.events import (
+    token_event, tool_start_event, tool_end_event,
+    widget_event, done_event, error_event, cancelled_event,
+)
+from shared.prompts.system import get_system_prompt, PROMPT_ID, PROMPT_VERSION
 
 logger = logging.getLogger(__name__)
 
-# ─── Dynamic Module Loading ──────────────────────────────────────────────────
+# ─── Load MCP tools (Basket + all 27 tools) ───────────────────────────────────
+try:
+    from shared.mcp.tools import register_mcp_tools
+    _mcp_count = register_mcp_tools()
+    logger.info("Phase1: registered %d MCP tools", _mcp_count)
+except Exception as _e:
+    logger.warning("Phase1: MCP tool registration skipped: %s", _e)
 
+# ─── Load optional analysis modules ───────────────────────────────────────────
 if settings.ENABLE_PORTFOLIO_ANALYSIS:
     try:
         import am_fin_portfolio_analysis.tools.portfolio_tools  # noqa
         import am_fin_portfolio_analysis.tools.analysis_tools   # noqa
         import am_fin_portfolio_analysis.tools.trade_tools      # noqa
-        logger.info("✅ Portfolio Analysis module loaded.")
+        logger.info("Portfolio Analysis module loaded.")
     except ImportError as e:
-        logger.error(f"❌ Failed to load Portfolio Analysis module: {e}")
+        logger.error("Failed to load Portfolio Analysis module: %s", e)
 
 if settings.ENABLE_API_TESTING:
     try:
-        import am_fin_api_testing.tools.meta_tools       # noqa
-        logger.info("✅ API Testing module loaded.")
+        import am_fin_api_testing.tools.meta_tools  # noqa
+        logger.info("API Testing module loaded.")
     except ImportError as e:
-        logger.error(f"❌ Failed to load API Testing module: {e}")
+        logger.error("Failed to load API Testing module: %s", e)
 
 TOOL_TIMEOUT_SECONDS = 5.0
+SYSTEM_PROMPT = get_system_prompt(
+    enable_portfolio=settings.ENABLE_PORTFOLIO_ANALYSIS,
+    enable_api_testing=settings.ENABLE_API_TESTING,
+)
 
 
-# ─── LangGraph State ─────────────────────────────────────────────────────────
+# ─── LangGraph State ──────────────────────────────────────────────────────────
 
 class AgentState(TypedDict):
     messages: Annotated[List[BaseMessage], operator.add]
-    tools_called: List[str]          # accumulates tool names executed this turn
+    tools_called: List[str]
     final_response: Optional[str]
-
-
-# ─── System Prompt ────────────────────────────────────────────────────────────
-
-def _build_system_prompt() -> str:
-    capabilities = []
-    if settings.ENABLE_PORTFOLIO_ANALYSIS:
-        capabilities.append("1. **Portfolio Analysis**: Use tools like get_portfolio_summary, analyze_etf_overlap, and count_etfs to answer financial questions.")
-    if settings.ENABLE_API_TESTING:
-        capabilities.append("2. **API Testing (Meta-Tools)**: You can explore and test any API registry (Swagger/OpenAPI).\n   - Use `register_api_spec` if you need to load a new Swagger JSON file from the filesystem.\n   - Use `search_apis` to find relevant endpoints.\n   - Use `get_api_workflow` to understand dependencies.\n   - Use `generate_payload` to see how to structure a request.\n   - Use `execute_api` to perform the test.\n   - Use `validate_response` to ensure the API meets its schema.")
-
-    prompt = f"""You are an advanced Financial Intelligence Agent for the AM Portfolio platform.
-You have access to the user's real portfolio data and an API testing "Meta-Tool" system.
-
-DOMAIN CAPABILITIES:
-{chr(10).join(capabilities)}
-3. **Market News**: Use web_search for real-time market sentiment and stock news.
-
-PRINCIPLES:
-1. Always check the portfolio before giving advice — use get_portfolio_summary first if you don't have context.
-2. **API Testing Lifecycle**: When asked to test an endpoint, follow these steps in your response:
-   - **Step 1: Discovery**: Confirm that you have found the correct endpoint(s) and their requirements.
-   - **Step 2: Execution**: State that you are calling the tool with specific parameters.
-   - **Step 3: Status**: Immediately after tool execution, clearly state if it was a **PASS** (2xx status) or **FAIL** (non-2xx).
-   - **Step 4: Analysis**: Provide a brief explanation of the result, especially if it failed.
-3. Answer concisely with data-backed insights. Use beautiful markdown tables for complex data.
-
-CRITICAL RULES:
-- DO NOT say "I will now call...". Just call the tool immediately.
-- If multiple tools are needed, call them all in the same turn.
-- Never return generic answers. Always ground in the actual tool data.
-- Ensure all important values are **bolded** for readability.
-"""
-    return prompt
-
-SYSTEM_PROMPT = _build_system_prompt()
 
 
 # ─── Agent Node ───────────────────────────────────────────────────────────────
 
 async def agent_node(state: AgentState) -> Dict[str, Any]:
     """LLM decides what tools to call next based on current state."""
+    logger.debug("agent_node: promptId=%s version=%s", PROMPT_ID, PROMPT_VERSION)
     messages = state["messages"]
 
-    # ── Dynamic tool retrieval via vector search ──────────────────────────────
-    # Extract the last few messages to use as retrieval context.
-    # This ensures that "execute now" or "go ahead" still find the relevant tools.
     search_context = []
-    msgs_for_context = messages[-3:]  # Last 3 messages for context
-    for m in msgs_for_context:
+    for m in messages[-3:]:
         if isinstance(m, (HumanMessage, AIMessage)):
             search_context.append(str(m.content))
-    
     retrieval_query = "\n".join(search_context)
 
     try:
         from shared.tools.tool_index import retrieve_tools
         relevant_tools = retrieve_tools(retrieval_query, top_k=10) if retrieval_query else TOOL_REGISTRY
     except Exception:
-        # Fallback to full registry if retrieval fails
         relevant_tools = TOOL_REGISTRY
 
-    # Build message payload
     payload = [{"role": "system", "content": SYSTEM_PROMPT}]
     for m in messages:
         if isinstance(m, HumanMessage):
@@ -132,20 +109,29 @@ async def agent_node(state: AgentState) -> Dict[str, Any]:
                 "role": "tool",
                 "content": m.content,
                 "tool_call_id": m.tool_call_id,
-                "name": m.name
+                "name": m.name,
             })
 
     response = await llm_client.chat(
         messages=payload,
         temperature=0.0,
-        tools=relevant_tools,       # ← only top-k relevant tools, not all of them
-        tool_choice="auto"
+        tools=relevant_tools,
+        tool_choice="auto",
     )
+
+    # Handle FallbackLLMError structured error dict
+    if isinstance(response, dict) and response.get("error"):
+        err_msg = response.get("message", "LLM unavailable")
+        return {
+            "messages": [AIMessage(content=err_msg)],
+            "final_response": err_msg,
+            "tools_called": state.get("tools_called", []),
+        }
 
     if isinstance(response, dict) and response.get("tool_calls"):
         ai_msg = AIMessage(
             content=response.get("content") or "",
-            additional_kwargs={"tool_calls": response["tool_calls"]}
+            additional_kwargs={"tool_calls": response["tool_calls"]},
         )
         return {"messages": [ai_msg], "tools_called": state.get("tools_called", [])}
 
@@ -153,10 +139,10 @@ async def agent_node(state: AgentState) -> Dict[str, Any]:
     return {"messages": [AIMessage(content=text)], "final_response": text, "tools_called": state.get("tools_called", [])}
 
 
-# ─── Tools Node (Parallel + Circuit Breaker) ──────────────────────────────────
+# ─── Tools Node ───────────────────────────────────────────────────────────────
 
 async def tools_node(state: AgentState) -> Dict[str, Any]:
-    """Execute all requested tool calls in parallel with per-call timeout."""
+    """Execute all requested tool calls in parallel with per-call timeout + compression."""
     last_msg = state["messages"][-1]
     tool_calls = last_msg.additional_kwargs.get("tool_calls", [])
     tools_executed = list(state.get("tools_called", []))
@@ -166,26 +152,19 @@ async def tools_node(state: AgentState) -> Dict[str, Any]:
         name = func["name"]
         raw_args = func.get("arguments", "{}")
         args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
-
         tools_executed.append(name)
-        logger.debug(
-            "tool_call",
-            extra={"tool": name, "args": args, "trace_id": trace_id_var.get()}
-        )
+        logger.debug("tool_call: %s args=%s trace_id=%s", name, args, trace_id_var.get())
         try:
-            # We no longer need run_in_executor because execute_tool is now async
-            # and handles both sync/async tools internally.
-            result = await asyncio.wait_for(
-                execute_tool(name, args),
-                timeout=TOOL_TIMEOUT_SECONDS
-            )
+            result = await asyncio.wait_for(execute_tool(name, args), timeout=TOOL_TIMEOUT_SECONDS)
         except asyncio.TimeoutError:
             result = json.dumps({"error": f"Tool '{name}' timed out after {TOOL_TIMEOUT_SECONDS}s", "fallback": True})
         except Exception as e:
-            logger.error(f"Error executing tool {name}: {e}")
+            logger.error("Error executing tool %s: %s", name, e)
             result = json.dumps({"error": str(e), "fallback": True})
 
-        return ToolMessage(tool_call_id=call["id"], content=str(result), name=name)
+        # Phase 1: compress before sending to LLM
+        compressed = compress(name, str(result))
+        return ToolMessage(tool_call_id=call["id"], content=compressed, name=name)
 
     results = await asyncio.gather(*[run_one(c) for c in tool_calls])
     return {"messages": list(results), "tools_called": tools_executed}
@@ -211,7 +190,6 @@ def _build_graph():
     wf.add_edge("tools", "agent")
     return wf.compile()
 
-
 _graph = _build_graph()
 
 
@@ -227,17 +205,24 @@ class FinanceAgent:
         session_id: str,
         trace_id: str,
     ) -> AiIntentResponse:
-        """
-        Process a user message end-to-end and return a structured AiIntentResponse.
-        """
-        # Set context vars — all tools will read from these
         user_id_var.set(user_id)
         session_id_var.set(session_id)
         trace_id_var.set(trace_id)
 
-        # Build LangChain message list from session history
+        # Phase 1: Inbound GuardRail
+        guard = check_inbound(message, user_id, trace_id)
+        if guard.blocked:
+            return AiIntentResponse(
+                message=f"Request blocked: {guard.reason}",
+                widgetId=WidgetId.ERROR,
+                widgetParams={"reason": guard.reason, "traceId": trace_id},
+                sessionId=session_id,
+                toolsUsed=[],
+                traceId=trace_id,
+            )
+
         lc_messages: List[BaseMessage] = []
-        for msg in history[-10:]:
+        for msg in history[-settings.AI_HISTORY_MAX_TURNS:]:
             if msg["role"] == "user":
                 lc_messages.append(HumanMessage(content=msg["content"]))
             elif msg["role"] == "assistant":
@@ -247,17 +232,17 @@ class FinanceAgent:
         initial_state: AgentState = {
             "messages": lc_messages,
             "tools_called": [],
-            "final_response": None
+            "final_response": None,
         }
 
         try:
             final_state = await _graph.ainvoke(initial_state, config={"recursion_limit": 50})
         except Exception as e:
-            logger.error(f"Agent error: {e}", extra={"trace_id": trace_id, "userId": user_id})
+            logger.error("Agent error: %s trace_id=%s userId=%s", e, trace_id, user_id)
             return AiIntentResponse(
-                message=f"I ran into an issue processing your request. Please try again.",
+                message="I ran into an issue processing your request. Please try again.",
                 widgetId=WidgetId.ERROR,
-                widgetParams={"error": str(e), "userId": user_id},
+                widgetParams={"error": str(e), "traceId": trace_id},
                 sessionId=session_id,
                 toolsUsed=[],
                 traceId=trace_id,
@@ -266,20 +251,15 @@ class FinanceAgent:
         tools_called = final_state.get("tools_called", [])
         answer = final_state.get("final_response") or "I couldn't find a specific answer for that."
 
-        # Collect ToolMessage return values so widgetParams can carry real data.
         tool_data: dict = {}
         for msg in final_state.get("messages", []):
-            msg_type = getattr(msg, "type", None)
-            msg_name = getattr(msg, "name", None)
-            content = getattr(msg, "content", None)
-            if msg_type == "tool" and msg_name and content:
+            if getattr(msg, "type", None) == "tool" and getattr(msg, "name", None):
                 try:
-                    tool_data[msg_name] = json.loads(content)
+                    tool_data[msg.name] = json.loads(msg.content)
                 except (ValueError, TypeError):
-                    tool_data[msg_name] = {"raw": str(content)}
+                    tool_data[msg.name] = {"raw": str(msg.content)}
 
         widget_id, widget_params = resolve_intent(tools_called, user_id, tool_data)
-
         return AiIntentResponse(
             message=answer,
             widgetId=widget_id,
@@ -298,14 +278,21 @@ class FinanceAgent:
         trace_id: str,
     ):
         """
-        Streaming version of run(). Yields JSON events for status and tokens.
+        Streaming version. Yields SSE-formatted events:
+        tool_start | tool_end | token | widget | done | error | cancelled
         """
         user_id_var.set(user_id)
         session_id_var.set(session_id)
         trace_id_var.set(trace_id)
 
+        # Phase 1: Inbound GuardRail
+        guard = check_inbound(message, user_id, trace_id)
+        if guard.blocked:
+            yield error_event(f"Request blocked: {guard.reason}", trace_id, session_id).to_sse()
+            return
+
         lc_messages: List[BaseMessage] = []
-        for msg in history[-10:]:
+        for msg in history[-settings.AI_HISTORY_MAX_TURNS:]:
             if msg["role"] == "user":
                 lc_messages.append(HumanMessage(content=msg["content"]))
             elif msg["role"] == "assistant":
@@ -315,47 +302,54 @@ class FinanceAgent:
         initial_state: AgentState = {
             "messages": lc_messages,
             "tools_called": [],
-            "final_response": None
+            "final_response": None,
         }
 
+        tools_called: List[str] = []
         tokens_yielded = False
-        # Use astream_events for granular tracking
-        async for event in _graph.astream_events(initial_state, version="v1", config={"recursion_limit": 50}):
-            kind = event["event"]
-            
-            if kind == "on_chat_model_stream":
-                # Raw token streaming
-                content = event["data"]["chunk"].content
-                if content:
-                    tokens_yielded = True
-                    yield json.dumps({"type": "token", "content": content})
-            
-            elif kind == "on_tool_start":
-                # Tool execution started
-                yield json.dumps({"type": "status", "content": f"⚙️ Executing {event['name']}..."})
-            
-            elif kind == "on_tool_end":
-                # Tool execution finished
-                yield json.dumps({"type": "status", "content": f"✅ {event['name']} completed."})
-            
-            elif kind == "on_chain_end":
-                # Final state after graph completion or node completion
-                final_state = event["data"].get("output")
-                if isinstance(final_state, dict):
-                    tools_called = final_state.get("tools_called", [])
-                    
-                    # If this is the main graph ending (has final_response)
-                    if "final_response" in final_state:
-                        yield json.dumps({
-                            "type": "final", 
-                            "tools_used": tools_called,
-                            "trace_id": trace_id,
-                            "answer": final_state.get("final_response")
-                        })
-                        
-                        # If we didn't stream any tokens, send the full answer now
-                        if not tokens_yielded and final_state.get("final_response"):
-                            yield json.dumps({"type": "token", "content": final_state["final_response"]})
-                            tokens_yielded = True # prevent double yield if multiple chains end
+
+        try:
+            async for event in _graph.astream_events(initial_state, version="v1", config={"recursion_limit": 50}):
+                kind = event["event"]
+
+                if kind == "on_chat_model_stream":
+                    content = event["data"]["chunk"].content
+                    if content:
+                        tokens_yielded = True
+                        yield token_event(content, trace_id).to_sse()
+
+                elif kind == "on_tool_start":
+                    name = event.get("name", "unknown")
+                    tools_called.append(name)
+                    yield tool_start_event(name, trace_id).to_sse()
+
+                elif kind == "on_tool_end":
+                    yield tool_end_event(event.get("name", "unknown"), trace_id).to_sse()
+
+                elif kind == "on_chain_end":
+                    fs = event["data"].get("output")
+                    if isinstance(fs, dict) and "final_response" in fs:
+                        final_answer = fs.get("final_response") or ""
+                        if not tokens_yielded and final_answer:
+                            yield token_event(final_answer, trace_id).to_sse()
+                            tokens_yielded = True
+
+                        tc = fs.get("tools_called", tools_called)
+                        parsed = parse_agent_result(tc, user_id)
+                        yield widget_event(
+                            parsed["widgetId"], parsed["widgetParams"],
+                            trace_id=trace_id, session_id=session_id,
+                        ).to_sse()
+                        yield done_event(tc, trace_id, session_id).to_sse()
+                        # Backward compat
+                        yield json.dumps({"type": "final", "tools_used": tc, "trace_id": trace_id, "answer": final_answer}) + "\n"
+
+        except asyncio.CancelledError:
+            yield cancelled_event(trace_id, session_id).to_sse()
+            raise
+        except Exception as e:
+            logger.error("run_stream error: %s trace_id=%s", e, trace_id)
+            yield error_event(str(e), trace_id, session_id).to_sse()
+
 
 finance_agent = FinanceAgent()

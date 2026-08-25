@@ -13,10 +13,16 @@ def _load_env():
 
 _load_env()
 
+# ---------------------------------------------------------------------------
+# Env-tier helpers
+# ---------------------------------------------------------------------------
+_AM_AGENT_ENV = os.getenv("AM_AGENT_ENV", "dev").lower()   # local | dev | preprod | prod
+
+
 class Config:
     ENABLE_PORTFOLIO_ANALYSIS = os.getenv("ENABLE_PORTFOLIO_ANALYSIS", "true").lower() == "true"
     ENABLE_API_TESTING = os.getenv("ENABLE_API_TESTING", "true").lower() == "true"
-    
+
     TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
     MONGODB_URI = os.getenv("MONGODB_URI")
     DB_NAME = os.getenv("DB_NAME", "portfolio")
@@ -42,4 +48,96 @@ class Config:
     LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY")
     LANGFUSE_TRACE_MAX_OUTPUT_CHARS = int(os.getenv("LANGFUSE_TRACE_MAX_OUTPUT_CHARS", "8000"))
 
+    # ---------------------------------------------------------------------------
+    # Phase 0b — 3-Tier Fallback Chain
+    # ---------------------------------------------------------------------------
+    # Each tier is (base_url, model_id, api_key_env_var)
+    # LiteLLM proxy (LITELLM_BASE_URL) acts as Plan A when configured;
+    # otherwise direct provider URLs are used as fallbacks.
+
+    # Plan A — primary: cheap, fast (Together AI / LiteLLM proxy)
+    LLM_PLAN_A_MODEL: str = os.getenv(
+        "LLM_PLAN_A_MODEL",
+        "deepseek-chat"
+        if _AM_AGENT_ENV in ("local", "dev")
+        else "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    )
+    LLM_PLAN_A_BASE_URL: str = os.getenv(
+        "LLM_PLAN_A_BASE_URL",
+        os.getenv("LITELLM_BASE_URL", "").strip()
+        or "https://api.together.ai/v1",
+    )
+    LLM_PLAN_A_API_KEY: str = os.getenv(
+        "LLM_PLAN_A_API_KEY",
+        os.getenv("LITELLM_MASTER_KEY") or os.getenv("TOGETHER_API_KEY") or "",
+    )
+
+    # Plan B — fallback 1: Gemini 2.5 Flash (high quota, rapid failover)
+    LLM_PLAN_B_MODEL: str = os.getenv("LLM_PLAN_B_MODEL", "gemini/gemini-2.5-flash")
+    LLM_PLAN_B_BASE_URL: str = os.getenv(
+        "LLM_PLAN_B_BASE_URL",
+        os.getenv("LITELLM_BASE_URL", "").strip()
+        or "https://generativelanguage.googleapis.com/v1beta/openai",
+    )
+    LLM_PLAN_B_API_KEY: str = os.getenv(
+        "LLM_PLAN_B_API_KEY",
+        os.getenv("LITELLM_MASTER_KEY") or os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY") or "",
+    )
+
+    # Plan C — fallback 2: GPT-4o-mini (rock-solid reliability)
+    LLM_PLAN_C_MODEL: str = os.getenv("LLM_PLAN_C_MODEL", "openai/gpt-4o-mini")
+    LLM_PLAN_C_BASE_URL: str = os.getenv(
+        "LLM_PLAN_C_BASE_URL",
+        os.getenv("LITELLM_BASE_URL", "").strip()
+        or "https://api.openai.com/v1",
+    )
+    LLM_PLAN_C_API_KEY: str = os.getenv(
+        "LLM_PLAN_C_API_KEY",
+        os.getenv("LITELLM_MASTER_KEY") or os.getenv("OPENAI_API_KEY") or "",
+    )
+
+    # ---------------------------------------------------------------------------
+    # Phase 0b — Retry / timeout policy
+    # ---------------------------------------------------------------------------
+    # Per-attempt hard cap (seconds) — cancel and fall to next tier on expiry
+    LLM_ATTEMPT_TIMEOUT_SECONDS: float = float(os.getenv("LLM_ATTEMPT_TIMEOUT_SECONDS", "8.0"))
+    # Max retries within the *same* tier before promoting to next tier
+    LLM_MAX_RETRIES_PER_TIER: int = int(os.getenv("LLM_MAX_RETRIES_PER_TIER", "2"))
+    # Initial backoff (seconds) for 429/5xx — doubles each retry
+    LLM_RETRY_BACKOFF_SECONDS: float = float(os.getenv("LLM_RETRY_BACKOFF_SECONDS", "1.0"))
+
+    # ---------------------------------------------------------------------------
+    # Phase 0b — Cost / budget alerts (0 = disabled)
+    # ---------------------------------------------------------------------------
+    LLM_DAILY_BUDGET_USD: float = float(os.getenv("LLM_DAILY_BUDGET_USD", "0"))
+    LLM_MONTHLY_BUDGET_USD: float = float(os.getenv("LLM_MONTHLY_BUDGET_USD", "0"))
+
+    # ---------------------------------------------------------------------------
+    # Env tier (useful for model routing decisions at runtime)
+    # ---------------------------------------------------------------------------
+    AM_AGENT_ENV: str = _AM_AGENT_ENV
+
+    # ---------------------------------------------------------------------------
+    # Phase 1 — MCP client wiring
+    # ---------------------------------------------------------------------------
+    MCP_BASE_URL: str = os.getenv(
+        "MCP_BASE_URL",
+        os.getenv("AM_MCP_SERVER_URL", "https://am-dev.asrax.in/mcp"),
+    ).rstrip("/")
+    AI_MCP_REQUIRED: bool = os.getenv("AI_MCP_REQUIRED", "false").lower() in {"1", "true", "yes"}
+    AI_WRITE_TOOLS_ENABLED: bool = os.getenv("AI_WRITE_TOOLS_ENABLED", "false").lower() in {"1", "true", "yes"}
+
+    # ---------------------------------------------------------------------------
+    # Phase 1 — Session / conversation history caps
+    # ---------------------------------------------------------------------------
+    AI_HISTORY_MAX_TURNS: int = int(os.getenv("AI_HISTORY_MAX_TURNS", "10"))
+    AI_SESSION_MAX_TURNS: int = int(os.getenv("AI_SESSION_MAX_TURNS", "20"))
+
+    # ---------------------------------------------------------------------------
+    # Phase 1 — Tool result compression
+    # ---------------------------------------------------------------------------
+    AI_TOOL_RESULT_MAX_CHARS: int = int(os.getenv("AI_TOOL_RESULT_MAX_CHARS", "4000"))
+    AI_TOOL_RESULT_MAX_ROWS: int = int(os.getenv("AI_TOOL_RESULT_MAX_ROWS", "20"))
+
 settings = Config()
+

@@ -5,7 +5,9 @@ import json
 import time
 import os
 import asyncio
-from typing import Any, AsyncIterator, Literal, Protocol, List, Dict, Optional
+import random
+from dataclasses import dataclass
+from typing import Any, AsyncIterator, Literal, Protocol, List, Dict, Optional, Tuple
 
 import httpx
 from pydantic import BaseModel, Field
@@ -13,6 +15,214 @@ from pydantic import BaseModel, Field
 from shared.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Phase 0b — Fallback chain primitives
+# ---------------------------------------------------------------------------
+
+class FallbackLLMError(RuntimeError):
+    """Raised when all 3 tiers of the fallback chain are exhausted."""
+
+    def __init__(self, trace_id: str, tier_errors: list[str]) -> None:
+        self.trace_id = trace_id
+        self.tier_errors = tier_errors
+        summary = " | ".join(f"[{i+1}] {e}" for i, e in enumerate(tier_errors))
+        super().__init__(f"All LLM tiers failed (traceId={trace_id}): {summary}")
+
+
+@dataclass
+class TierSpec:
+    """One entry in the 3-tier fallback chain."""
+    label: str          # "A", "B", "C"
+    base_url: str
+    model: str
+    api_key: str
+
+    @property
+    def available(self) -> bool:
+        return bool(self.api_key.strip())
+
+
+def _build_fallback_chain() -> list[TierSpec]:
+    """Construct Plan A → B → C from config, skipping tiers without keys."""
+    chain = [
+        TierSpec(
+            label="A",
+            base_url=settings.LLM_PLAN_A_BASE_URL.rstrip("/"),
+            model=settings.LLM_PLAN_A_MODEL,
+            api_key=settings.LLM_PLAN_A_API_KEY,
+        ),
+        TierSpec(
+            label="B",
+            base_url=settings.LLM_PLAN_B_BASE_URL.rstrip("/"),
+            model=settings.LLM_PLAN_B_MODEL,
+            api_key=settings.LLM_PLAN_B_API_KEY,
+        ),
+        TierSpec(
+            label="C",
+            base_url=settings.LLM_PLAN_C_BASE_URL.rstrip("/"),
+            model=settings.LLM_PLAN_C_MODEL,
+            api_key=settings.LLM_PLAN_C_API_KEY,
+        ),
+    ]
+    return [t for t in chain if t.available]
+
+
+# Status codes that trigger a retry within the same tier before falling back
+_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+# Status codes that mean "bad request / auth" — skip retries, promote immediately
+_PROMOTE_STATUS = {400, 401, 403, 404, 422}
+
+
+async def _attempt_completion(
+    *,
+    tier: TierSpec,
+    payload: dict[str, Any],
+    timeout: float,
+) -> dict[str, Any]:
+    """Single HTTP attempt against one tier. Returns parsed JSON or raises."""
+    url = f"{tier.base_url}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {tier.api_key}",
+        "Content-Type": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        resp = await client.post(url, headers=headers, json=payload)
+    if resp.status_code != 200:
+        raise httpx.HTTPStatusError(
+            f"HTTP {resp.status_code}: {resp.text[:300]}",
+            request=resp.request,
+            response=resp,
+        )
+    return resp.json()
+
+
+async def _call_with_fallback(
+    *,
+    messages: list[dict[str, str]],
+    tools: list[dict[str, Any]] | None = None,
+    tool_choice: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    request_id: str = "fin-request",
+    generation_name: str = "fin-agent",
+    backend: str | None = None,
+    stream: bool = False,
+    on_token: Any | None = None,
+) -> Tuple[dict[str, Any], TierSpec]:
+    """
+    Runs the 3-tier fallback chain:
+      Plan A → Plan B → Plan C
+
+    Within each tier:
+      - Attempts up to LLM_MAX_RETRIES_PER_TIER times on 429 / 5xx
+      - Uses exponential backoff (LLM_RETRY_BACKOFF_SECONDS × 2^attempt)
+      - Hard per-attempt timeout of LLM_ATTEMPT_TIMEOUT_SECONDS
+
+    Raises FallbackLLMError with a traceId when all tiers are exhausted.
+    """
+    import uuid
+    trace_id = request_id or str(uuid.uuid4())
+
+    chain = _build_fallback_chain()
+    if not chain:
+        raise FallbackLLMError(
+            trace_id=trace_id,
+            tier_errors=["No LLM tiers configured — set LLM_PLAN_A_API_KEY or LITELLM_MASTER_KEY"],
+        )
+
+    tier_errors: list[str] = []
+    attempt_timeout = settings.LLM_ATTEMPT_TIMEOUT_SECONDS
+    max_retries = settings.LLM_MAX_RETRIES_PER_TIER
+    base_backoff = settings.LLM_RETRY_BACKOFF_SECONDS
+
+    for tier in chain:
+        for attempt in range(max_retries):
+            payload: dict[str, Any] = {
+                "model": tier.model,
+                "messages": messages,
+                "temperature": temperature if temperature is not None else settings.LLM_TEMPERATURE,
+                "max_tokens": max_tokens if max_tokens is not None else settings.LLM_MAX_TOKENS,
+                "stream": False,
+                "metadata": {
+                    "request_id": trace_id,
+                    "generation_name": generation_name,
+                    "backend": backend,
+                    "source": "fin-agent",
+                    "tier": tier.label,
+                },
+            }
+            if tools:
+                payload["tools"] = tools
+            if tool_choice:
+                payload["tool_choice"] = tool_choice
+
+            try:
+                logger.debug(
+                    "LLM attempt tier=%s model=%s attempt=%d/%d",
+                    tier.label, tier.model, attempt + 1, max_retries,
+                )
+                data = await asyncio.wait_for(
+                    _attempt_completion(tier=tier, payload=payload, timeout=attempt_timeout),
+                    timeout=attempt_timeout + 1.0,  # outer safety net
+                )
+                logger.info(
+                    "LLM success tier=%s model=%s latency_ms=approx",
+                    tier.label, tier.model,
+                )
+                asyncio.create_task(
+                    _emit_langfuse(
+                        generation_name,
+                        messages,
+                        json.dumps(data.get("choices", [{}])[0].get("message", {})),
+                        tier.model,
+                    )
+                )
+                return data, tier
+
+            except asyncio.TimeoutError:
+                err = f"Plan {tier.label}: timeout after {attempt_timeout}s"
+                logger.warning(err)
+                tier_errors.append(err)
+                break  # promote immediately on timeout — no retry
+
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code
+                err = f"Plan {tier.label}: HTTP {status} {exc.response.text[:150]}"
+                logger.warning(err)
+
+                if status in _PROMOTE_STATUS:
+                    tier_errors.append(err)
+                    break  # no point retrying 401/403 etc.
+
+                if status in _RETRYABLE_STATUS and attempt < max_retries - 1:
+                    backoff = base_backoff * (2 ** attempt) + random.uniform(0, 0.5)
+                    logger.info("429/5xx — backing off %.1fs before retry", backoff)
+                    await asyncio.sleep(backoff)
+                    continue
+
+                tier_errors.append(err)
+                break
+
+            except Exception as exc:  # noqa: BLE001
+                err = f"Plan {tier.label}: {type(exc).__name__}: {exc}"
+                logger.warning(err)
+                tier_errors.append(err)
+                break
+
+    asyncio.create_task(
+        _emit_langfuse(
+            generation_name,
+            messages,
+            "",
+            "none",
+            f"All tiers failed: {'; '.join(tier_errors)}",
+        )
+    )
+    raise FallbackLLMError(trace_id=trace_id, tier_errors=tier_errors)
+
+
 
 
 class LlmCallResult(BaseModel):
@@ -175,36 +385,32 @@ class DirectLiteLLMClient:
         tool_choice: Optional[str] = None,
         request_id: str = "fin-request",
     ) -> Any:
-        url = f"{self.base_url}/chat/completions"
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": settings.LLM_MAX_TOKENS,
-            "stream": False,
-            "metadata": self._metadata(request_id=request_id, generation_name="fin-agent", backend="finance"),
-        }
-        if tools:
-            payload["tools"] = tools
-            if tool_choice:
-                payload["tool_choice"] = tool_choice
-
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            resp = await client.post(url, headers=self._headers(), json=payload)
-            if resp.status_code != 200:
-                err_text = resp.text[:500]
-                asyncio.create_task(_emit_langfuse("fin.chat", messages, "", self.model, err_text))
-                raise RuntimeError(f"LiteLLM failed [{resp.status_code}]: {err_text}")
-            data = resp.json()
+        try:
+            data, tier = await _call_with_fallback(
+                messages=messages,
+                tools=tools,
+                tool_choice=tool_choice,
+                temperature=temperature,
+                request_id=request_id,
+                generation_name="fin.chat",
+                backend="finance",
+            )
+        except FallbackLLMError as exc:
+            # Return structured ERROR so callers never get a blank crash
+            return {
+                "error": True,
+                "traceId": exc.trace_id,
+                "message": "LLM unavailable — all providers failed",
+                "details": exc.tier_errors,
+            }
 
         message = data["choices"][0]["message"]
         content = message.get("content") or message.get("reasoning_content") or ""
-        output_str = json.dumps(message.get("tool_calls")) if message.get("tool_calls") else content
-        asyncio.create_task(_emit_langfuse("fin.chat", messages, output_str, self.model))
-
         if message.get("tool_calls"):
             return message
         return content
+
+
 
     async def chat_with_usage(
         self,
@@ -221,30 +427,22 @@ class DirectLiteLLMClient:
             {"role": "user", "content": user},
         ]
         started = time.perf_counter()
-        url = f"{self.base_url}/chat/completions"
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": temperature if temperature is not None else settings.LLM_TEMPERATURE,
-            "max_tokens": settings.LLM_MAX_TOKENS,
-            "stream": False,
-            "metadata": self._metadata(request_id=request_id, generation_name=generation_name, backend=backend),
-        }
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            resp = await client.post(url, headers=self._headers(), json=payload)
-            if resp.status_code != 200:
-                err_text = resp.text[:500]
-                asyncio.create_task(_emit_langfuse(generation_name, messages, "", self.model, err_text))
-                raise RuntimeError(f"LiteLLM failed [{resp.status_code}]: {err_text}")
-            data = resp.json()
-
-        content = data["choices"][0]["message"].get("content") or data["choices"][0]["message"].get("reasoning_content") or ""
-        asyncio.create_task(_emit_langfuse(generation_name, messages, content, self.model))
-
+        data, tier = await _call_with_fallback(
+            messages=messages,
+            temperature=temperature,
+            request_id=request_id,
+            generation_name=generation_name,
+            backend=backend,
+        )
+        content = (
+            data["choices"][0]["message"].get("content")
+            or data["choices"][0]["message"].get("reasoning_content")
+            or ""
+        )
         usage_raw = data.get("usage") or {}
         return LlmCallResult(
             content=content,
-            model=str(data.get("model") or self.model),
+            model=str(data.get("model") or tier.model),
             usage={
                 "prompt_tokens": int(usage_raw.get("prompt_tokens") or 0),
                 "completion_tokens": int(usage_raw.get("completion_tokens") or 0),
@@ -252,6 +450,7 @@ class DirectLiteLLMClient:
             },
             latency_ms=int((time.perf_counter() - started) * 1000),
         )
+
 
     async def chat_stream_with_usage(
         self,
