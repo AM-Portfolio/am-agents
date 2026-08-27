@@ -1,22 +1,11 @@
 vault:
   secretPaths:
-    postgres:
-      mappings:
-        POSTGRES_URL: "url"
     mongodb:
       mappings:
         MONGODB_URI: "url"
     redis:
       template: |
         export REDIS_URL="redis://:{{ .Data.data.password }}@{{ .Data.data.host }}:{{ .Data.data.port }}/0"
-    kafka:
-      mappings:
-        KAFKA_BOOTSTRAP_SERVERS: "bootstrap_servers"
-        KAFKA_USERNAME: "username"
-        KAFKA_PASSWORD: "password"
-    identity-oidc:
-      mappings:
-        AM_MCP_CLIENT_SECRET: "AM_MCP_CLIENT_SECRET"
     observability:
       mappings:
         LANGFUSE_PUBLIC_KEY: "LANGFUSE_PUBLIC_KEY"
@@ -24,21 +13,6 @@ vault:
     llm-api-keys:
       mappings:
         LITELLM_MASTER_KEY: "LITELLM_MASTER_KEY"
-
-    am-agents-ops:
-      mappings:
-        OPENPROJECT_URL: "OPENPROJECT_URL"
-        OPENPROJECT_API_TOKEN: "OPENPROJECT_API_TOKEN"
-        OPENPROJECT_PROJECT_ID: "OPENPROJECT_PROJECT_ID"
-        OPENPROJECT_TYPE_ID: "OPENPROJECT_TYPE_ID"
-        OPENPROJECT_DEFAULT_ASSIGNEE_LOGIN: "OPENPROJECT_DEFAULT_ASSIGNEE_LOGIN"
-        ZOHO_CLIQ_WEBHOOK_URL: "ZOHO_CLIQ_WEBHOOK_URL"
-        ZOHO_CLIQ_LAB_WEBHOOK_URL: "ZOHO_CLIQ_LAB_WEBHOOK_URL"
-        ZOHO_CLIQ_PROD_WEBHOOK_URL: "ZOHO_CLIQ_PROD_WEBHOOK_URL"
-        GRAFANA_EXTERNAL_URL: "GRAFANA_EXTERNAL_URL"
-        GRAFANA_SERVICE_ACCOUNT_TOKEN: "GRAFANA_SERVICE_ACCOUNT_TOKEN"
-        GRAFANA_TEMPO_DATASOURCE_UID: "GRAFANA_TEMPO_DATASOURCE_UID"
-
     otel:
       mappings:
         TRACING_SAMPLING_PROBABILITY: "TRACING_SAMPLING_PROBABILITY"
