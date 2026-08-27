@@ -1,11 +1,12 @@
 """
 Portfolio Domain Tools — using REST client (Phase H.5)
 All data now comes from am-analysis REST API (port 8060).
-Mock data / engine.py is no longer used.
+
+NOTE: All functions accept **kwargs to absorb extra args (e.g. userId)
+that the LLM passes based on the MCP tool schema.
 """
 import json
 import logging
-from shared.context.request_context import user_id_var
 from shared.tools.registry import register_tool
 from ..clients.analysis_client import analysis_client
 
@@ -15,9 +16,6 @@ logger = logging.getLogger(__name__)
 def _format(data: dict, label: str) -> str:
     if "error" in data:
         return f"Error retrieving {label}: {data['error']}. Make sure am-analysis is running on port 8060."
-    # Return pure JSON so finance_agent can parse the content back into a dict
-    # for widgetParams. The LLM receives this as a tool result and reads the JSON
-    # fields directly, so the plain-text label prefix is not needed.
     return json.dumps(data)
 
 
@@ -25,7 +23,7 @@ def _format(data: dict, label: str) -> str:
     description="Get overall portfolio performance: total invested, current value, P&L, and all holdings.",
     parameters={"type": "object", "properties": {}, "required": []}
 )
-def get_portfolio_summary() -> str:
+def get_portfolio_summary(**kwargs) -> str:
     data = analysis_client.get_dashboard_summary()
     return _format(data, "Portfolio Summary")
 
@@ -34,7 +32,7 @@ def get_portfolio_summary() -> str:
     description="Get the complete list of all stock and ETF holdings in the user's portfolio.",
     parameters={"type": "object", "properties": {}, "required": []}
 )
-def get_holdings_list() -> str:
+def get_holdings_list(**kwargs) -> str:
     data = analysis_client.get_holdings()
     return _format(data, "Holdings")
 
@@ -49,11 +47,10 @@ def get_holdings_list() -> str:
         "required": ["stock_name"]
     }
 )
-def get_holding_details(stock_name: str) -> str:
+def get_holding_details(stock_name: str = "", **kwargs) -> str:
     data = analysis_client.get_holdings()
     if "error" in data:
         return _format(data, "Holdings")
-    # Filter by stock name
     holdings = data if isinstance(data, list) else data.get("holdings", [])
     match = next(
         (h for h in holdings if stock_name.lower() in str(h.get("symbol", "")).lower()),
@@ -68,7 +65,6 @@ def get_holding_details(stock_name: str) -> str:
     description="Get the user's portfolio comparison against the NIFTY 50 benchmark.",
     parameters={"type": "object", "properties": {}, "required": []}
 )
-def get_benchmark_comparison() -> str:
-    # Summary contains overall return which can be compared
+def get_benchmark_comparison(**kwargs) -> str:
     data = analysis_client.get_dashboard_summary()
     return _format(data, "Portfolio vs Benchmark")

@@ -177,6 +177,7 @@ async def _call_with_fallback(
                         messages,
                         json.dumps(data.get("choices", [{}])[0].get("message", {})),
                         tier.model,
+                        usage=data.get("usage"),
                     )
                 )
                 return data, tier
@@ -240,6 +241,7 @@ async def _emit_langfuse(
     output: str,
     model: str,
     error: str | None = None,
+    usage: dict | None = None,
 ) -> None:
     if not settings.LANGFUSE_ENABLED:
         return
@@ -255,7 +257,19 @@ async def _emit_langfuse(
     from datetime import datetime, timezone
     
     auth = base64.b64encode(f"{pk}:{sk}".encode()).decode()
-    trace_id = str(uuid.uuid4())
+    try:
+        from shared.context.request_context import trace_id_var, session_id_var, user_id_var
+        req_trace = trace_id_var.get()
+        req_sess = session_id_var.get()
+        req_user = user_id_var.get()
+    except Exception:
+        req_trace = ""
+        req_sess = ""
+        req_user = "fin-agent"
+    
+    trace_id = req_trace if req_trace else str(uuid.uuid4())
+    session_id = req_sess if req_sess else trace_id
+    user_id = req_user if req_user else "fin-agent"
     gen_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     max_chars = settings.LANGFUSE_TRACE_MAX_OUTPUT_CHARS
@@ -285,8 +299,8 @@ async def _emit_langfuse(
             "body": {
                 "id": trace_id,
                 "name": f"llm.{prompt_key}",
-                "userId": "fin-agent",
-                "sessionId": trace_id,
+                "userId": user_id,
+                "sessionId": session_id,
                 "tags": ["fin-agent", "llm", prompt_key],
                 "metadata": meta,
                 "input": {"system": system[:max_chars], "user": user_str[:max_chars]},
@@ -302,32 +316,77 @@ async def _emit_langfuse(
                 "traceId": trace_id,
                 "name": prompt_key,
                 "model": model,
-                "input": [
-                    {"role": "system", "content": system[:max_chars]},
-                    {"role": "user", "content": user_str[:max_chars]},
-                ],
+                "input": [{"role": m.get("role"), "content": m.get("content", "")[:max_chars]} for m in messages],
                 "output": (error or output)[:max_chars],
                 "metadata": meta,
                 "level": "ERROR" if error else "DEFAULT",
                 "statusMessage": error,
+                **({"usage": {
+                    "promptTokens": usage.get("prompt_tokens"),
+                    "completionTokens": usage.get("completion_tokens"),
+                    "totalTokens": usage.get("total_tokens")
+                }} if usage else {})
             },
         },
     ]
     
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.post(
+        async with httpx.AsyncClient() as c:
+            resp = await c.post(
                 f"{host}/api/public/ingestion",
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Basic {auth}",
-                },
+                headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"},
                 json={"batch": batch}
             )
             if resp.status_code not in {200, 207}:
                 logger.warning(f"Langfuse ingestion returned status {resp.status_code}")
     except Exception as e:
         logger.warning(f"Langfuse ingestion failed: {e}")
+
+async def emit_langfuse_span(name: str, input_args: dict, result: Any, start_time: float) -> None:
+    if not settings.LANGFUSE_ENABLED:
+        return
+    pk = settings.LANGFUSE_PUBLIC_KEY
+    sk = settings.LANGFUSE_SECRET_KEY
+    host = settings.LANGFUSE_HOST.rstrip("/")
+    if not pk or not sk or not host:
+        return
+    import base64, uuid, json
+    from datetime import datetime, timezone
+    
+    auth = base64.b64encode(f"{pk}:{sk}".encode()).decode()
+    try:
+        from shared.context.request_context import trace_id_var
+        req_trace = trace_id_var.get()
+    except Exception:
+        req_trace = ""
+    
+    trace_id = req_trace if req_trace else str(uuid.uuid4())
+    span_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc)
+    
+    input_str = json.dumps(input_args, default=str)
+    output_str = json.dumps(result, default=str) if not isinstance(result, str) else result
+    max_chars = settings.LANGFUSE_TRACE_MAX_OUTPUT_CHARS
+    
+    batch = [{
+        "id": str(uuid.uuid4()),
+        "type": "span-create",
+        "timestamp": now.isoformat(),
+        "body": {
+            "id": span_id,
+            "traceId": trace_id,
+            "name": name,
+            "startTime": datetime.fromtimestamp(start_time, timezone.utc).isoformat(),
+            "endTime": now.isoformat(),
+            "input": input_str[:max_chars],
+            "output": output_str[:max_chars],
+        }
+    }]
+    try:
+        async with httpx.AsyncClient() as c:
+            await c.post(f"{host}/api/public/ingestion", headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"}, json={"batch": batch})
+    except Exception as e:
+        logger.warning(f"Langfuse span ingestion failed: {e}")
 
 
 class DirectLiteLLMClient:
@@ -613,7 +672,8 @@ class GatewayLLMClient:
 
         content = data.get("content") or ""
         output_str = json.dumps(data.get("tool_calls")) if data.get("tool_calls") else content
-        asyncio.create_task(_emit_langfuse("fin.chat", messages, output_str, settings.LLM_PLANNER_MODEL))
+        usage = data.get("usage")
+        asyncio.create_task(_emit_langfuse("fin.chat", messages, output_str, settings.LLM_PLANNER_MODEL, usage=usage))
 
         if data.get("tool_calls"):
             return data
@@ -654,9 +714,9 @@ class GatewayLLMClient:
             data = resp.json()
 
         content = data["content"]
-        asyncio.create_task(_emit_langfuse(generation_name, messages, content, settings.LLM_PLANNER_MODEL))
-
         usage = data.get("usage") or {}
+        asyncio.create_task(_emit_langfuse(generation_name, messages, content, settings.LLM_PLANNER_MODEL, usage=usage))
+
         return LlmCallResult(
             content=content,
             model=settings.LLM_PLANNER_MODEL,

@@ -10,7 +10,7 @@ import time
 import uuid
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from shared.context.request_context import trace_id_var
+from shared.context.request_context import trace_id_var, auth_token_var
 
 logger = logging.getLogger("am.fin.agent")
 
@@ -22,6 +22,10 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
         # Set trace_id in ContextVar so all downstream code can access it
         trace_id_var.set(trace_id)
+
+        # Propagate auth token
+        auth_header = request.headers.get("Authorization", "")
+        auth_token_var.set(auth_header)
 
         start = time.time()
         logger.info(

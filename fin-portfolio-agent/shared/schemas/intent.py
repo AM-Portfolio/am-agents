@@ -17,6 +17,7 @@ class WidgetId:
     NONE               = "NONE"
     RISK_METRICS       = "RISK_METRICS"
     PERFORMANCE_CHART  = "PERFORMANCE_CHART"
+    ORDER_PREVIEW      = "ORDER_PREVIEW"
 
 
 

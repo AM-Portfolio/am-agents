@@ -122,8 +122,8 @@ class Config:
     # ---------------------------------------------------------------------------
     MCP_BASE_URL: str = os.getenv(
         "MCP_BASE_URL",
-        os.getenv("AM_MCP_SERVER_URL", "https://am-dev.asrax.in/mcp"),
-    ).rstrip("/")
+        os.getenv("AM_MCP_SERVER_URL", "https://am.asrax.in/mcp"),
+    ).replace("/sse", "").rstrip("/")
     AI_MCP_REQUIRED: bool = os.getenv("AI_MCP_REQUIRED", "false").lower() in {"1", "true", "yes"}
     AI_WRITE_TOOLS_ENABLED: bool = os.getenv("AI_WRITE_TOOLS_ENABLED", "false").lower() in {"1", "true", "yes"}
 
@@ -138,6 +138,6 @@ class Config:
     # ---------------------------------------------------------------------------
     AI_TOOL_RESULT_MAX_CHARS: int = int(os.getenv("AI_TOOL_RESULT_MAX_CHARS", "4000"))
     AI_TOOL_RESULT_MAX_ROWS: int = int(os.getenv("AI_TOOL_RESULT_MAX_ROWS", "20"))
+    AI_OBSERVATION_FORMAT: str = os.getenv("AI_OBSERVATION_FORMAT", "toon").lower()
 
 settings = Config()
-

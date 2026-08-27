@@ -1,18 +1,27 @@
 """
 Analysis Domain Tools — using REST client (Phase H.5)
 Data from am-analysis REST API (port 8060).
-ETF overlap still uses core/engine.py (MongoDB) as that's where ETF DB lives.
+ETF overlap still uses core/engine.py (MongoDB).
+
+NOTE: All functions accept **kwargs to absorb extra args (e.g. userId)
+that the LLM passes based on the MCP tool schema.
 """
 import json
 import logging
-from shared.context.request_context import user_id_var
 from shared.tools.registry import register_tool
 from ..clients.analysis_client import analysis_client
 from ..core.engine import engine
-from duckduckgo_search import DDGS
-from duckduckgo_search.exceptions import DuckDuckGoSearchException
 
 logger = logging.getLogger(__name__)
+
+# duckduckgo_search is optional — graceful degradation if not installed
+try:
+    from duckduckgo_search import DDGS
+    from duckduckgo_search.exceptions import DuckDuckGoSearchException
+    _DDGS_AVAILABLE = True
+except ImportError:
+    _DDGS_AVAILABLE = False
+    logger.warning("duckduckgo_search not installed. web_search tool disabled. Run: pip install duckduckgo-search")
 
 
 def _format(data, label: str) -> str:
@@ -31,7 +40,7 @@ def _format(data, label: str) -> str:
         "required": []
     }
 )
-def get_top_movers(time_frame: str = "DAY") -> str:
+def get_top_movers(time_frame: str = "DAY", **kwargs) -> str:
     data = analysis_client.get_top_movers(time_frame=time_frame)
     return _format(data, "Top Movers")
 
@@ -40,7 +49,7 @@ def get_top_movers(time_frame: str = "DAY") -> str:
     description="Get the sector/asset allocation breakdown of the user's portfolio.",
     parameters={"type": "object", "properties": {}, "required": []}
 )
-def get_sector_allocation() -> str:
+def get_sector_allocation(**kwargs) -> str:
     data = analysis_client.get_sector_allocation()
     return _format(data, "Sector Allocation")
 
@@ -55,7 +64,7 @@ def get_sector_allocation() -> str:
         "required": ["etf_symbol"]
     }
 )
-def analyze_etf_overlap(etf_symbol: str) -> str:
+def analyze_etf_overlap(etf_symbol: str = "", **kwargs) -> str:
     if not etf_symbol:
         return "Error: No ETF symbol provided."
     try:
@@ -69,7 +78,7 @@ def analyze_etf_overlap(etf_symbol: str) -> str:
     description="Count the number of ETFs in the user's portfolio.",
     parameters={"type": "object", "properties": {}, "required": []}
 )
-def count_etfs() -> str:
+def count_etfs(**kwargs) -> str:
     data = analysis_client.get_holdings()
     if isinstance(data, dict) and "error" in data:
         return _format(data, "ETF count")
@@ -91,7 +100,7 @@ def count_etfs() -> str:
         "required": ["fund_name"]
     }
 )
-def get_fund_details(fund_name: str) -> str:
+def get_fund_details(fund_name: str = "", **kwargs) -> str:
     try:
         etf = engine.get_etf_details(fund_name)
         if etf:
@@ -114,7 +123,9 @@ def get_fund_details(fund_name: str) -> str:
         "required": ["query"]
     }
 )
-def web_search(query: str) -> str:
+def web_search(query: str = "", **kwargs) -> str:
+    if not _DDGS_AVAILABLE:
+        return "Web search is unavailable. Please install duckduckgo-search: pip install duckduckgo-search"
     try:
         results = []
         with DDGS() as ddgs:
