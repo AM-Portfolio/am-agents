@@ -1,0 +1,49 @@
+environment: dev
+replicaCount: 1
+
+vault:
+  enabled: true
+  secretPaths:
+    otel:
+      path: "apps/data/dev/infra/observability"
+    postgres:
+      path: "apps/data/dev/infra/postgres"
+    mongodb:
+      path: "apps/data/dev/infra/mongodb"
+    redis:
+      path: "apps/data/dev/infra/redis"
+    kafka:
+      path: "apps/data/dev/infra/kafka"
+    identity-oidc:
+      path: "apps/data/dev/services/am-identity"
+    observability:
+      path: "apps/data/dev/services/am-agents-mcp-gateway"
+    llm-api-keys:
+      path: "apps/data/dev/services/am-agents-mcp-gateway"
+    # OpenProject / Cliq / Grafana for capability plugins (shared with support-agent).
+    am-agents-ops:
+      path: "apps/data/dev/services/am-agents"
+
+ingress:
+  hosts:
+    - host: am-dev.asrax.in
+      paths:
+        - path: /tools
+          pathType: Prefix
+
+env:
+  APP_ENV: dev
+  MCP_GATEWAY_BASE_URL: "http://am-mcp-gateway.am-apps-dev.svc.cluster.local:8120"
+  # mcp-gateway has no pods in am-apps-dev; use LiteLLM directly (master key from Vault).
+  LLM_ROUTING: "direct"
+  KEYCLOAK_TOKEN_URL: "http://auth.munish.org/auth/realms/am-dev-realm/protocol/openid-connect/token"
+  # Real capability writes (OpenProject / Cliq / silence) required for no-fake E2E.
+  TOOL_AGENT_ALLOW_WRITES: "true"
+  TOOL_AGENT_READ_ONLY_DEFAULT: "false"
+  # Enable support-agent capability plugins (manifests stay disabled by default).
+  TOOL_AGENT_CAPABILITY_PLUGINS: "work-item,chat,directory,observe,alert"
+  WORK_ITEM_PROVIDER: "openproject"
+  CHAT_PROVIDER: "cliq"
+  DIRECTORY_PROVIDER: "openproject"
+  OBSERVE_PROVIDER: "grafana"
+  QDRANT_URL: "http://qdrant.am-ai.svc.cluster.local:6333"
