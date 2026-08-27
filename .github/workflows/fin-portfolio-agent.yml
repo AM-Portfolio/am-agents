@@ -38,7 +38,7 @@ jobs:
     with:
       language: "python"
       working_directory: "fin-portfolio-agent"
-      image_name: "fin-portfolio-agent"
+      image_name: "am-fin-agent"
       build_context: "."
       preprod_namespace: "am-apps-preprod"
       prod_namespace: "am-apps-prod"
