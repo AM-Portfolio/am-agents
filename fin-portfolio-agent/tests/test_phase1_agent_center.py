@@ -79,6 +79,8 @@ class TestInboundGuardRail:
 
 class TestToolResultCompressor:
     def test_compresses_large_holdings_list(self):
+        from shared.core.config import settings
+        settings.AI_OBSERVATION_FORMAT = "json"
         # Create a large list of 50 holdings
         raw_list = [{"symbol": f"STOCK_{i}", "qty": 100, "ltp": 500.0} for i in range(50)]
         raw_json = json.dumps({"holdings": raw_list}, indent=4)
@@ -91,6 +93,8 @@ class TestToolResultCompressor:
         assert len(compressed) < len(raw_json)
 
     def test_compact_json_no_extra_whitespace(self):
+        from shared.core.config import settings
+        settings.AI_OBSERVATION_FORMAT = "json"
         payload = {"totalValue": 1000000, "status": "OK"}
         raw_json = json.dumps(payload, indent=4)
         compressed = compress("get_portfolio_summary", raw_json)
