@@ -6,13 +6,13 @@ vault:
     redis:
       template: |
         export REDIS_URL="redis://:{{ .Data.data.password }}@{{ .Data.data.host }}:{{ .Data.data.port }}/0"
-    observability:
-      mappings:
-        LANGFUSE_PUBLIC_KEY: "LANGFUSE_PUBLIC_KEY"
-        LANGFUSE_SECRET_KEY: "LANGFUSE_SECRET_KEY"
-    llm-api-keys:
+    am-agents:
       mappings:
         LITELLM_MASTER_KEY: "LITELLM_MASTER_KEY"
+        LITELLM_BASE_URL: "LITELLM_BASE_URL"
+        LANGFUSE_PUBLIC_KEY: "LANGFUSE_PUBLIC_KEY"
+        LANGFUSE_SECRET_KEY: "LANGFUSE_SECRET_KEY"
+        LANGFUSE_HOST: "LANGFUSE_HOST"
     otel:
       mappings:
         TRACING_SAMPLING_PROBABILITY: "TRACING_SAMPLING_PROBABILITY"

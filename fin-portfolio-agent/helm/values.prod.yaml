@@ -3,6 +3,7 @@ replicaCount: 1
 
 vault:
   enabled: true
+  role: "am-backend-role"
   secretPaths:
     otel:
       path: "apps/data/prod/infra/observability"
@@ -10,23 +11,14 @@ vault:
       path: "apps/data/prod/infra/mongodb"
     redis:
       path: "apps/data/prod/infra/redis"
-    observability:
-      path: "apps/data/prod/services/am-mcp-gateway"
-    llm-api-keys:
-      path: "apps/data/prod/services/am-mcp-gateway"
+    am-agents:
+      path: "apps/data/prod/services/am-agents"
 
 ingress:
-  enabled: true
-  annotations:
-    traefik.ingress.kubernetes.io/router.middlewares: >-
-      am-apps-prod-global-cors@kubernetescrd,
-      am-apps-prod-strip-prefix-apps@kubernetescrd
-  hosts:
-    - host: am.asrax.in
-      paths:
-        - path: /ai
-          pathType: Prefix
+  enabled: false
 
 env:
   APP_ENV: prod
   AI_WRITE_TOOLS_ENABLED: "false"
+  LLM_PLAN_A_MODEL: "together-llama-turbo"
+  LITELLM_BASE_URL: "http://litellm.am-ai.svc.cluster.local:4000"

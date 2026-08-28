@@ -1,15 +1,36 @@
 import os
 from dotenv import load_dotenv
 
-# Find and load .env file by searching upwards
+# Find and load .env file by searching upwards, then load Vault sidecar secrets
 def _load_env():
     curr = os.path.dirname(os.path.abspath(__file__))
     for _ in range(5):
         env_path = os.path.join(curr, ".env")
         if os.path.exists(env_path):
             load_dotenv(env_path, override=True)
-            return
+            break
         curr = os.path.dirname(curr)
+
+    # Automatically parse Vault secrets injected by the Vault Agent sidecar
+    vault_dir = "/vault/secrets"
+    if os.path.exists(vault_dir):
+        for fname in os.listdir(vault_dir):
+            fpath = os.path.join(vault_dir, fname)
+            if os.path.isfile(fpath):
+                try:
+                    with open(fpath, "r", encoding="utf-8") as f:
+                        for line in f:
+                            line = line.strip()
+                            if line.startswith("export "):
+                                line = line[7:]
+                            if "=" in line:
+                                k, v = line.split("=", 1)
+                                k = k.strip()
+                                v = v.strip("\"' ")
+                                if k:
+                                    os.environ[k] = v
+                except Exception:
+                    pass
 
 _load_env()
 
@@ -36,7 +57,7 @@ class Config:
     AM_MCP_CLIENT_ID = os.getenv("AM_MCP_CLIENT_ID", "am-mcp-service")
     AM_MCP_CLIENT_SECRET = os.getenv("AM_MCP_CLIENT_SECRET")
     KEYCLOAK_TOKEN_URL = os.getenv("KEYCLOAK_TOKEN_URL")
-    LLM_PLANNER_MODEL = os.getenv("LLM_MODEL", os.getenv("LLM_PLANNER_MODEL", "meta-llama/Llama-3.3-70B-Instruct-Turbo"))
+    LLM_PLANNER_MODEL = os.getenv("LLM_MODEL", os.getenv("LLM_PLANNER_MODEL", "together-llama-turbo"))
     LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.7"))
     LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "1000"))
     LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "60.0"))
@@ -58,9 +79,7 @@ class Config:
     # Plan A — primary: cheap, fast (Together AI / LiteLLM proxy)
     LLM_PLAN_A_MODEL: str = os.getenv(
         "LLM_PLAN_A_MODEL",
-        "deepseek-chat"
-        if _AM_AGENT_ENV in ("local", "dev")
-        else "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        "together-llama-turbo",
     )
     LLM_PLAN_A_BASE_URL: str = os.getenv(
         "LLM_PLAN_A_BASE_URL",
@@ -99,11 +118,8 @@ class Config:
     # ---------------------------------------------------------------------------
     # Phase 0b — Retry / timeout policy
     # ---------------------------------------------------------------------------
-    # Per-attempt hard cap (seconds) — cancel and fall to next tier on expiry
     LLM_ATTEMPT_TIMEOUT_SECONDS: float = float(os.getenv("LLM_ATTEMPT_TIMEOUT_SECONDS", "8.0"))
-    # Max retries within the *same* tier before promoting to next tier
     LLM_MAX_RETRIES_PER_TIER: int = int(os.getenv("LLM_MAX_RETRIES_PER_TIER", "2"))
-    # Initial backoff (seconds) for 429/5xx — doubles each retry
     LLM_RETRY_BACKOFF_SECONDS: float = float(os.getenv("LLM_RETRY_BACKOFF_SECONDS", "1.0"))
 
     # ---------------------------------------------------------------------------

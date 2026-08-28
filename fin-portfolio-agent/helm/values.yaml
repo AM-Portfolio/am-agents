@@ -78,6 +78,3 @@ podAnnotations:
 
 vault:
   enabled: true
-
-vault:
-  enabled: true
