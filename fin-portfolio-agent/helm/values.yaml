@@ -41,6 +41,8 @@ env:
   LANGFUSE_TRACE_MAX_OUTPUT_CHARS: "8000"
   AI_WRITE_TOOLS_ENABLED: "false"
   MCP_SERVER_URL: "http://am-mcp-server.am-apps-prod.svc.cluster.local:8080"
+  MCP_BASE_URL: "http://am-mcp-server.am-apps-prod.svc.cluster.local:8080"
+  ANALYSIS_BASE_URL: "http://am-analysis.am-apps-prod.svc.cluster.local:8080"
   AI_OBSERVATION_FORMAT: "toon"
   AI_TOOL_RESULT_MAX_ROWS: "20"
 

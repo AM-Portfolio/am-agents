@@ -44,15 +44,32 @@ _MUTATE_TOOLS = [
     ("rebalance_basket", "Rebalance basket weights to target allocation. [mutate]", {"type":"object","properties":{"basketId":{"type":"string"}},"required":["basketId"]}),
 ]
 
-def register_mcp_tools() -> int:
+def register_mcp_tools(*, override: bool = False) -> int:
     from shared.tools.registry import TOOL_REGISTRY, _TOOL_IMPL
     count = 0
     all_tools = _READ_TOOLS + (_MUTATE_TOOLS if settings.AI_WRITE_TOOLS_ENABLED else [])
+
+    def _remove_tool(tool_name: str) -> None:
+        TOOL_REGISTRY[:] = [
+            t for t in TOOL_REGISTRY
+            if t.get("function", {}).get("name") != tool_name
+        ]
+        _TOOL_IMPL.pop(tool_name, None)
+
     for name, desc, params in all_tools:
-        if any(t.get("function", {}).get("name") == name for t in TOOL_REGISTRY):
+        exists = any(t.get("function", {}).get("name") == name for t in TOOL_REGISTRY)
+        if exists and not override:
             continue
+        if exists and override:
+            _remove_tool(name)
         TOOL_REGISTRY.append({"type": "function", "function": {"name": name, "description": desc, "parameters": params}})
         _TOOL_IMPL[name] = _mcp_tool(name)
         count += 1
-    logger.info(f"register_mcp_tools: added {count} tools (write_enabled={settings.AI_WRITE_TOOLS_ENABLED})")
+    logger.info(
+        "register_mcp_tools: %d tools (override=%s write_enabled=%s mcp_base=%s)",
+        count,
+        override,
+        settings.AI_WRITE_TOOLS_ENABLED,
+        settings.MCP_BASE_URL,
+    )
     return count

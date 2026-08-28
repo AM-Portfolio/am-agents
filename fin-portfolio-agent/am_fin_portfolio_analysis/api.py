@@ -46,6 +46,20 @@ app.add_middleware(
 )
 app.add_middleware(LoggingMiddleware)
 
+
+@app.on_event("startup")
+async def _log_runtime_config() -> None:
+    from shared.core.config import settings
+    logger.info(
+        "fin-agent startup env=%s mcp=%s litellm=%s analysis=%s mcp_auth_disabled=%s",
+        settings.AM_AGENT_ENV,
+        settings.MCP_BASE_URL,
+        settings.LITELLM_BASE_URL or "(unset)",
+        os.getenv("ANALYSIS_BASE_URL", "http://localhost:8060"),
+        settings.MCP_GATEWAY_AUTH_DISABLED,
+    )
+
+
 @app.get("/")
 async def root():
     return {"message": "Portfolio Analysis API is running. Use /api/v1/ai/chat for agent interaction."}

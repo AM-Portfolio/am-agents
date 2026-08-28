@@ -37,6 +37,8 @@ env:
   MCP_BASE_URL: "http://am-mcp-server.am-apps-prod.svc.cluster.local:8080"
   MCP_GATEWAY_BASE_URL: "http://am-ai-gateway.am-apps-prod.svc.cluster.local:8120"
   MCP_GATEWAY_AUTH_DISABLED: "true"
+  # am-analysis — portfolio REST fallback for tools not yet on MCP (port 8080 in cluster)
+  ANALYSIS_BASE_URL: "http://am-analysis.am-apps-prod.svc.cluster.local:8080"
   # Internal infra — MongoDB and Redis via cluster DNS
   MONGODB_URI: "mongodb://mongodb.infra-prod.svc.cluster.local:27017/portfolio"
   REDIS_URL: "redis://redis.infra-prod.svc.cluster.local:6379/0"

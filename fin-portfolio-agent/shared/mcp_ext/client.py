@@ -6,11 +6,11 @@ import logging, time
 from typing import Any
 import httpx
 from shared.core.config import settings
+from shared.mcp_ext.urls import resolve_mcp_health_url, resolve_mcp_sse_url
 
 logger = logging.getLogger(__name__)
 _UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 
-import contextlib
 from mcp.client.sse import sse_client
 from mcp.client.session import ClientSession
 
@@ -48,14 +48,13 @@ class McpClient:
         return self._token
 
     async def health_check(self) -> bool:
-        # In a real MCP server over SSE, we can just check if /actuator/health is up,
-        # or just assume it's healthy if we can get a token. We'll do a quick actuator check.
         try:
+            health_url = resolve_mcp_health_url()
             async with httpx.AsyncClient(timeout=5.0) as c:
-                r = await c.get(f"{settings.MCP_BASE_URL}/actuator/health")
+                r = await c.get(health_url)
                 return r.status_code in {200, 204}
         except Exception as e:
-            logger.warning("mcp health_check failed: %s", e)
+            logger.warning("mcp health_check failed url=%s err=%s", settings.MCP_BASE_URL, e)
             return False
 
     async def _assert_healthy(self) -> None:
@@ -74,9 +73,8 @@ class McpClient:
         if token:
             headers["Authorization"] = f"Bearer {token}"
             
-        url = f"{settings.MCP_BASE_URL}/sse"
-        if url.endswith("/mcp/sse/sse"): 
-            url = url.replace("/mcp/sse/sse", "/mcp/sse") # cleanup edge cases
+        url = resolve_mcp_sse_url()
+        logger.debug("mcp call_tool name=%s sse_url=%s", name, url)
 
         try:
             async with sse_client(url, headers=headers) as (read, write):

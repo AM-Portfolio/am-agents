@@ -43,6 +43,12 @@ if settings.ENABLE_PORTFOLIO_ANALYSIS:
         import am_fin_portfolio_analysis.tools.analysis_tools   # noqa
         import am_fin_portfolio_analysis.tools.trade_tools      # noqa
         logger.info("✅ Portfolio Analysis module loaded.")
+        try:
+            from shared.mcp_ext.tools import register_mcp_tools
+            mcp_count = register_mcp_tools(override=True)
+            logger.info("✅ MCP tools bound over local HTTP tools (%d)", mcp_count)
+        except Exception as mcp_err:
+            logger.error("❌ Failed to register MCP tools: %s", mcp_err)
     except ImportError as e:
         logger.error(f"❌ Failed to load Portfolio Analysis module: {e}")
 
@@ -260,7 +266,17 @@ class FinanceAgent:
         try:
             final_state = await _graph.ainvoke(initial_state, config={"recursion_limit": 50})
         except Exception as e:
-            logger.error(f"Agent error: {e}", extra={"trace_id": trace_id, "userId": user_id})
+            err = str(e)
+            if "connection attempts failed" in err.lower() or isinstance(e, OSError):
+                logger.error(
+                    "Agent error (network): %s | mcp=%s litellm=%s",
+                    e,
+                    settings.MCP_BASE_URL,
+                    settings.LITELLM_BASE_URL,
+                    extra={"trace_id": trace_id, "userId": user_id},
+                )
+            else:
+                logger.error(f"Agent error: {e}", extra={"trace_id": trace_id, "userId": user_id})
             return AiIntentResponse(
                 message=f"I ran into an issue processing your request. Please try again.",
                 widgetId=WidgetId.ERROR,
