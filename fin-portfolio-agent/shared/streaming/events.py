@@ -1,5 +1,5 @@
-﻿"""
-shared/streaming/events.py — Canonical SSE streaming event schema.
+"""
+shared/streaming/events.py � Canonical SSE streaming event schema.
 """
 from __future__ import annotations
 import json
@@ -27,7 +27,7 @@ class StreamEvent:
         return json.dumps(payload)
 
 
-# ─── Helper constructors ───────────────────────────────────────────────────────
+# --- Helper constructors -------------------------------------------------------
 
 def token_event(content: str, trace_id: str | None = None) -> StreamEvent:
     return StreamEvent(type="token", content=content, trace_id=trace_id)

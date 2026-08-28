@@ -67,7 +67,11 @@ def _init():
 
         logger.info("ToolIndex: ChromaDB collection and embedding model initialised.")
 
-    except ImportError as exc:
+    except Exception as exc:
+        _chroma_client = None
+        _collection = None
+        _embed_model = None
+        _cross_encoder = None
         logger.warning(
             "ToolIndex: could not import chromadb / sentence-transformers (%s). "
             "Falling back to full TOOL_REGISTRY (no retrieval). "

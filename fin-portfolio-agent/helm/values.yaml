@@ -34,13 +34,13 @@ env:
   LOG_FORMAT: json
   LOG_LEVEL: INFO
   TZ: Asia/Kolkata
-  LLM_ROUTING: gateway
+  LLM_ROUTING: direct
   LITELLM_BASE_URL: "http://litellm.am-ai.svc.cluster.local:4000"
   LANGFUSE_ENABLED: "true"
   LANGFUSE_HOST: "https://langfuse.munish.org"
   LANGFUSE_TRACE_MAX_OUTPUT_CHARS: "8000"
   AI_WRITE_TOOLS_ENABLED: "false"
-  MCP_SERVER_URL: "http://am-mcp-server.am-apps-prod.svc.cluster.local:8141"
+  MCP_SERVER_URL: "http://am-mcp-server.am-apps-prod.svc.cluster.local:8080"
   AI_OBSERVATION_FORMAT: "toon"
   AI_TOOL_RESULT_MAX_ROWS: "20"
 
@@ -58,10 +58,10 @@ probes:
 resources:
   limits:
     cpu: 1000m
-    memory: 768Mi
+    memory: 1536Mi
   requests:
-    cpu: 150m
-    memory: 384Mi
+    cpu: 250m
+    memory: 512Mi
 
 ingress:
   enabled: true

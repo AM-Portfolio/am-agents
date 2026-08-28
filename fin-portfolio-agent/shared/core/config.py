@@ -91,8 +91,8 @@ class Config:
         os.getenv("LITELLM_MASTER_KEY") or os.getenv("TOGETHER_API_KEY") or "",
     )
 
-    # Plan B — fallback 1: Gemini 2.5 Flash (high quota, rapid failover)
-    LLM_PLAN_B_MODEL: str = os.getenv("LLM_PLAN_B_MODEL", "gemini/gemini-2.5-flash")
+    # Plan B — fallback 1: Gemini 2.0 Flash via LiteLLM alias
+    LLM_PLAN_B_MODEL: str = os.getenv("LLM_PLAN_B_MODEL", "gemini-2.0-flash")
     LLM_PLAN_B_BASE_URL: str = os.getenv(
         "LLM_PLAN_B_BASE_URL",
         os.getenv("LITELLM_BASE_URL", "").strip()
@@ -103,8 +103,8 @@ class Config:
         os.getenv("LITELLM_MASTER_KEY") or os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY") or "",
     )
 
-    # Plan C — fallback 2: GPT-4o-mini (rock-solid reliability)
-    LLM_PLAN_C_MODEL: str = os.getenv("LLM_PLAN_C_MODEL", "openai/gpt-4o-mini")
+    # Plan C — fallback 2: DeepSeek Chat via LiteLLM alias
+    LLM_PLAN_C_MODEL: str = os.getenv("LLM_PLAN_C_MODEL", "deepseek-chat")
     LLM_PLAN_C_BASE_URL: str = os.getenv(
         "LLM_PLAN_C_BASE_URL",
         os.getenv("LITELLM_BASE_URL", "").strip()
@@ -118,7 +118,8 @@ class Config:
     # ---------------------------------------------------------------------------
     # Phase 0b — Retry / timeout policy
     # ---------------------------------------------------------------------------
-    LLM_ATTEMPT_TIMEOUT_SECONDS: float = float(os.getenv("LLM_ATTEMPT_TIMEOUT_SECONDS", "8.0"))
+    # NOTE: LiteLLM proxy adds latency on top of providers — 30s minimum per attempt
+    LLM_ATTEMPT_TIMEOUT_SECONDS: float = float(os.getenv("LLM_ATTEMPT_TIMEOUT_SECONDS", "30.0"))
     LLM_MAX_RETRIES_PER_TIER: int = int(os.getenv("LLM_MAX_RETRIES_PER_TIER", "2"))
     LLM_RETRY_BACKOFF_SECONDS: float = float(os.getenv("LLM_RETRY_BACKOFF_SECONDS", "1.0"))
 
@@ -138,7 +139,9 @@ class Config:
     # ---------------------------------------------------------------------------
     MCP_BASE_URL: str = os.getenv(
         "MCP_BASE_URL",
-        os.getenv("AM_MCP_SERVER_URL", "https://am.asrax.in/mcp"),
+        os.getenv("MCP_SERVER_URL",
+            os.getenv("AM_MCP_SERVER_URL", "https://am.asrax.in/mcp")
+        ),
     ).replace("/sse", "").rstrip("/")
     AI_MCP_REQUIRED: bool = os.getenv("AI_MCP_REQUIRED", "false").lower() in {"1", "true", "yes"}
     AI_WRITE_TOOLS_ENABLED: bool = os.getenv("AI_WRITE_TOOLS_ENABLED", "false").lower() in {"1", "true", "yes"}

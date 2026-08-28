@@ -20,5 +20,23 @@ ingress:
 env:
   APP_ENV: prod
   AI_WRITE_TOOLS_ENABLED: "false"
+  # LLM routing — direct to LiteLLM proxy (never to raw providers)
+  LLM_ROUTING: direct
+  # Plan A — primary (LiteLLM alias for together_ai/Prism-ML/Ternary-Bonsai-27B)
   LLM_PLAN_A_MODEL: "together-llama-turbo"
+  # Plan B — fallback 1 (LiteLLM alias for Gemini 2.0 Flash)
+  LLM_PLAN_B_MODEL: "gemini-2.0-flash"
+  # Plan C — fallback 2 (LiteLLM alias for DeepSeek Chat)
+  LLM_PLAN_C_MODEL: "deepseek-chat"
+  # Timeouts — LiteLLM adds overhead vs direct calls, so use generous values
+  LLM_ATTEMPT_TIMEOUT_SECONDS: "30.0"
+  LLM_TIMEOUT_SECONDS: "60.0"
+  # LiteLLM — API keys injected from Vault (vault-mappings.yaml → apps/data/prod/services/am-agents)
   LITELLM_BASE_URL: "http://litellm.am-ai.svc.cluster.local:4000"
+  # MCP server — internal cluster DNS (no public internet needed)
+  MCP_BASE_URL: "http://am-mcp-server.am-apps-prod.svc.cluster.local:8080"
+  MCP_GATEWAY_BASE_URL: "http://am-ai-gateway.am-apps-prod.svc.cluster.local:8120"
+  MCP_GATEWAY_AUTH_DISABLED: "true"
+  # Internal infra — MongoDB and Redis via cluster DNS
+  MONGODB_URI: "mongodb://mongodb.infra-prod.svc.cluster.local:27017/portfolio"
+  REDIS_URL: "redis://redis.infra-prod.svc.cluster.local:6379/0"

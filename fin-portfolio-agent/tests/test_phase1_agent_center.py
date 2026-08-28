@@ -1,4 +1,4 @@
-﻿"""
+"""
 tests/test_phase1_agent_center.py
 =================================
 Comprehensive unit tests for Phase 1 (Agent Center):
@@ -29,11 +29,11 @@ from shared.streaming.events import (
 )
 from shared.prompts.system import get_system_prompt, PROMPT_ID, PROMPT_VERSION
 from shared.session.store import SessionStore
-from shared.mcp.tools import register_mcp_tools, _READ_TOOLS, _MUTATE_TOOLS
+from shared.mcp_ext.tools import register_mcp_tools, _READ_TOOLS, _MUTATE_TOOLS
 from shared.tools.registry import TOOL_REGISTRY, _TOOL_IMPL
 
 
-# ─── 1. Inbound GuardRail Tests ───────────────────────────────────────────────
+# --- 1. Inbound GuardRail Tests -----------------------------------------------
 
 class TestInboundGuardRail:
     def test_clean_message_passes(self):
@@ -75,7 +75,7 @@ class TestInboundGuardRail:
             assert res.blocked, f"Expected blocked for: {f}"
 
 
-# ─── 2. Tool Result Compressor Tests ──────────────────────────────────────────
+# --- 2. Tool Result Compressor Tests ------------------------------------------
 
 class TestToolResultCompressor:
     def test_compresses_large_holdings_list(self):
@@ -107,7 +107,7 @@ class TestToolResultCompressor:
         assert len(compressed) == 500
 
 
-# ─── 3. Intent Formatter & Basket Widget Bridge Tests ──────────────────────────
+# --- 3. Intent Formatter & Basket Widget Bridge Tests --------------------------
 
 class TestBasketAndWidgetBridge:
     def test_basket_tools_resolve_to_basket_card(self):
@@ -131,7 +131,7 @@ class TestBasketAndWidgetBridge:
         assert res["widgetParams"]["data"] == {"baskets": []}
 
 
-# ─── 4. Streaming SSE Events Tests ────────────────────────────────────────────
+# --- 4. Streaming SSE Events Tests --------------------------------------------
 
 class TestStreamingEvents:
     def test_all_seven_canonical_events(self):
@@ -162,7 +162,7 @@ class TestStreamingEvents:
         assert c_event.type == "cancelled"
 
 
-# ─── 5. Session Store Tenancy & Isolation Tests ───────────────────────────────
+# --- 5. Session Store Tenancy & Isolation Tests -------------------------------
 
 class TestSessionStoreTenancy:
     def test_user_id_isolation(self):
@@ -190,7 +190,7 @@ class TestSessionStoreTenancy:
         assert store.idempotency_seen(key)
 
 
-# ─── 6. Prompt Management Versioning Tests ────────────────────────────────────
+# --- 6. Prompt Management Versioning Tests ------------------------------------
 
 class TestPromptVersioning:
     def test_prompt_version_and_source_of_truth_rules(self):
@@ -202,7 +202,7 @@ class TestPromptVersioning:
         assert "Basket Management" in prompt
 
 
-# ─── 7. MCP Tool Registration Tests ───────────────────────────────────────────
+# --- 7. MCP Tool Registration Tests -------------------------------------------
 
 class TestMcpToolRegistration:
     def test_read_tools_always_registered(self):

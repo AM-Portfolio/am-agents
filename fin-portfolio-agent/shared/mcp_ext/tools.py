@@ -5,7 +5,7 @@ Read tools always registered. Mutate tools only when AI_WRITE_TOOLS_ENABLED=true
 from __future__ import annotations
 import json, logging
 from shared.tools.registry import register_tool
-from shared.mcp.client import mcp_client
+from shared.mcp_ext.client import mcp_client
 from shared.core.config import settings
 
 logger = logging.getLogger(__name__)
