@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+langchain-core
+langchain-community
+langgraph
+together
+httpx
+python-dotenv
+pydantic
+structlog
+requests
+google-genai
+duckduckgo-search
+motor
+pymongo
+openapi-pydantic
+mcp

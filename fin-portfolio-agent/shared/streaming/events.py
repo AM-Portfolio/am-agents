@@ -1,5 +1,5 @@
 """
-shared/streaming/events.py — Canonical SSE streaming event schema.
+shared/streaming/events.py â€” Canonical SSE streaming event schema.
 """
 from __future__ import annotations
 import json

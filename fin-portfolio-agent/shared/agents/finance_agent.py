@@ -22,6 +22,8 @@ from langgraph.graph import StateGraph, END
 from shared.llm.client import llm_client
 from shared.tools.registry import TOOL_REGISTRY, execute_tool
 from shared.formatters.intent_formatter import resolve_intent, parse_agent_result
+from shared.formatters.user_response import sanitize_user_response
+from shared.prompts.system import get_system_prompt
 from shared.schemas.intent import AiIntentResponse, WidgetId
 from shared.context.request_context import user_id_var, trace_id_var, session_id_var
 from shared.core.config import settings
@@ -29,9 +31,14 @@ from shared.streaming.events import (
     token_event, tool_start_event, tool_end_event,
     widget_event, done_event, error_event, cancelled_event
 )
+from shared.agents.llm_tool_coercion import coerce_llm_tool_response, describe_coercion
+from shared.observability.agent_log import log_agent_error, log_agent_event, log_agent_warning
+from shared.observability.langfuse_tracer import fin_tracer
+from shared.observability.log_events import AgentLogEvent
+from shared.observability.logging_setup import get_logger
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger("finance_agent")
 
 TOOL_DATA_CACHE = {} # trace_id -> dict
 
@@ -42,15 +49,33 @@ if settings.ENABLE_PORTFOLIO_ANALYSIS:
         import am_fin_portfolio_analysis.tools.portfolio_tools  # noqa
         import am_fin_portfolio_analysis.tools.analysis_tools   # noqa
         import am_fin_portfolio_analysis.tools.trade_tools      # noqa
-        logger.info("✅ Portfolio Analysis module loaded.")
+        logger.info("Portfolio Analysis module loaded.")
+        log_agent_event(logger, AgentLogEvent.MODULE_LOAD, module="portfolio_analysis")
         try:
             from shared.mcp_ext.tools import register_mcp_tools
             mcp_count = register_mcp_tools(override=True)
-            logger.info("✅ MCP tools bound over local HTTP tools (%d)", mcp_count)
+            log_agent_event(
+                logger,
+                AgentLogEvent.MODULE_LOAD,
+                module="mcp_tools",
+                tool_count=mcp_count,
+            )
         except Exception as mcp_err:
-            logger.error("❌ Failed to register MCP tools: %s", mcp_err)
+            log_agent_error(
+                logger,
+                AgentLogEvent.MODULE_LOAD_ERROR,
+                error=mcp_err,
+                module="mcp_tools",
+                exc_info=True,
+            )
     except ImportError as e:
-        logger.error(f"❌ Failed to load Portfolio Analysis module: {e}")
+        log_agent_error(
+            logger,
+            AgentLogEvent.MODULE_LOAD_ERROR,
+            error=e,
+            module="portfolio_analysis",
+            exc_info=True,
+        )
 
 if settings.ENABLE_API_TESTING:
     try:
@@ -59,7 +84,7 @@ if settings.ENABLE_API_TESTING:
     except ImportError as e:
         logger.error(f"❌ Failed to load API Testing module: {e}")
 
-TOOL_TIMEOUT_SECONDS = 5.0
+TOOL_TIMEOUT_SECONDS = settings.TOOL_TIMEOUT_SECONDS
 
 
 # ─── LangGraph State ─────────────────────────────────────────────────────────
@@ -72,38 +97,10 @@ class AgentState(TypedDict):
 
 # ─── System Prompt ────────────────────────────────────────────────────────────
 
-def _build_system_prompt() -> str:
-    capabilities = []
-    if settings.ENABLE_PORTFOLIO_ANALYSIS:
-        capabilities.append("1. **Portfolio Analysis**: Use tools like get_portfolio_summary, analyze_etf_overlap, and count_etfs to answer financial questions.")
-    if settings.ENABLE_API_TESTING:
-        capabilities.append("2. **API Testing (Meta-Tools)**: You can explore and test any API registry (Swagger/OpenAPI).\n   - Use `register_api_spec` if you need to load a new Swagger JSON file from the filesystem.\n   - Use `search_apis` to find relevant endpoints.\n   - Use `get_api_workflow` to understand dependencies.\n   - Use `generate_payload` to see how to structure a request.\n   - Use `execute_api` to perform the test.\n   - Use `validate_response` to ensure the API meets its schema.")
-
-    prompt = f"""You are an advanced Financial Intelligence Agent for the AM Portfolio platform.
-You have access to the user's real portfolio data and an API testing "Meta-Tool" system.
-
-DOMAIN CAPABILITIES:
-{chr(10).join(capabilities)}
-3. **Market News**: Use web_search for real-time market sentiment and stock news.
-
-PRINCIPLES:
-1. Always check the portfolio before giving advice — use get_portfolio_summary first if you don't have context.
-2. **API Testing Lifecycle**: When asked to test an endpoint, follow these steps in your response:
-   - **Step 1: Discovery**: Confirm that you have found the correct endpoint(s) and their requirements.
-   - **Step 2: Execution**: State that you are calling the tool with specific parameters.
-   - **Step 3: Status**: Immediately after tool execution, clearly state if it was a **PASS** (2xx status) or **FAIL** (non-2xx).
-   - **Step 4: Analysis**: Provide a brief explanation of the result, especially if it failed.
-3. Answer concisely with data-backed insights. Use beautiful markdown tables for complex data.
-
-CRITICAL RULES:
-- DO NOT say "I will now call...". Just call the tool immediately.
-- If multiple tools are needed, call them all in the same turn.
-- Never return generic answers. Always ground in the actual tool data.
-- Ensure all important values are **bolded** for readability.
-"""
-    return prompt
-
-SYSTEM_PROMPT = _build_system_prompt()
+SYSTEM_PROMPT = get_system_prompt(
+    enable_portfolio=settings.ENABLE_PORTFOLIO_ANALYSIS,
+    enable_api_testing=settings.ENABLE_API_TESTING,
+)
 
 
 # ─── Agent Node ───────────────────────────────────────────────────────────────
@@ -130,6 +127,9 @@ async def agent_node(state: AgentState) -> Dict[str, Any]:
         # Fallback to full registry if retrieval fails
         relevant_tools = TOOL_REGISTRY
 
+    if not relevant_tools:
+        relevant_tools = TOOL_REGISTRY
+
     # Build message payload
     payload = [{"role": "system", "content": SYSTEM_PROMPT}]
     for m in messages:
@@ -148,21 +148,54 @@ async def agent_node(state: AgentState) -> Dict[str, Any]:
                 "name": m.name
             })
 
+    log_agent_event(
+        logger,
+        AgentLogEvent.LLM_REQUEST,
+        tool_count=len(relevant_tools),
+        message_count=len(payload),
+        tools=[t.get("function", {}).get("name") for t in relevant_tools[:8]],
+    )
+
     response = await llm_client.chat(
         messages=payload,
         temperature=0.0,
         tools=relevant_tools,       # ← only top-k relevant tools, not all of them
-        tool_choice="auto"
+        tool_choice="auto",
+        request_id=trace_id_var.get() or "fin-request",
     )
 
+    uid = user_id_var.get() or "anonymous"
+    raw_response = response
+    response = coerce_llm_tool_response(
+        response,
+        relevant_tools,
+        default_args={"userId": uid} if uid else None,
+    )
+    coercion = describe_coercion(raw_response, response)
+    if coercion:
+        log_agent_event(logger, AgentLogEvent.LLM_TEXT_TOOL_COERCED, **coercion)
+        await fin_tracer.record_span(
+            trace_id_var.get() or "fin-request",
+            "agent.text_tool_coercion",
+            input_data=coercion.get("raw_text"),
+            output_data=coercion.get("tool_calls"),
+            metadata=coercion,
+        )
+
     if isinstance(response, dict) and response.get("tool_calls"):
+        log_agent_event(
+            logger,
+            AgentLogEvent.LLM_TOOL_CALLS,
+            tools=[c.get("function", {}).get("name") for c in response["tool_calls"]],
+        )
         ai_msg = AIMessage(
             content=response.get("content") or "",
             additional_kwargs={"tool_calls": response["tool_calls"]}
         )
         return {"messages": [ai_msg], "tools_called": state.get("tools_called", [])}
 
-    text = str(response)
+    text = sanitize_user_response(str(response))
+    log_agent_event(logger, AgentLogEvent.LLM_TEXT_RESPONSE, preview=text[:200])
     return {"messages": [AIMessage(content=text)], "final_response": text, "tools_called": state.get("tools_called", [])}
 
 
@@ -179,12 +212,12 @@ async def tools_node(state: AgentState) -> Dict[str, Any]:
         name = func["name"]
         raw_args = func.get("arguments", "{}")
         args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+        uid = user_id_var.get()
+        if uid and "userId" not in args:
+            args["userId"] = uid
 
         tools_executed.append(name)
-        logger.debug(
-            "tool_call",
-            extra={"tool": name, "args": args, "trace_id": trace_id_var.get()}
-        )
+        log_agent_event(logger, AgentLogEvent.TOOL_EXECUTE_START, tool=name, args=args)
         try:
             # We no longer need run_in_executor because execute_tool is now async
             # and handles both sync/async tools internally.
@@ -194,10 +227,36 @@ async def tools_node(state: AgentState) -> Dict[str, Any]:
             )
         except asyncio.TimeoutError:
             result = json.dumps({"error": f"Tool '{name}' timed out after {TOOL_TIMEOUT_SECONDS}s", "fallback": True})
+            log_agent_warning(
+                logger,
+                AgentLogEvent.TOOL_EXECUTE_ERROR,
+                tool=name,
+                reason="timeout",
+                timeout_seconds=TOOL_TIMEOUT_SECONDS,
+            )
         except Exception as e:
-            logger.error(f"Error executing tool {name}: {e}")
+            log_agent_error(
+                logger,
+                AgentLogEvent.TOOL_EXECUTE_ERROR,
+                error=e,
+                tool=name,
+                exc_info=True,
+            )
             result = json.dumps({"error": str(e), "fallback": True})
 
+        log_agent_event(
+            logger,
+            AgentLogEvent.TOOL_EXECUTE_END,
+            tool=name,
+            result_preview=str(result)[:200],
+        )
+        trace = trace_id_var.get()
+        if trace:
+            cached = TOOL_DATA_CACHE.setdefault(trace, {})
+            try:
+                cached[name] = json.loads(result) if isinstance(result, str) else result
+            except (ValueError, TypeError, json.JSONDecodeError):
+                cached[name] = result
         return ToolMessage(tool_call_id=call["id"], content=str(result), name=name)
 
     results = await asyncio.gather(*[run_one(c) for c in tool_calls])
@@ -228,6 +287,21 @@ def _build_graph():
 _graph = _build_graph()
 
 
+def _extract_tool_data(messages: list) -> dict:
+    """Collect parsed tool outputs from LangGraph ToolMessage entries."""
+    tool_data: dict = {}
+    for msg in messages:
+        msg_type = getattr(msg, "type", None)
+        msg_name = getattr(msg, "name", None)
+        content = getattr(msg, "content", None)
+        if msg_type == "tool" and msg_name and content is not None:
+            try:
+                tool_data[msg_name] = json.loads(content)
+            except (ValueError, TypeError, json.JSONDecodeError):
+                tool_data[msg_name] = content if isinstance(content, str) else {"raw": str(content)}
+    return tool_data
+
+
 # ─── Public Interface ─────────────────────────────────────────────────────────
 
 class FinanceAgent:
@@ -247,6 +321,15 @@ class FinanceAgent:
         user_id_var.set(user_id)
         session_id_var.set(session_id)
         trace_id_var.set(trace_id)
+
+        await fin_tracer.start_chat_trace(
+            trace_id,
+            user_id=user_id,
+            session_id=session_id,
+            user_message=message,
+            system_prompt=SYSTEM_PROMPT,
+        )
+        log_agent_event(logger, AgentLogEvent.CHAT_START, message_preview=message[:200])
 
         # Build LangChain message list from session history
         lc_messages: List[BaseMessage] = []
@@ -268,15 +351,22 @@ class FinanceAgent:
         except Exception as e:
             err = str(e)
             if "connection attempts failed" in err.lower() or isinstance(e, OSError):
-                logger.error(
-                    "Agent error (network): %s | mcp=%s litellm=%s",
-                    e,
-                    settings.MCP_BASE_URL,
-                    settings.LITELLM_BASE_URL,
-                    extra={"trace_id": trace_id, "userId": user_id},
+                log_agent_error(
+                    logger,
+                    AgentLogEvent.CHAT_ERROR,
+                    error=e,
+                    reason="network",
+                    mcp=settings.MCP_BASE_URL,
+                    litellm=settings.LITELLM_BASE_URL,
+                    exc_info=True,
                 )
             else:
-                logger.error(f"Agent error: {e}", extra={"trace_id": trace_id, "userId": user_id})
+                log_agent_error(
+                    logger,
+                    AgentLogEvent.CHAT_ERROR,
+                    error=e,
+                    exc_info=True,
+                )
             return AiIntentResponse(
                 message=f"I ran into an issue processing your request. Please try again.",
                 widgetId=WidgetId.ERROR,
@@ -287,23 +377,32 @@ class FinanceAgent:
             )
 
         tools_called = final_state.get("tools_called", [])
-        answer = final_state.get("final_response") or "I couldn't find a specific answer for that."
+        answer = sanitize_user_response(
+            final_state.get("final_response") or "I couldn't find a specific answer for that."
+        )
 
         # Collect ToolMessage return values so widgetParams can carry real data.
-        tool_data: dict = {}
-        for msg in final_state.get("messages", []):
-            msg_type = getattr(msg, "type", None)
-            msg_name = getattr(msg, "name", None)
-            content = getattr(msg, "content", None)
-            if msg_type == "tool" and msg_name and content:
-                try:
-                    tool_data[msg_name] = json.loads(content)
-                except (ValueError, TypeError):
-                    tool_data[msg_name] = {"raw": str(content)}
-
+        tool_data = _extract_tool_data(final_state.get("messages", []))
         cached_data = TOOL_DATA_CACHE.pop(trace_id, {})
         tool_data.update(cached_data)
         widget_id, widget_params = resolve_intent(tools_called, user_id, tool_data)
+
+        log_agent_event(
+            logger,
+            AgentLogEvent.CHAT_COMPLETE,
+            tools_called=tools_called,
+            widget_id=str(widget_id),
+            answer_preview=answer[:200],
+        )
+        await fin_tracer.end_chat_trace(
+            trace_id,
+            user_id=user_id,
+            session_id=session_id,
+            answer=answer,
+            tools_called=tools_called,
+            widget_id=str(widget_id),
+        )
+        await fin_tracer.flush()
 
         return AiIntentResponse(
             message=answer,
@@ -326,6 +425,15 @@ class FinanceAgent:
         session_id_var.set(session_id)
         trace_id_var.set(trace_id)
 
+        await fin_tracer.start_chat_trace(
+            trace_id,
+            user_id=user_id,
+            session_id=session_id,
+            user_message=message,
+            system_prompt=SYSTEM_PROMPT,
+        )
+        log_agent_event(logger, AgentLogEvent.CHAT_START, message_preview=message[:200])
+
         lc_messages: List[BaseMessage] = []
         for msg in history[-10:]:
             if msg["role"] == "user":
@@ -341,16 +449,17 @@ class FinanceAgent:
         }
 
         tokens_yielded = False
+        tools_called: list[str] = []
+        final_answer = ""
+        widget_id: str | None = None
+        stream_error: str | None = None
         try:
             async for event in _graph.astream_events(initial_state, version="v1", config={"recursion_limit": 50}):
                 kind = event["event"]
-                if kind == "on_chat_model_stream":
-                    chunk = event["data"]["chunk"].content
-                    if chunk:
-                        tokens_yielded = True
-                        yield token_event(chunk, trace_id).to_sse()
-                elif kind == "on_tool_start":
+                # Do not stream raw LLM tokens — reasoning/planning must not reach the UI.
+                if kind == "on_tool_start":
                     name = event.get("name", "unknown")
+                    tools_called.append(name)
                     yield tool_start_event(name, trace_id).to_sse()
                 elif kind == "on_tool_end":
                     name = event.get("name", "unknown")
@@ -359,27 +468,45 @@ class FinanceAgent:
                     final_state = event["data"].get("output")
                     if isinstance(final_state, dict):
                         tc = final_state.get("tools_called", [])
+                        if tc:
+                            tools_called = list(dict.fromkeys(tools_called + tc))
                         if "final_response" in final_state:
-                            final_answer = final_state.get("final_response") or ""
+                            final_answer = sanitize_user_response(
+                                final_state.get("final_response") or ""
+                            )
                             if not tokens_yielded and final_answer:
                                 yield token_event(final_answer, trace_id).to_sse()
                                 tokens_yielded = True
                             
                             # Fire widget event
-                            tool_data = TOOL_DATA_CACHE.pop(trace_id, {})
-                            parsed = parse_agent_result(tc, user_id, tool_data)
+                            tool_data = _extract_tool_data(final_state.get("messages", []))
+                            tool_data.update(TOOL_DATA_CACHE.pop(trace_id, {}))
+                            parsed = parse_agent_result(tc or tools_called, user_id, tool_data)
+                            widget_id = parsed["widgetId"]
                             yield widget_event(
                                 parsed["widgetId"], parsed["widgetParams"],
                                 trace_id=trace_id, session_id=session_id
                             ).to_sse()
                             
                             # Fire done event
-                            yield done_event(tc, trace_id, session_id).to_sse()
+                            yield done_event(tc or tools_called, trace_id, session_id).to_sse()
         except asyncio.CancelledError:
             yield cancelled_event(trace_id, session_id).to_sse()
             raise
         except Exception as e:
-            logger.error("Streaming error: %s", e)
-            yield error_event(str(e), trace_id, session_id).to_sse()
+            stream_error = str(e)
+            log_agent_error(logger, AgentLogEvent.CHAT_STREAM_ERROR, error=e, exc_info=True)
+            yield error_event(stream_error, trace_id, session_id).to_sse()
+        finally:
+            await fin_tracer.end_chat_trace(
+                trace_id,
+                user_id=user_id,
+                session_id=session_id,
+                answer=final_answer,
+                tools_called=tools_called,
+                widget_id=widget_id,
+                error=stream_error,
+            )
+            await fin_tracer.flush()
 
 finance_agent = FinanceAgent()

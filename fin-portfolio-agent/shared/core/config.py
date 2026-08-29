@@ -68,6 +68,12 @@ class Config:
     LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY")
     LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY")
     LANGFUSE_TRACE_MAX_OUTPUT_CHARS = int(os.getenv("LANGFUSE_TRACE_MAX_OUTPUT_CHARS", "8000"))
+    LANGFUSE_PROMPT_NAME = os.getenv("LANGFUSE_PROMPT_NAME", "fin-agent/finance-system")
+    LANGFUSE_PROMPT_LABEL = os.getenv(
+        "LANGFUSE_PROMPT_LABEL",
+        os.getenv("APP_ENV", _AM_AGENT_ENV),
+    )
+    LANGFUSE_PROMPT_VERSION = os.getenv("LANGFUSE_PROMPT_VERSION", "").strip()
 
     # ---------------------------------------------------------------------------
     # Phase 0b — 3-Tier Fallback Chain
@@ -151,6 +157,10 @@ class Config:
     # ---------------------------------------------------------------------------
     AI_HISTORY_MAX_TURNS: int = int(os.getenv("AI_HISTORY_MAX_TURNS", "10"))
     AI_SESSION_MAX_TURNS: int = int(os.getenv("AI_SESSION_MAX_TURNS", "20"))
+
+    # Phase 1 — Tool execution
+    # ---------------------------------------------------------------------------
+    TOOL_TIMEOUT_SECONDS: float = float(os.getenv("TOOL_TIMEOUT_SECONDS", "30.0"))
 
     # ---------------------------------------------------------------------------
     # Phase 1 — Tool result compression

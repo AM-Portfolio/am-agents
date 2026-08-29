@@ -19,18 +19,26 @@ os.environ["ENABLE_API_TESTING"] = "false"
 
 load_dotenv(os.path.join(root_dir, ".env"), override=True)
 
+from shared.observability.logging_setup import configure_logging
+
+configure_logging()
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, StreamingResponse
 from shared.schemas.intent import ChatRequest, AiIntentResponse
 from shared.session.store import session_store
 from shared.middleware.logging_middleware import LoggingMiddleware
-from shared.context.request_context import trace_id_var
+from shared.context.request_context import trace_id_var, user_id_var, session_id_var, auth_token_var
+from shared.context.jwt_context import resolve_request_user_id
 from shared.agents.finance_agent import finance_agent
 from shared.tools.registry import TOOL_REGISTRY
 from shared.streaming.events import error_event
+from shared.observability.agent_log import log_agent_error, log_agent_event
+from shared.observability.log_events import AgentLogEvent
+from shared.observability.logging_setup import get_logger
 
-logger = logging.getLogger("am.fin.portfolio.api")
+logger = get_logger("api")
 
 app = FastAPI(
     title="AM Portfolio Analysis API",
@@ -50,14 +58,27 @@ app.add_middleware(LoggingMiddleware)
 @app.on_event("startup")
 async def _log_runtime_config() -> None:
     from shared.core.config import settings
-    logger.info(
-        "fin-agent startup env=%s mcp=%s litellm=%s analysis=%s mcp_auth_disabled=%s",
-        settings.AM_AGENT_ENV,
-        settings.MCP_BASE_URL,
-        settings.LITELLM_BASE_URL or "(unset)",
-        os.getenv("ANALYSIS_BASE_URL", "http://localhost:8060"),
-        settings.MCP_GATEWAY_AUTH_DISABLED,
+    from shared.observability.langfuse_tracer import start_langfuse_worker
+
+    await start_langfuse_worker()
+    log_agent_event(
+        logger,
+        AgentLogEvent.STARTUP,
+        env=settings.AM_AGENT_ENV,
+        mcp=settings.MCP_BASE_URL,
+        litellm=settings.LITELLM_BASE_URL or "(unset)",
+        analysis=os.getenv("ANALYSIS_BASE_URL", "http://localhost:8060"),
+        mcp_auth_disabled=settings.MCP_GATEWAY_AUTH_DISABLED,
+        langfuse=settings.LANGFUSE_ENABLED,
+        prompt=settings.LANGFUSE_PROMPT_NAME,
     )
+
+
+@app.on_event("shutdown")
+async def _shutdown_observability() -> None:
+    from shared.observability.langfuse_tracer import stop_langfuse_worker
+
+    await stop_langfuse_worker()
 
 
 @app.get("/")
@@ -65,41 +86,69 @@ async def root():
     return {"message": "Portfolio Analysis API is running. Use /api/v1/ai/chat for agent interaction."}
 
 @app.post("/api/v1/ai/chat", response_model=AiIntentResponse)
-async def chat(request: ChatRequest) -> AiIntentResponse:
+async def chat(request: ChatRequest, http_request: Request) -> AiIntentResponse:
     session_id = request.sessionId or str(uuid.uuid4())
     trace_id = trace_id_var.get() or str(uuid.uuid4())
+    uid, _jwt_sub = resolve_request_user_id(
+        body_user_id=request.userId,
+        header_user_id=http_request.headers.get("x-user-id"),
+        auth_header=auth_token_var.get() or http_request.headers.get("Authorization", ""),
+    )
+    user_id_var.set(uid)
+    session_id_var.set(session_id)
 
-    history = session_store.get_history(request.userId, session_id)
-    session_store.append_turn(request.userId, session_id, "user", request.message)
+    history = session_store.get_history(uid, session_id)
+    session_store.append_turn(uid, session_id, "user", request.message)
 
     try:
         response = await finance_agent.run(
             message=request.message,
             history=history,
-            user_id=request.userId,
+            user_id=uid,
             session_id=session_id,
             trace_id=trace_id,
         )
     except Exception as e:
-        logger.error("Agent failed: %s", e)
+        log_agent_error(
+            logger,
+            AgentLogEvent.CHAT_ERROR,
+            error=e,
+            exc_info=True,
+            endpoint="/api/v1/ai/chat",
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
-    session_store.append_turn(request.userId, session_id, "assistant", response.message)
+    session_store.append_turn(uid, session_id, "assistant", response.message)
+    log_agent_event(
+        logger,
+        AgentLogEvent.CHAT_COMPLETE,
+        widget_id=str(response.widgetId),
+        tools_used=response.toolsUsed,
+        message_preview=(response.message or "")[:200],
+    )
     return response
 
 
 @app.post("/api/v1/ai/chat/stream")
 @app.get("/api/v1/ai/chat/stream")
 async def chat_stream(
+    http_request: Request,
     request: ChatRequest | None = None,
     message: str | None = None,
     user_id: str | None = None,
     session_id: str | None = None,
 ):
     msg = (request.message if request else message) or ""
-    uid = (request.userId if request else user_id) or "anonymous"
+    body_uid = (request.userId if request else user_id) or ""
     sid = (request.sessionId if request else session_id) or str(uuid.uuid4())
     tid = trace_id_var.get() or str(uuid.uuid4())
+    uid, _jwt_sub = resolve_request_user_id(
+        body_user_id=body_uid,
+        header_user_id=http_request.headers.get("x-user-id"),
+        auth_header=auth_token_var.get() or http_request.headers.get("Authorization", ""),
+    )
+    user_id_var.set(uid)
+    session_id_var.set(sid)
 
     if not msg:
         raise HTTPException(status_code=400, detail="Missing message parameter")
@@ -118,7 +167,13 @@ async def chat_stream(
             ):
                 yield sse_chunk
         except Exception as exc:
-            logger.error("Streaming error: %s", exc)
+            log_agent_error(
+                logger,
+                AgentLogEvent.CHAT_STREAM_ERROR,
+                error=exc,
+                exc_info=True,
+                endpoint="/api/v1/ai/chat/stream",
+            )
             yield error_event(str(exc), tid, sid).to_sse()
 
     return StreamingResponse(

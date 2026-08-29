@@ -14,10 +14,13 @@ Contains:
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Any, Callable, Dict, List
 
-logger = logging.getLogger(__name__)
+from shared.observability.agent_log import log_agent_error, log_agent_warning
+from shared.observability.log_events import AgentLogEvent
+from shared.observability.logging_setup import get_logger
+
+logger = get_logger("tools.registry")
 
 # ─── Registries ───────────────────────────────────────────────────────────────
 
@@ -145,7 +148,7 @@ async def execute_tool(name: str, args: Dict[str, Any]) -> str:
                 else:
                     result = impl(**args)
             except Exception as exc:
-                logger.error("execute_tool: hand-written tool '%s' raised %s", name, exc)
+                log_agent_error(logger, AgentLogEvent.TOOL_EXECUTE_ERROR, error=exc, tool=name)
                 result = f"Error executing tool '{name}': {exc}"
             return result
             
@@ -161,7 +164,7 @@ async def execute_tool(name: str, args: Dict[str, Any]) -> str:
             return result
             
         # 3. Unknown
-        logger.warning("execute_tool: unknown tool '%s'", name)
+        log_agent_warning(logger, AgentLogEvent.TOOL_UNKNOWN, tool=name, args=args)
         result = f"Error: Unknown tool '{name}'"
         return result
         

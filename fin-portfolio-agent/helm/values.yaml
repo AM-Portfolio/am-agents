@@ -39,6 +39,8 @@ env:
   LANGFUSE_ENABLED: "true"
   LANGFUSE_HOST: "https://langfuse.munish.org"
   LANGFUSE_TRACE_MAX_OUTPUT_CHARS: "8000"
+  LANGFUSE_PROMPT_NAME: "fin-agent/finance-system"
+  LANGFUSE_PROMPT_LABEL: "prod"
   AI_WRITE_TOOLS_ENABLED: "false"
   MCP_SERVER_URL: "http://am-mcp-server.am-apps-prod.svc.cluster.local:8080"
   MCP_BASE_URL: "http://am-mcp-server.am-apps-prod.svc.cluster.local:8080"

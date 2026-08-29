@@ -1,6 +1,6 @@
 """
 tests/test_llm_fallback.py
-Phase 0b — Unit tests for the 3-tier LLM fallback chain.
+Phase 0b â€” Unit tests for the 3-tier LLM fallback chain.
 
 These tests use pytest-asyncio and unittest.mock; they do NOT hit any live API.
 Run:  pytest tests/test_llm_fallback.py -v
@@ -42,7 +42,7 @@ def _silence_langfuse(monkeypatch):
     async def _noop(*a, **kw):
         pass
     monkeypatch.setattr(
-        "shared.llm.client._emit_langfuse", _noop
+        "shared.llm.client._record_fin_langfuse", _noop
     )
 
 

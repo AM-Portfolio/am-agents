@@ -1,5 +1,5 @@
 """
-shared/guardrail/inbound.py — Inbound GuardRail.
+shared/guardrail/inbound.py â€” Inbound GuardRail.
 Blocks prompt injection, credential exfil, and PII fishing before LLM call.
 """
 from __future__ import annotations
@@ -13,7 +13,7 @@ class GuardRailResult:
     blocked: bool
     reason: str | None = None
 
-# Patterns — case-insensitive substring match
+# Patterns â€” case-insensitive substring match
 _INJECTION_PATTERNS = [
     "ignore previous instructions",
     "ignore your instructions",
@@ -54,7 +54,7 @@ def check_inbound(message: str, user_id: str, trace_id: str) -> GuardRailResult:
     """
     Check a user message before sending to LLM.
     Returns GuardRailResult(blocked=True, reason=...) if suspicious.
-    No PII logged — only trace_id and category.
+    No PII logged â€” only trace_id and category.
     """
     lower = message.lower()
 

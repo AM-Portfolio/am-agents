@@ -3,6 +3,8 @@ Intent Formatter - Deterministic tool-call -> widgetId mapping.
 No second LLM call. Maps which tools actually ran to the correct Flutter widget.
 """
 from typing import Dict, List, Optional, Tuple
+
+from shared.formatters.tool_payload import normalize_tool_payload
 from shared.schemas.intent import WidgetId
 
 _INTENT_PRIORITY: List[Tuple[str, str, dict]] = [
@@ -44,7 +46,7 @@ def resolve_intent(
         if any(tool_name in called for called in tools_called):
             params: dict = {**default_params, "userId": user_id}
             if tool_name in resolved:
-                params["data"] = resolved[tool_name]
+                params["data"] = normalize_tool_payload(tool_name, resolved[tool_name])
             return widget_id, params
     return WidgetId.TEXT_RESPONSE, {}
 

@@ -13,12 +13,50 @@ import httpx
 from pydantic import BaseModel, Field
 
 from shared.core.config import settings
+from shared.observability.agent_log import log_agent_error, log_agent_event, log_agent_warning
+from shared.observability.log_events import AgentLogEvent
+from shared.observability.logging_setup import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger("llm")
+
+
+async def _record_fin_langfuse(
+    *,
+    generation_name: str,
+    messages: list[dict[str, Any]],
+    model: str,
+    response: Any,
+    tools: list[dict[str, Any]] | None = None,
+    usage: dict[str, Any] | None = None,
+    error: str | None = None,
+    tier: str | None = None,
+    request_id: str = "fin-request",
+) -> None:
+    """Send LLM generation to Langfuse (includes system prompt in input)."""
+    if not settings.LANGFUSE_ENABLED:
+        return
+    try:
+        from shared.context.request_context import trace_id_var
+        from shared.observability.langfuse_tracer import fin_tracer
+
+        trace_id = trace_id_var.get() or request_id
+        await fin_tracer.record_generation(
+            trace_id,
+            name=generation_name,
+            model=model,
+            messages=messages,
+            response=response,
+            tools=tools,
+            usage=usage,
+            error=error,
+            tier=tier,
+        )
+    except Exception as exc:
+        logger.warning("Langfuse record_generation failed: %s", exc)
 
 
 # ---------------------------------------------------------------------------
-# Phase 0b — Fallback chain primitives
+# Phase 0b â€” Fallback chain primitives
 # ---------------------------------------------------------------------------
 
 class FallbackLLMError(RuntimeError):
@@ -45,7 +83,7 @@ class TierSpec:
 
 
 def _build_fallback_chain() -> list[TierSpec]:
-    """Construct Plan A → B → C from config, skipping tiers without keys."""
+    """Construct Plan A â†’ B â†’ C from config, skipping tiers without keys."""
     chain = [
         TierSpec(
             label="A",
@@ -71,7 +109,7 @@ def _build_fallback_chain() -> list[TierSpec]:
 
 # Status codes that trigger a retry within the same tier before falling back
 _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
-# Status codes that mean "bad request / auth" — skip retries, promote immediately
+# Status codes that mean "bad request / auth" â€” skip retries, promote immediately
 _PROMOTE_STATUS = {400, 401, 403, 404, 422}
 
 
@@ -113,11 +151,11 @@ async def _call_with_fallback(
 ) -> Tuple[dict[str, Any], TierSpec]:
     """
     Runs the 3-tier fallback chain:
-      Plan A → Plan B → Plan C
+      Plan A â†’ Plan B â†’ Plan C
 
     Within each tier:
       - Attempts up to LLM_MAX_RETRIES_PER_TIER times on 429 / 5xx
-      - Uses exponential backoff (LLM_RETRY_BACKOFF_SECONDS × 2^attempt)
+      - Uses exponential backoff (LLM_RETRY_BACKOFF_SECONDS Ã— 2^attempt)
       - Hard per-attempt timeout of LLM_ATTEMPT_TIMEOUT_SECONDS
 
     Raises FallbackLLMError with a traceId when all tiers are exhausted.
@@ -129,7 +167,7 @@ async def _call_with_fallback(
     if not chain:
         raise FallbackLLMError(
             trace_id=trace_id,
-            tier_errors=["No LLM tiers configured — set LLM_PLAN_A_API_KEY or LITELLM_MASTER_KEY"],
+            tier_errors=["No LLM tiers configured â€” set LLM_PLAN_A_API_KEY or LITELLM_MASTER_KEY"],
         )
 
     tier_errors: list[str] = []
@@ -167,31 +205,49 @@ async def _call_with_fallback(
                     _attempt_completion(tier=tier, payload=payload, timeout=attempt_timeout),
                     timeout=attempt_timeout + 1.0,  # outer safety net
                 )
-                logger.info(
-                    "LLM success tier=%s model=%s latency_ms=approx",
-                    tier.label, tier.model,
+                log_agent_event(
+                    logger,
+                    AgentLogEvent.LLM_SUCCESS,
+                    tier=tier.label,
+                    model=tier.model,
+                    attempt=attempt + 1,
                 )
-                asyncio.create_task(
-                    _emit_langfuse(
-                        generation_name,
-                        messages,
-                        json.dumps(data.get("choices", [{}])[0].get("message", {})),
-                        tier.model,
-                        usage=data.get("usage"),
-                    )
+                message = data.get("choices", [{}])[0].get("message", {})
+                await _record_fin_langfuse(
+                    generation_name=generation_name,
+                    messages=messages,
+                    model=tier.model,
+                    response=message,
+                    tools=tools,
+                    usage=data.get("usage"),
+                    tier=tier.label,
+                    request_id=trace_id,
                 )
                 return data, tier
 
             except asyncio.TimeoutError:
                 err = f"Plan {tier.label}: timeout after {attempt_timeout}s"
-                logger.warning(err)
+                log_agent_warning(
+                    logger,
+                    AgentLogEvent.LLM_FAILURE,
+                    tier=tier.label,
+                    reason="timeout",
+                    attempt=attempt + 1,
+                )
                 tier_errors.append(err)
                 break  # promote immediately on timeout — no retry
 
             except httpx.HTTPStatusError as exc:
                 status = exc.response.status_code
                 err = f"Plan {tier.label}: HTTP {status} {exc.response.text[:150]}"
-                logger.warning(err)
+                log_agent_warning(
+                    logger,
+                    AgentLogEvent.LLM_FAILURE,
+                    tier=tier.label,
+                    http_status=status,
+                    detail=exc.response.text[:150],
+                    attempt=attempt + 1,
+                )
 
                 if status in _PROMOTE_STATUS:
                     tier_errors.append(err)
@@ -199,7 +255,7 @@ async def _call_with_fallback(
 
                 if status in _RETRYABLE_STATUS and attempt < max_retries - 1:
                     backoff = base_backoff * (2 ** attempt) + random.uniform(0, 0.5)
-                    logger.info("429/5xx — backing off %.1fs before retry", backoff)
+                    logger.info("429/5xx â€” backing off %.1fs before retry", backoff)
                     await asyncio.sleep(backoff)
                     continue
 
@@ -208,22 +264,33 @@ async def _call_with_fallback(
 
             except Exception as exc:  # noqa: BLE001
                 err = f"Plan {tier.label}: {type(exc).__name__}: {exc}"
-                logger.warning(err)
+                log_agent_warning(
+                    logger,
+                    AgentLogEvent.LLM_FAILURE,
+                    tier=tier.label,
+                    reason=type(exc).__name__,
+                    detail=str(exc)[:200],
+                    attempt=attempt + 1,
+                )
                 tier_errors.append(err)
                 break
 
-    asyncio.create_task(
-        _emit_langfuse(
-            generation_name,
-            messages,
-            "",
-            "none",
-            f"All tiers failed: {'; '.join(tier_errors)}",
-        )
+    log_agent_error(
+        logger,
+        AgentLogEvent.LLM_ALL_TIERS_FAILED,
+        error="; ".join(tier_errors),
+        trace_id=trace_id,
+    )
+    await _record_fin_langfuse(
+        generation_name=generation_name,
+        messages=messages,
+        model="none",
+        response="",
+        tools=tools,
+        error="; ".join(tier_errors),
+        request_id=trace_id,
     )
     raise FallbackLLMError(trace_id=trace_id, tier_errors=tier_errors)
-
-
 
 
 class LlmCallResult(BaseModel):
@@ -459,12 +526,12 @@ class DirectLiteLLMClient:
             return {
                 "error": True,
                 "traceId": exc.trace_id,
-                "message": "LLM unavailable — all providers failed",
+                "message": "LLM unavailable â€” all providers failed",
                 "details": exc.tier_errors,
             }
 
         message = data["choices"][0]["message"]
-        content = message.get("content") or message.get("reasoning_content") or ""
+        content = message.get("content") or ""
         if message.get("tool_calls"):
             return message
         return content
@@ -493,11 +560,7 @@ class DirectLiteLLMClient:
             generation_name=generation_name,
             backend=backend,
         )
-        content = (
-            data["choices"][0]["message"].get("content")
-            or data["choices"][0]["message"].get("reasoning_content")
-            or ""
-        )
+        content = data["choices"][0]["message"].get("content") or ""
         usage_raw = data.get("usage") or {}
         return LlmCallResult(
             content=content,
@@ -566,7 +629,7 @@ class DirectLiteLLMClient:
                             "total_tokens": int(u.get("total_tokens") or 0),
                         }
                     delta = (data.get("choices") or [{}])[0].get("delta") or {}
-                    token = delta.get("content") or delta.get("reasoning_content")
+                    token = delta.get("content")
                     if token:
                         parts.append(token)
                         if on_token:
@@ -673,7 +736,15 @@ class GatewayLLMClient:
         content = data.get("content") or ""
         output_str = json.dumps(data.get("tool_calls")) if data.get("tool_calls") else content
         usage = data.get("usage")
-        asyncio.create_task(_emit_langfuse("fin.chat", messages, output_str, settings.LLM_PLANNER_MODEL, usage=usage))
+        await _record_fin_langfuse(
+            generation_name="fin.chat",
+            messages=messages,
+            model=settings.LLM_PLANNER_MODEL,
+            response=data,
+            tools=tools,
+            usage=usage,
+            request_id=request_id,
+        )
 
         if data.get("tool_calls"):
             return data

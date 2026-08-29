@@ -19,6 +19,7 @@ ingress:
 
 env:
   APP_ENV: prod
+  AM_AGENT_ENV: prod
   AI_WRITE_TOOLS_ENABLED: "false"
   # LLM routing — direct to LiteLLM proxy (never to raw providers)
   LLM_ROUTING: direct
@@ -31,6 +32,7 @@ env:
   # Timeouts — LiteLLM adds overhead vs direct calls, so use generous values
   LLM_ATTEMPT_TIMEOUT_SECONDS: "30.0"
   LLM_TIMEOUT_SECONDS: "60.0"
+  TOOL_TIMEOUT_SECONDS: "30.0"
   # LiteLLM — API keys injected from Vault (vault-mappings.yaml → apps/data/prod/services/am-agents)
   LITELLM_BASE_URL: "http://litellm.am-ai.svc.cluster.local:4000"
   # MCP server — internal cluster DNS (no public internet needed)
