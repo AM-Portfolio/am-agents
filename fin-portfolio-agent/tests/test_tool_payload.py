@@ -40,3 +40,22 @@ def test_unwrap_ok_data_envelope_dict():
     assert out["totalInvested"] == 53067494.33
     assert out["totalHoldings"] == 1
     assert out["brokers"] == ["ZERODHA"]
+
+
+def test_normalize_analysis_dashboard_summary_shape():
+    """Flutter dashboard uses am-analysis DashboardSummary field names."""
+    raw = {
+        "totalValue": 907389.79,
+        "totalInvested": 832790.65,
+        "totalGainLoss": 74599.14,
+        "totalGainLossPercentage": 8.96,
+        "dayChange": 6244.97,
+        "dayChangePercentage": 0.69,
+        "totalHoldings": 106,
+        "totalPortfolios": 1,
+    }
+    out = normalize_tool_payload("get_portfolio_summary", raw)
+    assert out["totalValue"] == 907389.79
+    assert out["totalInvested"] == 832790.65
+    assert out["totalHoldings"] == 106
+    assert out["totalPortfolios"] == 1

@@ -7,6 +7,10 @@ _COT_LABEL = re.compile(
     r"^\s*(Thought|Action|Execution|Status|Analysis|Plan|Response\s+draft)\s*:",
     re.IGNORECASE | re.MULTILINE,
 )
+_LEAKED_TOOL_CALL = re.compile(
+    r"<tool_call>.*?</tool_call>|<function=[a-zA-Z_][a-zA-Z0-9_]*>",
+    re.DOTALL | re.IGNORECASE,
+)
 _RESPONSE_DRAFT = re.compile(
     r"(?:\*\*)?Response\s+draft(?:\*\*)?\s*:?\s*",
     re.IGNORECASE,
@@ -43,6 +47,11 @@ def sanitize_user_response(text: str) -> str:
         return text
 
     cleaned = text.strip()
+    if _LEAKED_TOOL_CALL.search(cleaned):
+        return (
+            "I'm working on fetching that information — please try your question again "
+            "in a moment."
+        )
     if not _looks_like_chain_of_thought(cleaned):
         return cleaned
 

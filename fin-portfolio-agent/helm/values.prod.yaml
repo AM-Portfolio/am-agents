@@ -35,6 +35,8 @@ env:
   TOOL_TIMEOUT_SECONDS: "30.0"
   # LiteLLM — API keys injected from Vault (vault-mappings.yaml → apps/data/prod/services/am-agents)
   LITELLM_BASE_URL: "http://litellm.am-ai.svc.cluster.local:4000"
+  # In-cluster Langfuse (public langfuse.munish.org queues fail when Redis is down)
+  LANGFUSE_HOST: "http://langfuse-web.am-ai.svc.cluster.local:3000"
   # MCP server — internal cluster DNS (no public internet needed)
   MCP_BASE_URL: "http://am-mcp-server.am-apps-prod.svc.cluster.local:8080"
   MCP_GATEWAY_BASE_URL: "http://am-ai-gateway.am-apps-prod.svc.cluster.local:8120"

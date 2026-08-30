@@ -208,6 +208,7 @@ class TestMcpToolRegistration:
     def test_read_tools_always_registered(self):
         register_mcp_tools()
         registered_names = {t["function"]["name"] for t in TOOL_REGISTRY}
+
         for name, _, _ in _READ_TOOLS:
             assert name in registered_names, f"Expected read tool {name} to be registered"
             assert name in _TOOL_IMPL

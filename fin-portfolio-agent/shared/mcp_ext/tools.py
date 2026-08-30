@@ -3,18 +3,41 @@ shared/mcp/tools.py - Registers all 27 MCP tools into TOOL_REGISTRY.
 Read tools always registered. Mutate tools only when AI_WRITE_TOOLS_ENABLED=true.
 """
 from __future__ import annotations
-import json, logging
-from shared.tools.registry import register_tool
+import logging
 from shared.mcp_ext.client import mcp_client
 from shared.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Agent registry name → live MCP tool name (catalog drift).
+_MCP_NAME_ALIASES = {
+    "get_holdings_list": "get_holdings",
+}
+
+# JWT-scoped portfolio tools: MCP schema is portfolioId-only (additionalProperties false).
+# Identity comes from the forwarded Bearer JWT — do not send userId as an arg.
+_STRIP_USERID_TOOLS = frozenset({
+    "get_portfolio_summary",
+    "get_holdings",
+    "get_holdings_list",
+    "get_holding_detail",
+    "get_portfolio_overviews",
+    "get_portfolio_by_id",
+    "get_portfolio_advanced_analytics",
+})
+
+
 def _mcp_tool(name: str):
     async def _impl(**kwargs) -> str:
-        return await mcp_client.call_tool(name, kwargs)
+        mcp_name = _MCP_NAME_ALIASES.get(name, name)
+        args = dict(kwargs)
+        if name in _STRIP_USERID_TOOLS or mcp_name in _STRIP_USERID_TOOLS:
+            args.pop("userId", None)
+        return await mcp_client.call_tool(mcp_name, args)
+
     _impl.__name__ = name
     return _impl
+
 
 _READ_TOOLS = [
     ("get_portfolio_summary", "Get a summary of the user's portfolio including total value, P&L, day change. [read]", {"type":"object","properties":{"userId":{"type":"string"}},"required":["userId"]}),
