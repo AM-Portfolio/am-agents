@@ -14,9 +14,9 @@ _MCP_NAME_ALIASES = {
     "get_holdings_list": "get_holdings",
 }
 
-# JWT-scoped portfolio tools: MCP schema is portfolioId-only (additionalProperties false).
-# Identity comes from the forwarded Bearer JWT — do not send userId as an arg.
-_STRIP_USERID_TOOLS = frozenset({
+# MCP tool execution often runs off the SSE request thread, so UserContext is empty
+# and AM_DEFAULT_USER=user1 wins. Send JWT sub as userId; MCP prefers JWT when present.
+_BIND_USERID_TOOLS = frozenset({
     "get_portfolio_summary",
     "get_holdings",
     "get_holdings_list",
@@ -27,12 +27,35 @@ _STRIP_USERID_TOOLS = frozenset({
 })
 
 
+def bound_mcp_user_id() -> str:
+    from shared.context.jwt_context import bearer_token, jwt_subject
+    from shared.context.request_context import auth_token_var, user_id_var
+
+    token = bearer_token(auth_token_var.get() or "")
+    uid = jwt_subject(token) if token else None
+    if uid:
+        return uid
+    ctx = (user_id_var.get() or "").strip()
+    if ctx and ctx not in {"anonymous", "-"}:
+        return ctx
+    return ""
+
+
+def bind_mcp_tool_args(name: str, mcp_name: str, args: dict) -> dict:
+    out = dict(args)
+    if name in _BIND_USERID_TOOLS or mcp_name in _BIND_USERID_TOOLS:
+        uid = bound_mcp_user_id()
+        if uid:
+            out["userId"] = uid
+        else:
+            out.pop("userId", None)
+    return out
+
+
 def _mcp_tool(name: str):
     async def _impl(**kwargs) -> str:
         mcp_name = _MCP_NAME_ALIASES.get(name, name)
-        args = dict(kwargs)
-        if name in _STRIP_USERID_TOOLS or mcp_name in _STRIP_USERID_TOOLS:
-            args.pop("userId", None)
+        args = bind_mcp_tool_args(name, mcp_name, kwargs)
         return await mcp_client.call_tool(mcp_name, args)
 
     _impl.__name__ = name

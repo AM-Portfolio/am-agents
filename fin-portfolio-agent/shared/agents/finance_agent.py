@@ -213,7 +213,7 @@ async def tools_node(state: AgentState) -> Dict[str, Any]:
         raw_args = func.get("arguments", "{}")
         args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
         uid = user_id_var.get()
-        if uid and "userId" not in args:
+        if uid and uid not in {"anonymous", "-"}:
             args["userId"] = uid
 
         tools_executed.append(name)
