@@ -1,5 +1,5 @@
 """
-shared/mcp/tools.py - Registers all 27 MCP tools into TOOL_REGISTRY.
+shared/mcp/tools.py - Registers MCP read tools into TOOL_REGISTRY.
 Read tools always registered. Mutate tools only when AI_WRITE_TOOLS_ENABLED=true.
 """
 from __future__ import annotations
@@ -21,9 +21,44 @@ _BIND_USERID_TOOLS = frozenset({
     "get_holdings",
     "get_holdings_list",
     "get_holding_detail",
-    "get_portfolio_overviews",
-    "get_portfolio_by_id",
-    "get_portfolio_advanced_analytics",
+    "get_sector_allocation",
+    "get_top_movers",
+    "get_market_cap_allocation",
+    "get_recent_activity",
+    "get_trade_history",
+})
+
+# MCP names (after alias) that require user JWT — shared with McpClient.
+USER_SCOPED_MCP_READ_TOOLS = frozenset(
+    name for name in _BIND_USERID_TOOLS if name != "get_holdings_list"
+)
+
+# Names that exist on am-mcp-server @Tool catalog (read). Used by alignment tests.
+MCP_CATALOG_READ_TOOLS = frozenset({
+    "get_portfolio_summary",
+    "get_holdings",
+    "get_holding_detail",
+    "get_market_movers",
+    "get_stock_quote",
+    "get_indices_data",
+    "search_instruments",
+    "get_recent_activity",
+    "get_trade_history",
+    "get_sector_allocation",
+    "get_top_movers",
+    "get_market_cap_allocation",
+})
+
+# Phantom names removed from agent registry until MCP implements them (Wave 2).
+PHANTOM_AGENT_TOOLS = frozenset({
+    "get_basket_list",
+    "get_basket_details",
+    "get_benchmark_comparison",
+    "get_fund_details",
+    "analyze_etf_overlap",
+    "count_etfs",
+    "get_risk_metrics",
+    "get_performance_chart",
 })
 
 
@@ -63,21 +98,98 @@ def _mcp_tool(name: str):
 
 
 _READ_TOOLS = [
-    ("get_portfolio_summary", "Get a summary of the user's portfolio including total value, P&L, day change. [read]", {"type":"object","properties":{"userId":{"type":"string"}},"required":["userId"]}),
-    ("get_holdings_list", "List all holdings in the user's portfolio with quantities and values. [read]", {"type":"object","properties":{"userId":{"type":"string"},"portfolioId":{"type":"string"}},"required":["userId"]}),
-    ("get_holding_detail", "Get detailed info for a specific holding including price history. [read]", {"type":"object","properties":{"userId":{"type":"string"},"symbol":{"type":"string"}},"required":["userId","symbol"]}),
-    ("get_sector_allocation", "Get portfolio sector allocation breakdown as percentages. [read]", {"type":"object","properties":{"userId":{"type":"string"}},"required":["userId"]}),
-    ("get_benchmark_comparison", "Compare portfolio performance against a benchmark index. [read]", {"type":"object","properties":{"userId":{"type":"string"},"benchmark":{"type":"string"}},"required":["userId"]}),
-    ("get_top_movers", "Get today's top gaining and losing stocks. [read]", {"type":"object","properties":{"limit":{"type":"integer","default":10}},"required":[]}),
-    ("get_fund_details", "Get details about a mutual fund or ETF by symbol. [read]", {"type":"object","properties":{"symbol":{"type":"string"}},"required":["symbol"]}),
-    ("get_basket_list", "List all investment baskets available to the user. [read]", {"type":"object","properties":{"userId":{"type":"string"}},"required":["userId"]}),
-    ("get_basket_details", "Get contents and weights of a specific basket. [read]", {"type":"object","properties":{"basketId":{"type":"string"}},"required":["basketId"]}),
-    ("get_trade_history", "Get the user's past trade history. [read]", {"type":"object","properties":{"userId":{"type":"string"},"limit":{"type":"integer","default":20}},"required":["userId"]}),
-    ("get_recent_activity", "Get the user's recent portfolio activity and transactions. [read]", {"type":"object","properties":{"userId":{"type":"string"},"limit":{"type":"integer","default":20}},"required":["userId"]}),
-    ("analyze_etf_overlap", "Analyze overlap between ETFs in the portfolio to spot concentration risk. [read]", {"type":"object","properties":{"userId":{"type":"string"}},"required":["userId"]}),
-    ("count_etfs", "Count the number of ETFs in the portfolio. [read]", {"type":"object","properties":{"userId":{"type":"string"}},"required":["userId"]}),
-    ("get_risk_metrics", "Get risk metrics for the portfolio: VaR, beta, Sharpe ratio. [read]", {"type":"object","properties":{"userId":{"type":"string"}},"required":["userId"]}),
-    ("get_performance_chart", "Get performance chart data for the portfolio over a time period. [read]", {"type":"object","properties":{"userId":{"type":"string"},"period":{"type":"string","default":"1M"}},"required":["userId"]}),
+    (
+        "get_portfolio_summary",
+        "[portfolio] Summary of the user's portfolio: total value, P&L, day change. [read]",
+        {"type": "object", "properties": {"userId": {"type": "string"}}, "required": ["userId"]},
+    ),
+    (
+        "get_holdings_list",
+        "[portfolio] List all holdings with quantities and values. [read]",
+        {
+            "type": "object",
+            "properties": {"userId": {"type": "string"}, "portfolioId": {"type": "string"}},
+            "required": ["userId"],
+        },
+    ),
+    (
+        "get_holding_detail",
+        "[portfolio] Detailed info for one holding by symbol. [read]",
+        {
+            "type": "object",
+            "properties": {"userId": {"type": "string"}, "symbol": {"type": "string"}},
+            "required": ["userId", "symbol"],
+        },
+    ),
+    (
+        "get_market_movers",
+        "[market] Market-wide / index top gainers and losers (Nifty, Sensex). NOT the user's portfolio. [read]",
+        {
+            "type": "object",
+            "properties": {
+                "type": {"type": "string", "description": "GAINERS or LOSERS"},
+                "limit": {"type": "integer", "default": 10},
+                "indexSymbol": {"type": "string", "description": "e.g. NIFTY 50"},
+            },
+            "required": [],
+        },
+    ),
+    (
+        "get_stock_quote",
+        "[market] Live quote (LTP) for an NSE symbol e.g. RELIANCE, TCS. [read]",
+        {"type": "object", "properties": {"symbol": {"type": "string"}}, "required": ["symbol"]},
+    ),
+    (
+        "get_indices_data",
+        "[market] Latest index levels (NIFTY, SENSEX, BANKNIFTY). [read]",
+        {
+            "type": "object",
+            "properties": {"symbols": {"type": "string", "description": "Comma-separated, optional"}},
+            "required": [],
+        },
+    ),
+    (
+        "search_instruments",
+        "[market] Search stocks/ETFs by company name or partial symbol. [read]",
+        {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
+    ),
+    (
+        "get_recent_activity",
+        "[trade] Recent buys/sells and transactions, newest first. [read]",
+        {
+            "type": "object",
+            "properties": {"userId": {"type": "string"}, "limit": {"type": "integer", "default": 20}},
+            "required": ["userId"],
+        },
+    ),
+    (
+        "get_trade_history",
+        "[trade] Full transaction history for a specific stock symbol. [read]",
+        {
+            "type": "object",
+            "properties": {"userId": {"type": "string"}, "symbol": {"type": "string"}},
+            "required": ["userId", "symbol"],
+        },
+    ),
+    (
+        "get_sector_allocation",
+        "[analysis] Sector breakdown of THIS user's portfolio (IT, Banking, etc.). NOT market sectors. [read]",
+        {"type": "object", "properties": {"userId": {"type": "string"}}, "required": ["userId"]},
+    ),
+    (
+        "get_top_movers",
+        "[analysis] Top gainers/losers in THIS user's portfolio by P&L. NOT Nifty/market movers. [read]",
+        {
+            "type": "object",
+            "properties": {"userId": {"type": "string"}, "timeFrame": {"type": "string"}},
+            "required": ["userId"],
+        },
+    ),
+    (
+        "get_market_cap_allocation",
+        "[analysis] Large/mid/small cap breakdown of the user's portfolio. [read]",
+        {"type": "object", "properties": {"userId": {"type": "string"}}, "required": ["userId"]},
+    ),
 ]
 
 _MUTATE_TOOLS = [

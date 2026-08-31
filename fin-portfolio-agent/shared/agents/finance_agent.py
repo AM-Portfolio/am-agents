@@ -32,6 +32,11 @@ from shared.streaming.events import (
     widget_event, done_event, error_event, cancelled_event
 )
 from shared.agents.llm_tool_coercion import coerce_llm_tool_response, describe_coercion
+from shared.agents.data_question_router import (
+    build_forced_tool_call,
+    match_data_question,
+)
+from shared.formatters.tool_fallback import build_tool_fallback_answer, needs_tool_fallback
 from shared.observability.agent_log import log_agent_error, log_agent_event, log_agent_warning
 from shared.observability.langfuse_tracer import fin_tracer
 from shared.observability.log_events import AgentLogEvent
@@ -129,6 +134,27 @@ async def agent_node(state: AgentState) -> Dict[str, Any]:
 
     if not relevant_tools:
         relevant_tools = TOOL_REGISTRY
+
+    # Wave C: force a tool on first agent pass for clear data questions.
+    if isinstance(messages[-1], HumanMessage):
+        forced = match_data_question(str(messages[-1].content))
+        if forced:
+            tool_name, forced_args = forced
+            uid = user_id_var.get() or "anonymous"
+            if uid and uid not in {"anonymous", "-"}:
+                forced_args.setdefault("userId", uid)
+            response = build_forced_tool_call(tool_name, forced_args)
+            log_agent_event(
+                logger,
+                AgentLogEvent.LLM_TOOL_CALLS,
+                tools=[tool_name],
+                forced=True,
+            )
+            ai_msg = AIMessage(
+                content="",
+                additional_kwargs={"tool_calls": response["tool_calls"]},
+            )
+            return {"messages": [ai_msg], "tools_called": state.get("tools_called", [])}
 
     # Build message payload
     payload = [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -385,6 +411,12 @@ class FinanceAgent:
         tool_data = _extract_tool_data(final_state.get("messages", []))
         cached_data = TOOL_DATA_CACHE.pop(trace_id, {})
         tool_data.update(cached_data)
+
+        if needs_tool_fallback(answer, tools_called):
+            fallback = build_tool_fallback_answer(tools_called, tool_data)
+            if fallback:
+                answer = fallback
+
         widget_id, widget_params = resolve_intent(tools_called, user_id, tool_data)
 
         log_agent_event(
@@ -474,14 +506,18 @@ class FinanceAgent:
                             final_answer = sanitize_user_response(
                                 final_state.get("final_response") or ""
                             )
+                            tool_data = _extract_tool_data(final_state.get("messages", []))
+                            tool_data.update(TOOL_DATA_CACHE.pop(trace_id, {}))
+                            active_tools = tc or tools_called
+                            if needs_tool_fallback(final_answer, active_tools):
+                                fallback = build_tool_fallback_answer(active_tools, tool_data)
+                                if fallback:
+                                    final_answer = fallback
                             if not tokens_yielded and final_answer:
                                 yield token_event(final_answer, trace_id).to_sse()
                                 tokens_yielded = True
-                            
-                            # Fire widget event
-                            tool_data = _extract_tool_data(final_state.get("messages", []))
-                            tool_data.update(TOOL_DATA_CACHE.pop(trace_id, {}))
-                            parsed = parse_agent_result(tc or tools_called, user_id, tool_data)
+
+                            parsed = parse_agent_result(active_tools, user_id, tool_data)
                             widget_id = parsed["widgetId"]
                             yield widget_event(
                                 parsed["widgetId"], parsed["widgetParams"],

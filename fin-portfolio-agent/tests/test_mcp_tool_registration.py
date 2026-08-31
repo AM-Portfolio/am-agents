@@ -68,5 +68,7 @@ def test_bind_mcp_args_uses_context_when_no_jwt():
     try:
         args = bind_mcp_tool_args("get_holdings_list", "get_holdings", {})
         assert args["userId"] == "670116d7-8683-4f35-bdb6-7cf6fb122068"
+        sector = bind_mcp_tool_args("get_sector_allocation", "get_sector_allocation", {})
+        assert sector["userId"] == "670116d7-8683-4f35-bdb6-7cf6fb122068"
     finally:
         user_id_var.set("anonymous")

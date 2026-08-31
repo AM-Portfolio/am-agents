@@ -71,8 +71,35 @@ def normalize_portfolio_summary(raw: Any) -> dict[str, Any]:
     return {**payload, **{k: v for k, v in normalized.items() if v is not None}}
 
 
+def normalize_movers(raw: Any) -> dict[str, Any]:
+    """Unify market movers[] and analysis gainers/losers for TOP_MOVERS widget."""
+    payload = unwrap_tool_payload(raw)
+    if not isinstance(payload, dict):
+        return {"raw": str(payload)}
+
+    if "movers" in payload and isinstance(payload.get("movers"), list):
+        movers = payload["movers"]
+        return {
+            "gainers": movers,
+            "losers": [],
+            "count": payload.get("count", len(movers)),
+            "source": "market",
+        }
+
+    gainers = payload.get("gainers") or []
+    losers = payload.get("losers") or []
+    if gainers or losers:
+        return {**payload, "gainers": gainers, "losers": losers, "source": "portfolio"}
+
+    return payload
+
+
 def normalize_tool_payload(tool_name: str, raw: Any) -> Any:
     """Return widget-ready data for a tool result."""
     if tool_name == "get_portfolio_summary":
         return normalize_portfolio_summary(raw)
+    if tool_name in ("get_top_movers", "get_market_movers"):
+        return normalize_movers(raw)
+    if tool_name in ("get_holdings_list", "get_holdings"):
+        return unwrap_tool_payload(raw)
     return unwrap_tool_payload(raw)

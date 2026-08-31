@@ -98,24 +98,17 @@ class McpClient:
         # but provided for completeness.
         return []
 
-    _USER_SCOPED_TOOLS = frozenset({
-        "get_portfolio_summary",
-        "get_holdings_list",
-        "get_holding_detail",
-        "get_sector_allocation",
-        "get_benchmark_comparison",
-        "get_basket_list",
-        "get_trade_history",
-        "get_recent_activity",
-        "analyze_etf_overlap",
-        "count_etfs",
-        "get_risk_metrics",
-        "get_performance_chart",
+    _MUTATE_USER_SCOPED = frozenset({
         "place_order",
         "modify_order",
         "cancel_order",
         "create_basket",
     })
+
+    @property
+    def _USER_SCOPED_TOOLS(self) -> frozenset[str]:
+        from shared.mcp_ext.tools import USER_SCOPED_MCP_READ_TOOLS
+        return USER_SCOPED_MCP_READ_TOOLS | self._MUTATE_USER_SCOPED
 
     async def call_tool(self, name: str, args: dict[str, Any]) -> str:
         await self._assert_healthy()

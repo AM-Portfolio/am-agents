@@ -8,13 +8,16 @@ from shared.formatters.tool_payload import normalize_tool_payload
 from shared.schemas.intent import WidgetId
 
 _INTENT_PRIORITY: List[Tuple[str, str, dict]] = [
-    ("get_top_movers",           WidgetId.TOP_MOVERS,        {"limit": 10}),
-    ("analyze_etf_overlap",      WidgetId.ETF_ANALYSIS,      {}),
-    ("count_etfs",               WidgetId.ETF_ANALYSIS,      {}),
-    ("get_fund_details",         WidgetId.ETF_ANALYSIS,      {}),
-    ("get_sector_allocation",    WidgetId.ALLOCATION_PIE,    {}),
-    ("get_holdings_list",        WidgetId.HOLDINGS_TABLE,    {}),
-    ("get_holding_detail",       WidgetId.HOLDINGS_TABLE,    {}),
+    ("get_market_movers",          WidgetId.TOP_MOVERS,        {"limit": 10}),
+    ("get_top_movers",             WidgetId.TOP_MOVERS,        {"limit": 10}),
+    ("analyze_etf_overlap",        WidgetId.ETF_ANALYSIS,      {}),
+    ("count_etfs",                 WidgetId.ETF_ANALYSIS,      {}),
+    ("get_fund_details",           WidgetId.ETF_ANALYSIS,      {}),
+    ("get_market_cap_allocation",  WidgetId.ALLOCATION_PIE,    {}),
+    ("get_sector_allocation",      WidgetId.ALLOCATION_PIE,    {}),
+    ("get_holdings_list",          WidgetId.HOLDINGS_TABLE,    {}),
+    ("get_holdings",               WidgetId.HOLDINGS_TABLE,    {}),
+    ("get_holding_detail",         WidgetId.HOLDINGS_TABLE,    {}),
     ("get_recent_activity",      WidgetId.RECENT_ACTIVITY,   {"limit": 20}),
     ("get_trade_history",        WidgetId.RECENT_ACTIVITY,   {}),
     ("get_benchmark_comparison", WidgetId.BENCHMARK,         {}),
