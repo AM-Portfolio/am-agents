@@ -22,6 +22,14 @@ _XML_FUNCTION_TAG_RE = re.compile(
     r"<function>\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*</function>",
     re.IGNORECASE,
 )
+_XML_PARAMETER_EQ_RE = re.compile(
+    r"<parameter=([a-zA-Z_][a-zA-Z0-9_]*)>\s*(.*?)\s*</parameter>",
+    re.DOTALL | re.IGNORECASE,
+)
+_XML_PARAMETER_ATTR_RE = re.compile(
+    r'<parameter\s+name=["\']([a-zA-Z_][a-zA-Z0-9_]*)["\']\s*>(.*?)</parameter>',
+    re.DOTALL | re.IGNORECASE,
+)
 _MARKDOWN_JSON_FENCE_RE = re.compile(
     r"```(?:json)?\s*(\{.*?\})\s*```",
     re.DOTALL | re.IGNORECASE,
@@ -90,6 +98,18 @@ def _extract_tool_from_dict(data: Any) -> tuple[str, Dict[str, Any]] | None:
     return name.strip(), raw_args
 
 
+def _parse_xml_parameters(body: str) -> Dict[str, Any]:
+    """Extract ``<parameter=name>value</parameter>`` pairs from XML tool blocks."""
+    params: Dict[str, Any] = {}
+    for pattern in (_XML_PARAMETER_EQ_RE, _XML_PARAMETER_ATTR_RE):
+        for match in pattern.finditer(body):
+            key = match.group(1).strip()
+            value = match.group(2).strip()
+            if key:
+                params[key] = value
+    return params
+
+
 def _parse_xml_tool_block(block: str) -> tuple[str, Dict[str, Any]] | None:
     """Parse ``<tool_call>…</tool_call>`` bodies (JSON or XML function tags)."""
     body = block.strip()
@@ -103,10 +123,12 @@ def _parse_xml_tool_block(block: str) -> tuple[str, Dict[str, Any]] | None:
             return None
         return _extract_tool_from_dict(data)
 
+    xml_args = _parse_xml_parameters(body)
+
     for pattern in (_XML_FUNCTION_EQ_RE, _XML_FUNCTION_TAG_RE):
         match = pattern.search(body)
         if match:
-            return match.group(1), {}
+            return match.group(1), xml_args
 
     return None
 

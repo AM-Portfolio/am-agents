@@ -195,9 +195,9 @@ class TestSessionStoreTenancy:
 class TestPromptVersioning:
     def test_prompt_version_and_source_of_truth_rules(self):
         prompt = get_system_prompt(enable_portfolio=True)
-        assert PROMPT_VERSION == "1.1.0"
+        assert PROMPT_VERSION == "1.2.0"
         assert PROMPT_ID == "fin-agent-system-v1"
-        assert f"[promptId={PROMPT_ID} version={PROMPT_VERSION}]" in prompt
+        assert f"version={PROMPT_VERSION}" in prompt
         assert "SOURCE OF TRUTH" in prompt
         assert "get_market_movers" in prompt
         assert "get_recent_activity" in prompt

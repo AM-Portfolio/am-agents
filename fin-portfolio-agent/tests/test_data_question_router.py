@@ -65,6 +65,18 @@ def test_stock_quote_extracts_symbol():
     assert m[1]["symbol"] == "RELIANCE"
 
 
+def test_stock_quote_reliance_stock_price_phrasing():
+    """Regression: 'reliance stock price?' must not capture symbol=STOCK."""
+    m = match_data_question("reliance stock price?")
+    assert m is not None
+    assert m[0] == "get_stock_quote"
+    assert m[1]["symbol"] == "RELIANCE"
+
+
+def test_stock_quote_does_not_capture_stopword_stock():
+    assert match_data_question("stock price?") is None
+
+
 def test_search_instruments_routed():
     m = match_data_question("Find Tata stocks")
     assert m is not None

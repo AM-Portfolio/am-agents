@@ -69,9 +69,13 @@ def test_bind_userid_for_trade_and_analysis():
 
 def test_prompt_routes_market_vs_portfolio_movers():
     prompt = get_system_prompt(enable_portfolio=True)
-    assert PROMPT_VERSION == "1.1.0"
+    assert PROMPT_VERSION == "1.2.0"
     assert "get_market_movers" in prompt
-    assert "Never call get_top_movers for Nifty" in prompt or "get_market_movers" in prompt
+    assert "get_top_movers" in prompt
+    assert "get_recent_activity" in prompt
+    assert "get_trade_history" in prompt
+    assert "get_sector_allocation" in prompt
+    assert "Portfolio" in prompt and "Market" in prompt and "Trade" in prompt and "Analysis" in prompt
     assert "get_fund_details" not in prompt
     assert "get_basket_list" not in prompt
 

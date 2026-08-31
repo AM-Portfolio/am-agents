@@ -92,3 +92,66 @@ def test_xml_tool_call_uses_full_registry_when_not_in_retrieved_tools(monkeypatc
     out = coerce_llm_tool_response(xml, [], default_args={"userId": "u1"})
     assert isinstance(out, dict)
     assert out["tool_calls"][0]["function"]["name"] == "get_portfolio_summary"
+
+
+def test_coerces_xml_tool_call_with_parameter_tags():
+    """Regression: Together/Llama emits <parameter=symbol> inside <tool_call> blocks."""
+    xml = """<tool_call>
+<function=get_stock_quote>
+<parameter=symbol>
+RELIANCE
+</parameter>
+</function>
+</tool_call>"""
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_stock_quote",
+                "description": "quote",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "symbol": {"type": "string"},
+                        "userId": {"type": "string"},
+                    },
+                    "required": ["symbol"],
+                },
+            },
+        }
+    ]
+    out = coerce_llm_tool_response(xml, tools, default_args={"userId": "u42"})
+    args = json.loads(out["tool_calls"][0]["function"]["arguments"])
+    assert args["symbol"] == "RELIANCE"
+    assert args["userId"] == "u42"
+
+
+def test_coerces_xml_search_instruments_with_query_parameter():
+    xml = """<tool_call>
+<function=search_instruments>
+<parameter=query>
+reliance
+</parameter>
+</function>
+</tool_call>"""
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "search_instruments",
+                "description": "search",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"},
+                        "userId": {"type": "string"},
+                    },
+                    "required": ["query"],
+                },
+            },
+        }
+    ]
+    out = coerce_llm_tool_response(xml, tools, default_args={"userId": "u42"})
+    args = json.loads(out["tool_calls"][0]["function"]["arguments"])
+    assert args["query"] == "reliance"
+    assert args["userId"] == "u42"

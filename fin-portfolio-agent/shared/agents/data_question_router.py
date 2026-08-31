@@ -21,6 +21,25 @@ BASKET_UNAVAILABLE_REPLY = (
     "Open the Baskets section in the app to view or manage them."
 )
 
+# Words that must not be treated as ticker symbols when forced-routing quotes.
+_SYMBOL_STOPWORDS = frozenset(
+    {
+        "STOCK",
+        "STOCKS",
+        "SHARE",
+        "SHARES",
+        "ETF",
+        "ETFS",
+        "PRICE",
+        "QUOTE",
+        "LTP",
+        "MARKET",
+        "TODAY",
+        "CURRENT",
+        "LIVE",
+    }
+)
+
 # (pattern, tool_name, arg_builder)
 # Order matters: more specific rules first.
 _RULES: list[tuple[re.Pattern[str], str, Optional[str]]] = [
@@ -80,6 +99,14 @@ _RULES: list[tuple[re.Pattern[str], str, Optional[str]]] = [
     (
         re.compile(
             r"(?:price\s+of|quote\s+for|current\s+price\s+of)\s+([A-Z][A-Z0-9&.-]{1,20})",
+            re.I,
+        ),
+        "get_stock_quote",
+        "symbol",
+    ),
+    (
+        re.compile(
+            r"\b([a-zA-Z][a-zA-Z0-9&.-]{1,19})\s+stock\s+(?:price|quote|ltp)\b",
             re.I,
         ),
         "get_stock_quote",
@@ -146,7 +173,10 @@ def match_data_question(text: str) -> Optional[Tuple[str, Dict[str, Any]]]:
             continue
         args: Dict[str, Any] = {}
         if capture == "symbol" and m.lastindex:
-            args["symbol"] = m.group(m.lastindex).upper()
+            symbol = m.group(m.lastindex).upper()
+            if symbol in _SYMBOL_STOPWORDS:
+                continue
+            args["symbol"] = symbol
         if capture == "query" and m.lastindex:
             query = m.group(m.lastindex).strip().strip("?.!")
             if query:
