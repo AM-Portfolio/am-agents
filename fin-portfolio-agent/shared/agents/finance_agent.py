@@ -35,7 +35,9 @@ from shared.agents.llm_tool_coercion import coerce_llm_tool_response, describe_c
 from shared.agents.data_question_router import (
     build_forced_tool_call,
     match_data_question,
+    match_static_reply,
 )
+from shared.mcp_ext.tools import _BIND_USERID_TOOLS
 from shared.formatters.tool_fallback import build_tool_fallback_answer, needs_tool_fallback
 from shared.observability.agent_log import log_agent_error, log_agent_event, log_agent_warning
 from shared.observability.langfuse_tracer import fin_tracer
@@ -135,13 +137,23 @@ async def agent_node(state: AgentState) -> Dict[str, Any]:
     if not relevant_tools:
         relevant_tools = TOOL_REGISTRY
 
-    # Wave C: force a tool on first agent pass for clear data questions.
+    # Wave C: static replies and forced tool on first agent pass for data questions.
     if isinstance(messages[-1], HumanMessage):
-        forced = match_data_question(str(messages[-1].content))
+        user_text = str(messages[-1].content)
+        static_reply = match_static_reply(user_text)
+        if static_reply:
+            reply = sanitize_user_response(static_reply)
+            return {
+                "messages": [AIMessage(content=reply)],
+                "final_response": reply,
+                "tools_called": state.get("tools_called", []),
+            }
+
+        forced = match_data_question(user_text)
         if forced:
             tool_name, forced_args = forced
             uid = user_id_var.get() or "anonymous"
-            if uid and uid not in {"anonymous", "-"}:
+            if uid and uid not in {"anonymous", "-"} and tool_name in _BIND_USERID_TOOLS:
                 forced_args.setdefault("userId", uid)
             response = build_forced_tool_call(tool_name, forced_args)
             log_agent_event(
@@ -239,8 +251,8 @@ async def tools_node(state: AgentState) -> Dict[str, Any]:
         raw_args = func.get("arguments", "{}")
         args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
         uid = user_id_var.get()
-        if uid and uid not in {"anonymous", "-"}:
-            args["userId"] = uid
+        if uid and uid not in {"anonymous", "-"} and name in _BIND_USERID_TOOLS:
+            args.setdefault("userId", uid)
 
         tools_executed.append(name)
         log_agent_event(logger, AgentLogEvent.TOOL_EXECUTE_START, tool=name, args=args)
@@ -280,7 +292,9 @@ async def tools_node(state: AgentState) -> Dict[str, Any]:
         if trace:
             cached = TOOL_DATA_CACHE.setdefault(trace, {})
             try:
-                cached[name] = json.loads(result) if isinstance(result, str) else result
+                from shared.formatters.tool_payload import unwrap_tool_payload
+                parsed = json.loads(result) if isinstance(result, str) else result
+                cached[name] = unwrap_tool_payload(parsed)
             except (ValueError, TypeError, json.JSONDecodeError):
                 cached[name] = result
         return ToolMessage(tool_call_id=call["id"], content=str(result), name=name)

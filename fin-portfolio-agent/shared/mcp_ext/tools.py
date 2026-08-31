@@ -202,6 +202,85 @@ _MUTATE_TOOLS = [
     ("rebalance_basket", "Rebalance basket weights to target allocation. [mutate]", {"type":"object","properties":{"basketId":{"type":"string"}},"required":["basketId"]}),
 ]
 
+# Local HTTP tools that must not reach the LLM when MCP is the call path.
+LEGACY_DOMAIN_TOOLS = frozenset({
+    "get_benchmark_comparison",
+    "get_holding_details",
+    "analyze_etf_overlap",
+    "count_etfs",
+    "get_fund_details",
+    "web_search",
+}) | PHANTOM_AGENT_TOOLS
+
+# Meta-tools for API testing (kept when ENABLE_API_TESTING).
+_API_TESTING_TOOL_NAMES = frozenset({
+    "register_api_spec",
+    "search_apis",
+    "get_api_workflow",
+    "generate_payload",
+    "execute_api",
+    "validate_response",
+})
+
+
+def mcp_agent_tool_allowlist() -> frozenset[str]:
+    """Agent-facing tool names that map to MCP (plus optional mutate tools)."""
+    names = {name for name, _, _ in _READ_TOOLS}
+    if settings.AI_WRITE_TOOLS_ENABLED:
+        names |= {name for name, _, _ in _MUTATE_TOOLS}
+    return frozenset(names)
+
+
+def prune_legacy_domain_tools() -> int:
+    """
+    Drop legacy analysis_client HTTP tools from TOOL_REGISTRY when MCP is configured.
+
+    register_mcp_tools(override=True) replaces overlapping names, but phantom / ETF /
+    benchmark tools remain and inflate the LLM catalog (~18 tools).
+    """
+    if not (settings.MCP_BASE_URL or "").strip():
+        return 0
+
+    from shared.tools.registry import OPENAPI_EXECUTOR_MAP, TOOL_REGISTRY, _TOOL_IMPL
+
+    allow = mcp_agent_tool_allowlist()
+    kept: list[dict] = []
+    removed = 0
+
+    for tool in TOOL_REGISTRY:
+        name = tool.get("function", {}).get("name")
+        if not name:
+            kept.append(tool)
+            continue
+
+        if name in allow:
+            kept.append(tool)
+            continue
+        if settings.ENABLE_API_TESTING and name in _API_TESTING_TOOL_NAMES:
+            kept.append(tool)
+            continue
+        if name in OPENAPI_EXECUTOR_MAP:
+            kept.append(tool)
+            continue
+        if name in LEGACY_DOMAIN_TOOLS:
+            _TOOL_IMPL.pop(name, None)
+            removed += 1
+            continue
+
+        kept.append(tool)
+
+    TOOL_REGISTRY[:] = kept
+    if removed:
+        logger.info(
+            "prune_legacy_domain_tools: removed %d tools (registry=%d allow=%d mcp=%s)",
+            removed,
+            len(TOOL_REGISTRY),
+            len(allow),
+            settings.MCP_BASE_URL,
+        )
+    return removed
+
+
 def register_mcp_tools(*, override: bool = False) -> int:
     from shared.tools.registry import TOOL_REGISTRY, _TOOL_IMPL
     count = 0
@@ -223,11 +302,13 @@ def register_mcp_tools(*, override: bool = False) -> int:
         TOOL_REGISTRY.append({"type": "function", "function": {"name": name, "description": desc, "parameters": params}})
         _TOOL_IMPL[name] = _mcp_tool(name)
         count += 1
+    prune_legacy_domain_tools()
     logger.info(
-        "register_mcp_tools: %d tools (override=%s write_enabled=%s mcp_base=%s)",
+        "register_mcp_tools: %d tools (override=%s write_enabled=%s mcp_base=%s registry=%d)",
         count,
         override,
         settings.AI_WRITE_TOOLS_ENABLED,
         settings.MCP_BASE_URL,
+        len(TOOL_REGISTRY),
     )
     return count

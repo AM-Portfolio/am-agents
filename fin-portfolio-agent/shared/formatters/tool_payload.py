@@ -19,9 +19,15 @@ def _parse_json_maybe(value: Any) -> Any:
 
 def unwrap_tool_payload(raw: Any) -> Any:
     """Parse JSON strings and unwrap {ok, data} MCP envelopes."""
-    payload = _parse_json_maybe(raw)
-    if isinstance(payload, dict) and "raw" in payload and len(payload) == 1:
-        payload = _parse_json_maybe(payload["raw"])
+    payload: Any = raw
+    for _ in range(4):
+        payload = _parse_json_maybe(payload)
+        if isinstance(payload, dict) and "raw" in payload and len(payload) == 1:
+            payload = _parse_json_maybe(payload["raw"])
+            continue
+        if isinstance(payload, str):
+            continue
+        break
 
     if isinstance(payload, dict) and payload.get("ok") is True and "data" in payload:
         inner = _parse_json_maybe(payload["data"])

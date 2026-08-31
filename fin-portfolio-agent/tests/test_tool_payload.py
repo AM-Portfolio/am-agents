@@ -59,3 +59,13 @@ def test_normalize_analysis_dashboard_summary_shape():
     assert out["totalInvested"] == 832790.65
     assert out["totalHoldings"] == 106
     assert out["totalPortfolios"] == 1
+
+
+def test_unwrap_double_encoded_json_string():
+    from shared.formatters.tool_payload import unwrap_tool_payload
+
+    inner = {"holdings": [{"symbol": "RELI"}], "count": 1}
+    raw = json.dumps(json.dumps(inner))
+    out = unwrap_tool_payload(raw)
+    assert out["count"] == 1
+    assert out["holdings"][0]["symbol"] == "RELI"

@@ -11,6 +11,16 @@ _GREETING = re.compile(
     re.IGNORECASE,
 )
 
+_BASKET = re.compile(
+    r"\b(list|show|my|investment)?\s*baskets?\b|\binvestment\s+baskets?\b",
+    re.IGNORECASE,
+)
+
+BASKET_UNAVAILABLE_REPLY = (
+    "Investment baskets aren't available in chat yet. "
+    "Open the Baskets section in the app to view or manage them."
+)
+
 # (pattern, tool_name, arg_builder)
 # Order matters: more specific rules first.
 _RULES: list[tuple[re.Pattern[str], str, Optional[str]]] = [
@@ -90,11 +100,35 @@ _RULES: list[tuple[re.Pattern[str], str, Optional[str]]] = [
         "get_trade_history",
         "symbol",
     ),
+    (
+        re.compile(
+            r"\b(?:find|search|look\s+up)\s+(?:for\s+)?(.+?)\s+(?:stock|stocks|etf|etfs|symbol)\b",
+            re.I,
+        ),
+        "search_instruments",
+        "query",
+    ),
+    (
+        re.compile(r"\b(?:find|search)\s+(?:stock|stocks|etf|etfs)\s+(?:for|named|like)?\s*(.+)", re.I),
+        "search_instruments",
+        "query",
+    ),
 ]
 
 
 def is_greeting(text: str) -> bool:
     return bool(_GREETING.match(text.strip()))
+
+
+def match_static_reply(text: str) -> Optional[str]:
+    """Deterministic chat answers that must not invoke the LLM or phantom tools."""
+    if not text or not text.strip():
+        return None
+    if is_greeting(text):
+        return None
+    if _BASKET.search(text):
+        return BASKET_UNAVAILABLE_REPLY
+    return None
 
 
 def match_data_question(text: str) -> Optional[Tuple[str, Dict[str, Any]]]:
@@ -113,10 +147,25 @@ def match_data_question(text: str) -> Optional[Tuple[str, Dict[str, Any]]]:
         args: Dict[str, Any] = {}
         if capture == "symbol" and m.lastindex:
             args["symbol"] = m.group(m.lastindex).upper()
+        if capture == "query" and m.lastindex:
+            query = m.group(m.lastindex).strip().strip("?.!")
+            if query:
+                args["query"] = query
+            else:
+                continue
         if tool_name == "get_recent_activity":
             args.setdefault("limit", 20)
         if tool_name == "get_market_movers":
             args.setdefault("limit", 10)
+            args.setdefault("type", "GAINERS")
+            if re.search(r"\b(sensex)\b", text, re.I):
+                args.setdefault("indexSymbol", "SENSEX")
+            elif re.search(r"\b(banknifty|bank\s+nifty)\b", text, re.I):
+                args.setdefault("indexSymbol", "NIFTY BANK")
+            elif re.search(r"\b(nifty|market)\b", text, re.I):
+                args.setdefault("indexSymbol", "NIFTY 50")
+            if re.search(r"\blosers?\b", text, re.I):
+                args["type"] = "LOSERS"
         return tool_name, args
 
     return None

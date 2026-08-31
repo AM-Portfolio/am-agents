@@ -22,6 +22,14 @@ _XML_FUNCTION_TAG_RE = re.compile(
     r"<function>\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*</function>",
     re.IGNORECASE,
 )
+_MARKDOWN_JSON_FENCE_RE = re.compile(
+    r"```(?:json)?\s*(\{.*?\})\s*```",
+    re.DOTALL | re.IGNORECASE,
+)
+_JSON_TOOL_KEY_RE = re.compile(
+    r'\{\s*"(?:tool|name|function)"\s*:\s*"([a-zA-Z_][a-zA-Z0-9_]*)"',
+    re.IGNORECASE,
+)
 
 
 def describe_coercion(before: Any, after: Any) -> Optional[Dict[str, Any]]:
@@ -65,6 +73,23 @@ def _build_tool_call(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _extract_tool_from_dict(data: Any) -> tuple[str, Dict[str, Any]] | None:
+    if not isinstance(data, dict):
+        return None
+    name = data.get("name") or data.get("function") or data.get("tool")
+    if not isinstance(name, str) or not name.strip():
+        return None
+    raw_args = data.get("arguments") or data.get("parameters") or data.get("args") or {}
+    if isinstance(raw_args, str):
+        try:
+            raw_args = json.loads(raw_args)
+        except json.JSONDecodeError:
+            raw_args = {}
+    if not isinstance(raw_args, dict):
+        raw_args = {}
+    return name.strip(), raw_args
+
+
 def _parse_xml_tool_block(block: str) -> tuple[str, Dict[str, Any]] | None:
     """Parse ``<tool_call>…</tool_call>`` bodies (JSON or XML function tags)."""
     body = block.strip()
@@ -76,20 +101,7 @@ def _parse_xml_tool_block(block: str) -> tuple[str, Dict[str, Any]] | None:
             data = json.loads(body)
         except json.JSONDecodeError:
             return None
-        if not isinstance(data, dict):
-            return None
-        name = data.get("name") or data.get("function") or data.get("tool")
-        if not isinstance(name, str) or not name.strip():
-            return None
-        raw_args = data.get("arguments") or data.get("parameters") or {}
-        if isinstance(raw_args, str):
-            try:
-                raw_args = json.loads(raw_args)
-            except json.JSONDecodeError:
-                raw_args = {}
-        if not isinstance(raw_args, dict):
-            raw_args = {}
-        return name.strip(), raw_args
+        return _extract_tool_from_dict(data)
 
     for pattern in (_XML_FUNCTION_EQ_RE, _XML_FUNCTION_TAG_RE):
         match = pattern.search(body)
@@ -110,6 +122,30 @@ def _coerce_from_text(text: str, known: set[str], default_args: Optional[Dict[st
                 merged = dict(default_args or {})
                 merged.update(args)
                 return _build_tool_call(name, merged)
+
+    for fence in _MARKDOWN_JSON_FENCE_RE.finditer(text):
+        try:
+            data = json.loads(fence.group(1))
+        except json.JSONDecodeError:
+            continue
+        parsed = _extract_tool_from_dict(data)
+        if parsed and parsed[0] in known:
+            name, args = parsed
+            merged = dict(default_args or {})
+            merged.update(args)
+            return _build_tool_call(name, merged)
+
+    for key_match in _JSON_TOOL_KEY_RE.finditer(text):
+        try:
+            data, _ = json.JSONDecoder().raw_decode(text[key_match.start():])
+        except json.JSONDecodeError:
+            continue
+        parsed = _extract_tool_from_dict(data)
+        if parsed and parsed[0] in known:
+            name, args = parsed
+            merged = dict(default_args or {})
+            merged.update(args)
+            return _build_tool_call(name, merged)
 
     match = _TEXT_TOOL_RE.match(text.strip())
     if not match:

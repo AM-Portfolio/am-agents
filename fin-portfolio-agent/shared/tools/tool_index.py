@@ -72,7 +72,7 @@ def _init():
         _collection = None
         _embed_model = None
         _cross_encoder = None
-        logger.warning(
+        logger.debug(
             "ToolIndex: could not import chromadb / sentence-transformers (%s). "
             "Falling back to full TOOL_REGISTRY (no retrieval). "
             "Install with: pip install chromadb sentence-transformers",
