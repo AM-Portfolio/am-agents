@@ -44,6 +44,11 @@ def _silence_langfuse(monkeypatch):
     monkeypatch.setattr(
         "shared.llm.client._record_fin_langfuse", _noop
     )
+    from shared.agents.token_budget import reset_turn_token_budget
+    from shared.core.config import settings
+
+    reset_turn_token_budget()
+    settings.AI_MAX_TOKENS_PER_TURN = 0  # disable per-turn cap in LLM unit tests
 
 
 @pytest.fixture()

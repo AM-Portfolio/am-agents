@@ -159,9 +159,14 @@ async def _call_with_fallback(
       - Hard per-attempt timeout of LLM_ATTEMPT_TIMEOUT_SECONDS
 
     Raises FallbackLLMError with a traceId when all tiers are exhausted.
+    Raises TokenBudgetExceededError when AI_MAX_TOKENS_PER_TURN is reached.
     """
+    from shared.agents.token_budget import assert_within_budget, record_turn_tokens
+
     import uuid
     trace_id = request_id or str(uuid.uuid4())
+
+    assert_within_budget()
 
     chain = _build_fallback_chain()
     if not chain:
@@ -223,6 +228,7 @@ async def _call_with_fallback(
                     tier=tier.label,
                     request_id=trace_id,
                 )
+                record_turn_tokens(data.get("usage"))
                 return data, tier
 
             except asyncio.TimeoutError:
@@ -529,6 +535,18 @@ class DirectLiteLLMClient:
                 "message": "LLM unavailable â€” all providers failed",
                 "details": exc.tier_errors,
             }
+        except Exception as exc:
+            from shared.agents.token_budget import TokenBudgetExceededError
+
+            if isinstance(exc, TokenBudgetExceededError):
+                return {
+                    "error": True,
+                    "code": "TOKEN_BUDGET_EXCEEDED",
+                    "message": str(exc),
+                    "tokensUsed": exc.used,
+                    "tokenLimit": exc.limit,
+                }
+            raise
 
         message = data["choices"][0]["message"]
         content = message.get("content") or ""
@@ -721,9 +739,12 @@ class GatewayLLMClient:
         }
         if tools:
             payload["tools"] = tools
-            if tool_choice:
-                payload["tool_choice"] = tool_choice
+        if tool_choice:
+            payload["tool_choice"] = tool_choice
 
+        from shared.agents.token_budget import assert_within_budget, record_turn_tokens
+
+        assert_within_budget()
         token = await self._get_access_token()
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             resp = await client.post(url, headers=self._headers(token), json=payload)
@@ -732,6 +753,8 @@ class GatewayLLMClient:
                 asyncio.create_task(_emit_langfuse("fin.chat", messages, "", settings.LLM_PLANNER_MODEL, err_text))
                 raise RuntimeError(f"Gateway LLM failed [{resp.status_code}]: {err_text}")
             data = resp.json()
+
+        record_turn_tokens(data.get("usage"))
 
         content = data.get("content") or ""
         output_str = json.dumps(data.get("tool_calls")) if data.get("tool_calls") else content

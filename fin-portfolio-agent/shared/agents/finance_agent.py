@@ -37,8 +37,15 @@ from shared.agents.data_question_router import (
     match_data_question,
     match_static_reply,
 )
+from shared.agents.token_budget import (
+    current_turn_tokens,
+    reset_turn_token_budget,
+    token_budget_exceeded,
+)
 from shared.mcp_ext.tools import _BIND_USERID_TOOLS
 from shared.formatters.tool_fallback import build_tool_fallback_answer, needs_tool_fallback
+from shared.formatters.tool_payload import unwrap_tool_payload
+from shared.tools.compressor import compress
 from shared.observability.agent_log import log_agent_error, log_agent_event, log_agent_warning
 from shared.observability.langfuse_tracer import fin_tracer
 from shared.observability.log_events import AgentLogEvent
@@ -100,6 +107,7 @@ class AgentState(TypedDict):
     messages: Annotated[List[BaseMessage], operator.add]
     tools_called: List[str]          # accumulates tool names executed this turn
     final_response: Optional[str]
+    tool_data: Annotated[Dict[str, Any], operator.or_]
 
 
 # ─── System Prompt ────────────────────────────────────────────────────────────
@@ -110,10 +118,56 @@ SYSTEM_PROMPT = get_system_prompt(
 )
 
 
+# ─── Turn limits (token / cost guardrails) ─────────────────────────────────────
+
+def _tool_calls_exceeded(tools_called: list[str]) -> bool:
+    limit = settings.AI_MAX_TOOL_CALLS_PER_TURN
+    return limit > 0 and len(tools_called) >= limit
+
+
+def _turn_cap_reached(state: AgentState) -> bool:
+    return _tool_calls_exceeded(state.get("tools_called", [])) or token_budget_exceeded()
+
+
+def _build_cap_response(state: AgentState) -> Dict[str, Any]:
+    """Stop the graph after too many tool rounds or token budget — use fallback if MCP data exists."""
+    tools_called = list(state.get("tools_called", []))
+    tool_data = dict(state.get("tool_data") or {})
+    fallback = build_tool_fallback_answer(tools_called, tool_data)
+    if fallback:
+        answer = sanitize_user_response(fallback)
+    elif token_budget_exceeded():
+        answer = sanitize_user_response(
+            "This request used too many tokens. Please start a new chat or ask a simpler question."
+        )
+    else:
+        answer = sanitize_user_response(
+            "I couldn't complete that request after several attempts. "
+            "Please try again with a simpler question."
+        )
+    log_agent_event(
+        logger,
+        AgentLogEvent.CHAT_COMPLETE,
+        tools_called=tools_called,
+        answer_preview=answer[:200],
+        turn_cap=True,
+        tokens_used=current_turn_tokens(),
+        token_limit=settings.AI_MAX_TOKENS_PER_TURN,
+    )
+    return {
+        "messages": [AIMessage(content=answer)],
+        "final_response": answer,
+        "tools_called": tools_called,
+    }
+
+
 # ─── Agent Node ───────────────────────────────────────────────────────────────
 
 async def agent_node(state: AgentState) -> Dict[str, Any]:
     """LLM decides what tools to call next based on current state."""
+    if _turn_cap_reached(state):
+        return _build_cap_response(state)
+
     messages = state["messages"]
 
     # ── Dynamic tool retrieval via vector search ──────────────────────────────
@@ -201,6 +255,18 @@ async def agent_node(state: AgentState) -> Dict[str, Any]:
         tool_choice="auto",
         request_id=trace_id_var.get() or "fin-request",
     )
+
+    if isinstance(response, dict) and response.get("error"):
+        if response.get("code") == "TOKEN_BUDGET_EXCEEDED":
+            return _build_cap_response(state)
+        err_msg = sanitize_user_response(
+            response.get("message") or "I ran into an issue processing your request."
+        )
+        return {
+            "messages": [AIMessage(content=err_msg)],
+            "final_response": err_msg,
+            "tools_called": state.get("tools_called", []),
+        }
 
     uid = user_id_var.get() or "anonymous"
     raw_response = response
@@ -291,21 +357,30 @@ async def tools_node(state: AgentState) -> Dict[str, Any]:
         trace = trace_id_var.get()
         if trace:
             cached = TOOL_DATA_CACHE.setdefault(trace, {})
-            try:
-                from shared.formatters.tool_payload import unwrap_tool_payload
-                parsed = json.loads(result) if isinstance(result, str) else result
-                cached[name] = unwrap_tool_payload(parsed)
-            except (ValueError, TypeError, json.JSONDecodeError):
-                cached[name] = result
-        return ToolMessage(tool_call_id=call["id"], content=str(result), name=name)
+            cached[name] = _parse_tool_result(result)
+        return ToolMessage(
+            tool_call_id=call["id"],
+            content=compress(name, str(result)),
+            name=name,
+        )
 
     results = await asyncio.gather(*[run_one(c) for c in tool_calls])
-    return {"messages": list(results), "tools_called": tools_executed}
+    trace = trace_id_var.get()
+    turn_tool_data: Dict[str, Any] = {}
+    if trace:
+        turn_tool_data = dict(TOOL_DATA_CACHE.get(trace, {}))
+    return {
+        "messages": list(results),
+        "tools_called": tools_executed,
+        "tool_data": turn_tool_data,
+    }
 
 
 # ─── Routing ──────────────────────────────────────────────────────────────────
 
 def should_continue(state: AgentState) -> str:
+    if _turn_cap_reached(state):
+        return END
     last = state["messages"][-1]
     if isinstance(last, AIMessage) and last.additional_kwargs.get("tool_calls"):
         return "tools"
@@ -327,19 +402,40 @@ def _build_graph():
 _graph = _build_graph()
 
 
+def _parse_tool_result(raw: Any) -> Any:
+    """Parse MCP JSON (including double-encoded strings) for widgets and fallback."""
+    if raw is None:
+        return raw
+    payload: Any = raw
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return unwrap_tool_payload(raw)
+    return unwrap_tool_payload(payload)
+
+
 def _extract_tool_data(messages: list) -> dict:
     """Collect parsed tool outputs from LangGraph ToolMessage entries."""
     tool_data: dict = {}
     for msg in messages:
+        if isinstance(msg, ToolMessage) and msg.name and msg.content is not None:
+            tool_data[msg.name] = _parse_tool_result(msg.content)
+            continue
         msg_type = getattr(msg, "type", None)
         msg_name = getattr(msg, "name", None)
         content = getattr(msg, "content", None)
         if msg_type == "tool" and msg_name and content is not None:
-            try:
-                tool_data[msg_name] = json.loads(content)
-            except (ValueError, TypeError, json.JSONDecodeError):
-                tool_data[msg_name] = content if isinstance(content, str) else {"raw": str(content)}
+            tool_data[msg_name] = _parse_tool_result(content)
     return tool_data
+
+
+def _merge_tool_data(final_state: dict, trace_id: str) -> dict:
+    """Merge graph state, ToolMessages, and request-scoped cache."""
+    merged: dict = dict(final_state.get("tool_data") or {})
+    merged.update(_extract_tool_data(final_state.get("messages", [])))
+    merged.update(TOOL_DATA_CACHE.pop(trace_id, {}))
+    return merged
 
 
 # ─── Public Interface ─────────────────────────────────────────────────────────
@@ -361,6 +457,7 @@ class FinanceAgent:
         user_id_var.set(user_id)
         session_id_var.set(session_id)
         trace_id_var.set(trace_id)
+        reset_turn_token_budget()
 
         await fin_tracer.start_chat_trace(
             trace_id,
@@ -373,7 +470,7 @@ class FinanceAgent:
 
         # Build LangChain message list from session history
         lc_messages: List[BaseMessage] = []
-        for msg in history[-10:]:
+        for msg in history[-settings.AI_HISTORY_MAX_TURNS:]:
             if msg["role"] == "user":
                 lc_messages.append(HumanMessage(content=msg["content"]))
             elif msg["role"] == "assistant":
@@ -383,11 +480,15 @@ class FinanceAgent:
         initial_state: AgentState = {
             "messages": lc_messages,
             "tools_called": [],
-            "final_response": None
+            "final_response": None,
+            "tool_data": {},
         }
 
         try:
-            final_state = await _graph.ainvoke(initial_state, config={"recursion_limit": 50})
+            final_state = await _graph.ainvoke(
+                initial_state,
+                config={"recursion_limit": settings.AI_GRAPH_RECURSION_LIMIT},
+            )
         except Exception as e:
             err = str(e)
             if "connection attempts failed" in err.lower() or isinstance(e, OSError):
@@ -421,15 +522,15 @@ class FinanceAgent:
             final_state.get("final_response") or "I couldn't find a specific answer for that."
         )
 
-        # Collect ToolMessage return values so widgetParams can carry real data.
-        tool_data = _extract_tool_data(final_state.get("messages", []))
-        cached_data = TOOL_DATA_CACHE.pop(trace_id, {})
-        tool_data.update(cached_data)
+        # Collect tool payloads for widgets and LLM-blank fallback.
+        tool_data = _merge_tool_data(final_state, trace_id)
 
+        tool_fallback_used = False
         if needs_tool_fallback(answer, tools_called):
             fallback = build_tool_fallback_answer(tools_called, tool_data)
             if fallback:
                 answer = fallback
+                tool_fallback_used = True
 
         widget_id, widget_params = resolve_intent(tools_called, user_id, tool_data)
 
@@ -439,6 +540,9 @@ class FinanceAgent:
             tools_called=tools_called,
             widget_id=str(widget_id),
             answer_preview=answer[:200],
+            tool_fallback=tool_fallback_used,
+            tokens_used=current_turn_tokens(),
+            token_limit=settings.AI_MAX_TOKENS_PER_TURN,
         )
         await fin_tracer.end_chat_trace(
             trace_id,
@@ -470,6 +574,7 @@ class FinanceAgent:
         user_id_var.set(user_id)
         session_id_var.set(session_id)
         trace_id_var.set(trace_id)
+        reset_turn_token_budget()
 
         await fin_tracer.start_chat_trace(
             trace_id,
@@ -481,7 +586,7 @@ class FinanceAgent:
         log_agent_event(logger, AgentLogEvent.CHAT_START, message_preview=message[:200])
 
         lc_messages: List[BaseMessage] = []
-        for msg in history[-10:]:
+        for msg in history[-settings.AI_HISTORY_MAX_TURNS:]:
             if msg["role"] == "user":
                 lc_messages.append(HumanMessage(content=msg["content"]))
             elif msg["role"] == "assistant":
@@ -491,16 +596,22 @@ class FinanceAgent:
         initial_state: AgentState = {
             "messages": lc_messages,
             "tools_called": [],
-            "final_response": None
+            "final_response": None,
+            "tool_data": {},
         }
 
         tokens_yielded = False
         tools_called: list[str] = []
+        accumulated_tool_data: dict = {}
         final_answer = ""
         widget_id: str | None = None
         stream_error: str | None = None
         try:
-            async for event in _graph.astream_events(initial_state, version="v1", config={"recursion_limit": 50}):
+            async for event in _graph.astream_events(
+                initial_state,
+                version="v1",
+                config={"recursion_limit": settings.AI_GRAPH_RECURSION_LIMIT},
+            ):
                 kind = event["event"]
                 # Do not stream raw LLM tokens — reasoning/planning must not reach the UI.
                 if kind == "on_tool_start":
@@ -513,6 +624,8 @@ class FinanceAgent:
                 elif kind == "on_chain_end":
                     final_state = event["data"].get("output")
                     if isinstance(final_state, dict):
+                        if final_state.get("tool_data"):
+                            accumulated_tool_data.update(final_state["tool_data"])
                         tc = final_state.get("tools_called", [])
                         if tc:
                             tools_called = list(dict.fromkeys(tools_called + tc))
@@ -520,7 +633,8 @@ class FinanceAgent:
                             final_answer = sanitize_user_response(
                                 final_state.get("final_response") or ""
                             )
-                            tool_data = _extract_tool_data(final_state.get("messages", []))
+                            tool_data = dict(accumulated_tool_data)
+                            tool_data.update(_extract_tool_data(final_state.get("messages", [])))
                             tool_data.update(TOOL_DATA_CACHE.pop(trace_id, {}))
                             active_tools = tc or tools_called
                             if needs_tool_fallback(final_answer, active_tools):
@@ -537,8 +651,7 @@ class FinanceAgent:
                                 parsed["widgetId"], parsed["widgetParams"],
                                 trace_id=trace_id, session_id=session_id
                             ).to_sse()
-                            
-                            # Fire done event
+
                             yield done_event(tc or tools_called, trace_id, session_id).to_sse()
         except asyncio.CancelledError:
             yield cancelled_event(trace_id, session_id).to_sse()

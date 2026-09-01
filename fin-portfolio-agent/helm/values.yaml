@@ -47,6 +47,11 @@ env:
   ANALYSIS_BASE_URL: "http://am-analysis.am-apps-prod.svc.cluster.local:8080"
   AI_OBSERVATION_FORMAT: "toon"
   AI_TOOL_RESULT_MAX_ROWS: "20"
+  AI_TOOL_RESULT_MAX_CHARS: "4000"
+  AI_GRAPH_RECURSION_LIMIT: "14"
+  AI_MAX_TOOL_CALLS_PER_TURN: "6"
+  AI_MAX_TOKENS_PER_TURN: "120000"
+  AI_HISTORY_MAX_TURNS: "8"
 
 probes:
   port: 8101

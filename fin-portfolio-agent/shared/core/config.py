@@ -158,6 +158,11 @@ class Config:
     AI_HISTORY_MAX_TURNS: int = int(os.getenv("AI_HISTORY_MAX_TURNS", "10"))
     AI_SESSION_MAX_TURNS: int = int(os.getenv("AI_SESSION_MAX_TURNS", "20"))
 
+    # Phase 1 — Agent turn / token guards (prevents runaway tool+LLM loops)
+    AI_GRAPH_RECURSION_LIMIT: int = int(os.getenv("AI_GRAPH_RECURSION_LIMIT", "14"))
+    AI_MAX_TOOL_CALLS_PER_TURN: int = int(os.getenv("AI_MAX_TOOL_CALLS_PER_TURN", "6"))
+    AI_MAX_TOKENS_PER_TURN: int = int(os.getenv("AI_MAX_TOKENS_PER_TURN", "12000"))
+
     # Phase 1 — Tool execution
     # ---------------------------------------------------------------------------
     TOOL_TIMEOUT_SECONDS: float = float(os.getenv("TOOL_TIMEOUT_SECONDS", "30.0"))

@@ -87,7 +87,7 @@ _RULES: list[tuple[re.Pattern[str], str, Optional[str]]] = [
         None,
     ),
     (
-        re.compile(r"\b(holdings|what\s+do\s+i\s+hold|list\s+(all\s+)?my\s+stock)\b", re.I),
+        re.compile(r"\b(holdings?|what\s+do\s+i\s+hold|list\s+(all\s+)?my\s+stock)\b", re.I),
         "get_holdings_list",
         None,
     ),

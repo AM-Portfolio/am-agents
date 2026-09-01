@@ -19,6 +19,16 @@ def test_holdings_routed():
     assert m == ("get_holdings_list", {})
 
 
+def test_singular_holding_routed():
+    m = match_data_question("give me the holding")
+    assert m == ("get_holdings_list", {})
+
+
+def test_show_my_holdings_routed():
+    m = match_data_question("show my holdings")
+    assert m == ("get_holdings_list", {})
+
+
 def test_recent_activity_routed():
     m = match_data_question("Show my recent activity")
     assert m is not None
