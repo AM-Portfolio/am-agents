@@ -1,0 +1,89 @@
+global:
+  image:
+    registry: ghcr.io/am-portfolio
+    pullPolicy: Always
+    imagePullSecrets:
+      - name: regcred
+  vault:
+    enabled: true
+    role: "am-backend-role"
+    authPath: "auth/kubernetes"
+    serviceAccountName: "am-backend-sa"
+
+image:
+  repository: am-fin-agent
+
+replicaCount: 1
+language: python
+port: 8101
+
+service:
+  port: 8101
+
+entrypoint: "exec uvicorn am_fin_portfolio_analysis.api:app --host 0.0.0.0 --port 8101"
+
+security:
+  automountServiceAccountToken: true
+
+config: {}
+
+env:
+  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: "http://otel-collector.monitoring.svc.cluster.local:4318/v1/traces"
+  APP_NAME: am-fin-agent
+  APP_PORT: "8101"
+  LOG_FORMAT: json
+  LOG_LEVEL: INFO
+  TZ: Asia/Kolkata
+  LLM_ROUTING: direct
+  LITELLM_BASE_URL: "http://litellm.am-ai.svc.cluster.local:4000"
+  LANGFUSE_ENABLED: "true"
+  LANGFUSE_HOST: "https://langfuse.munish.org"
+  LANGFUSE_TRACE_MAX_OUTPUT_CHARS: "8000"
+  LANGFUSE_PROMPT_NAME: "fin-agent/finance-system"
+  LANGFUSE_PROMPT_LABEL: "prod"
+  AI_WRITE_TOOLS_ENABLED: "false"
+  MCP_SERVER_URL: "http://am-mcp-server.am-apps-prod.svc.cluster.local:8080"
+  MCP_BASE_URL: "http://am-mcp-server.am-apps-prod.svc.cluster.local:8080"
+  ANALYSIS_BASE_URL: "http://am-analysis.am-apps-prod.svc.cluster.local:8080"
+  AI_OBSERVATION_FORMAT: "toon"
+  AI_TOOL_RESULT_MAX_ROWS: "20"
+  AI_TOOL_RESULT_MAX_CHARS: "4000"
+  AI_GRAPH_RECURSION_LIMIT: "14"
+  AI_MAX_TOOL_CALLS_PER_TURN: "6"
+  AI_MAX_TOKENS_PER_TURN: "120000"
+  AI_HISTORY_MAX_TURNS: "8"
+
+probes:
+  port: 8101
+  startup:
+    path: /health
+    failureThreshold: 30
+    periodSeconds: 10
+  liveness:
+    path: /health
+  readiness:
+    path: /ready
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1536Mi
+  requests:
+    cpu: 250m
+    memory: 512Mi
+
+ingress:
+  enabled: true
+  className: "traefik"
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+
+# Prometheus scrape
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8101"
+  prometheus.io/path: "/metrics"
+
+vault:
+  enabled: true

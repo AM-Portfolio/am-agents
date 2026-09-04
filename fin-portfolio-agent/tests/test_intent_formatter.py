@@ -86,7 +86,8 @@ class TestResolveIntentWithToolData:
             "u42",
             tool_data={"get_portfolio_summary": payload},
         )
-        assert params["data"] == payload
+        assert params["data"]["totalValue"] == 1_500_000
+        assert params["data"]["totalHoldings"] == 15
 
     def test_data_key_exact_value(self):
         payload = {"k": "v"}

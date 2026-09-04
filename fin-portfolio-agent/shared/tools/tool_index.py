@@ -67,8 +67,12 @@ def _init():
 
         logger.info("ToolIndex: ChromaDB collection and embedding model initialised.")
 
-    except ImportError as exc:
-        logger.warning(
+    except Exception as exc:
+        _chroma_client = None
+        _collection = None
+        _embed_model = None
+        _cross_encoder = None
+        logger.debug(
             "ToolIndex: could not import chromadb / sentence-transformers (%s). "
             "Falling back to full TOOL_REGISTRY (no retrieval). "
             "Install with: pip install chromadb sentence-transformers",
@@ -90,7 +94,7 @@ def index_all_tools() -> int:
     """
     _init()
 
-    from tools.registry import TOOL_REGISTRY  # avoid circular import
+    from shared.tools.registry import TOOL_REGISTRY  # avoid circular import
 
     if _collection is None:
         logger.warning("ToolIndex: ChromaDB not available – skipping indexing.")
@@ -133,7 +137,7 @@ def keyword_search(query: str, top_k: int = 10) -> List[str]:
     Performs a lexical (keyword) search on tool names and paths.
     Returns a list of tool names (IDs).
     """
-    from tools.registry import TOOL_REGISTRY, OPENAPI_EXECUTOR_MAP
+    from shared.tools.registry import TOOL_REGISTRY, OPENAPI_EXECUTOR_MAP
     
     query = query.lower()
     scores = []
@@ -176,7 +180,7 @@ def retrieve_tools(query: str, top_k: int = 8) -> List[Dict[str, Any]]:
     """
     Hybrid search: Vector + Lexical + Re-ranking.
     """
-    from tools.registry import TOOL_REGISTRY  # avoid circular import
+    from shared.tools.registry import TOOL_REGISTRY  # avoid circular import
 
     _init()
 

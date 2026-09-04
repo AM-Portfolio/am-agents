@@ -1,0 +1,19 @@
+vault:
+  secretPaths:
+    mongodb:
+      mappings:
+        MONGODB_URI: "url"
+    redis:
+      template: |
+        export REDIS_URL="redis://:{{ .Data.data.password }}@{{ .Data.data.host }}:{{ .Data.data.port }}/0"
+    am-agents:
+      mappings:
+        LITELLM_MASTER_KEY: "LITELLM_MASTER_KEY"
+        LITELLM_BASE_URL: "LITELLM_BASE_URL"
+        LLM_PLAN_A_API_KEY: "LLM_PLAN_A_API_KEY"
+        TOGETHER_API_KEY: "TOGETHER_API_KEY"
+        LANGFUSE_PUBLIC_KEY: "LANGFUSE_PUBLIC_KEY"
+        LANGFUSE_SECRET_KEY: "LANGFUSE_SECRET_KEY"
+    otel:
+      mappings:
+        TRACING_SAMPLING_PROBABILITY: "TRACING_SAMPLING_PROBABILITY"

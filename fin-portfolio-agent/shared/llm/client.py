@@ -5,14 +5,298 @@ import json
 import time
 import os
 import asyncio
-from typing import Any, AsyncIterator, Literal, Protocol, List, Dict, Optional
+import random
+from dataclasses import dataclass
+from typing import Any, AsyncIterator, Literal, Protocol, List, Dict, Optional, Tuple
 
 import httpx
 from pydantic import BaseModel, Field
 
 from shared.core.config import settings
+from shared.observability.agent_log import log_agent_error, log_agent_event, log_agent_warning
+from shared.observability.log_events import AgentLogEvent
+from shared.observability.logging_setup import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger("llm")
+
+
+async def _record_fin_langfuse(
+    *,
+    generation_name: str,
+    messages: list[dict[str, Any]],
+    model: str,
+    response: Any,
+    tools: list[dict[str, Any]] | None = None,
+    usage: dict[str, Any] | None = None,
+    error: str | None = None,
+    tier: str | None = None,
+    request_id: str = "fin-request",
+) -> None:
+    """Send LLM generation to Langfuse (includes system prompt in input)."""
+    if not settings.LANGFUSE_ENABLED:
+        return
+    try:
+        from shared.context.request_context import trace_id_var
+        from shared.observability.langfuse_tracer import fin_tracer
+
+        trace_id = trace_id_var.get() or request_id
+        await fin_tracer.record_generation(
+            trace_id,
+            name=generation_name,
+            model=model,
+            messages=messages,
+            response=response,
+            tools=tools,
+            usage=usage,
+            error=error,
+            tier=tier,
+        )
+    except Exception as exc:
+        logger.warning("Langfuse record_generation failed: %s", exc)
+
+
+# ---------------------------------------------------------------------------
+# Phase 0b â€” Fallback chain primitives
+# ---------------------------------------------------------------------------
+
+class FallbackLLMError(RuntimeError):
+    """Raised when all 3 tiers of the fallback chain are exhausted."""
+
+    def __init__(self, trace_id: str, tier_errors: list[str]) -> None:
+        self.trace_id = trace_id
+        self.tier_errors = tier_errors
+        summary = " | ".join(f"[{i+1}] {e}" for i, e in enumerate(tier_errors))
+        super().__init__(f"All LLM tiers failed (traceId={trace_id}): {summary}")
+
+
+@dataclass
+class TierSpec:
+    """One entry in the 3-tier fallback chain."""
+    label: str          # "A", "B", "C"
+    base_url: str
+    model: str
+    api_key: str
+
+    @property
+    def available(self) -> bool:
+        return bool(self.api_key.strip())
+
+
+def _build_fallback_chain() -> list[TierSpec]:
+    """Construct Plan A â†’ B â†’ C from config, skipping tiers without keys."""
+    chain = [
+        TierSpec(
+            label="A",
+            base_url=settings.LLM_PLAN_A_BASE_URL.rstrip("/"),
+            model=settings.LLM_PLAN_A_MODEL,
+            api_key=settings.LLM_PLAN_A_API_KEY,
+        ),
+        TierSpec(
+            label="B",
+            base_url=settings.LLM_PLAN_B_BASE_URL.rstrip("/"),
+            model=settings.LLM_PLAN_B_MODEL,
+            api_key=settings.LLM_PLAN_B_API_KEY,
+        ),
+        TierSpec(
+            label="C",
+            base_url=settings.LLM_PLAN_C_BASE_URL.rstrip("/"),
+            model=settings.LLM_PLAN_C_MODEL,
+            api_key=settings.LLM_PLAN_C_API_KEY,
+        ),
+    ]
+    return [t for t in chain if t.available]
+
+
+# Status codes that trigger a retry within the same tier before falling back
+_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+# Status codes that mean "bad request / auth" â€” skip retries, promote immediately
+_PROMOTE_STATUS = {400, 401, 403, 404, 422}
+
+
+async def _attempt_completion(
+    *,
+    tier: TierSpec,
+    payload: dict[str, Any],
+    timeout: float,
+) -> dict[str, Any]:
+    """Single HTTP attempt against one tier. Returns parsed JSON or raises."""
+    url = f"{tier.base_url}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {tier.api_key}",
+        "Content-Type": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        resp = await client.post(url, headers=headers, json=payload)
+    if resp.status_code != 200:
+        raise httpx.HTTPStatusError(
+            f"HTTP {resp.status_code}: {resp.text[:300]}",
+            request=resp.request,
+            response=resp,
+        )
+    return resp.json()
+
+
+async def _call_with_fallback(
+    *,
+    messages: list[dict[str, str]],
+    tools: list[dict[str, Any]] | None = None,
+    tool_choice: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    request_id: str = "fin-request",
+    generation_name: str = "fin-agent",
+    backend: str | None = None,
+    stream: bool = False,
+    on_token: Any | None = None,
+) -> Tuple[dict[str, Any], TierSpec]:
+    """
+    Runs the 3-tier fallback chain:
+      Plan A â†’ Plan B â†’ Plan C
+
+    Within each tier:
+      - Attempts up to LLM_MAX_RETRIES_PER_TIER times on 429 / 5xx
+      - Uses exponential backoff (LLM_RETRY_BACKOFF_SECONDS Ã— 2^attempt)
+      - Hard per-attempt timeout of LLM_ATTEMPT_TIMEOUT_SECONDS
+
+    Raises FallbackLLMError with a traceId when all tiers are exhausted.
+    Raises TokenBudgetExceededError when AI_MAX_TOKENS_PER_TURN is reached.
+    """
+    from shared.agents.token_budget import assert_within_budget, record_turn_tokens
+
+    import uuid
+    trace_id = request_id or str(uuid.uuid4())
+
+    assert_within_budget()
+
+    chain = _build_fallback_chain()
+    if not chain:
+        raise FallbackLLMError(
+            trace_id=trace_id,
+            tier_errors=["No LLM tiers configured â€” set LLM_PLAN_A_API_KEY or LITELLM_MASTER_KEY"],
+        )
+
+    tier_errors: list[str] = []
+    attempt_timeout = settings.LLM_ATTEMPT_TIMEOUT_SECONDS
+    max_retries = settings.LLM_MAX_RETRIES_PER_TIER
+    base_backoff = settings.LLM_RETRY_BACKOFF_SECONDS
+
+    for tier in chain:
+        for attempt in range(max_retries):
+            payload: dict[str, Any] = {
+                "model": tier.model,
+                "messages": messages,
+                "temperature": temperature if temperature is not None else settings.LLM_TEMPERATURE,
+                "max_tokens": max_tokens if max_tokens is not None else settings.LLM_MAX_TOKENS,
+                "stream": False,
+                "metadata": {
+                    "request_id": trace_id,
+                    "generation_name": generation_name,
+                    "backend": backend,
+                    "source": "fin-agent",
+                    "tier": tier.label,
+                },
+            }
+            if tools:
+                payload["tools"] = tools
+            if tool_choice:
+                payload["tool_choice"] = tool_choice
+
+            try:
+                logger.debug(
+                    "LLM attempt tier=%s model=%s attempt=%d/%d",
+                    tier.label, tier.model, attempt + 1, max_retries,
+                )
+                data = await asyncio.wait_for(
+                    _attempt_completion(tier=tier, payload=payload, timeout=attempt_timeout),
+                    timeout=attempt_timeout + 1.0,  # outer safety net
+                )
+                log_agent_event(
+                    logger,
+                    AgentLogEvent.LLM_SUCCESS,
+                    tier=tier.label,
+                    model=tier.model,
+                    attempt=attempt + 1,
+                )
+                message = data.get("choices", [{}])[0].get("message", {})
+                await _record_fin_langfuse(
+                    generation_name=generation_name,
+                    messages=messages,
+                    model=tier.model,
+                    response=message,
+                    tools=tools,
+                    usage=data.get("usage"),
+                    tier=tier.label,
+                    request_id=trace_id,
+                )
+                record_turn_tokens(data.get("usage"))
+                return data, tier
+
+            except asyncio.TimeoutError:
+                err = f"Plan {tier.label}: timeout after {attempt_timeout}s"
+                log_agent_warning(
+                    logger,
+                    AgentLogEvent.LLM_FAILURE,
+                    tier=tier.label,
+                    reason="timeout",
+                    attempt=attempt + 1,
+                )
+                tier_errors.append(err)
+                break  # promote immediately on timeout — no retry
+
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code
+                err = f"Plan {tier.label}: HTTP {status} {exc.response.text[:150]}"
+                log_agent_warning(
+                    logger,
+                    AgentLogEvent.LLM_FAILURE,
+                    tier=tier.label,
+                    http_status=status,
+                    detail=exc.response.text[:150],
+                    attempt=attempt + 1,
+                )
+
+                if status in _PROMOTE_STATUS:
+                    tier_errors.append(err)
+                    break  # no point retrying 401/403 etc.
+
+                if status in _RETRYABLE_STATUS and attempt < max_retries - 1:
+                    backoff = base_backoff * (2 ** attempt) + random.uniform(0, 0.5)
+                    logger.info("429/5xx â€” backing off %.1fs before retry", backoff)
+                    await asyncio.sleep(backoff)
+                    continue
+
+                tier_errors.append(err)
+                break
+
+            except Exception as exc:  # noqa: BLE001
+                err = f"Plan {tier.label}: {type(exc).__name__}: {exc}"
+                log_agent_warning(
+                    logger,
+                    AgentLogEvent.LLM_FAILURE,
+                    tier=tier.label,
+                    reason=type(exc).__name__,
+                    detail=str(exc)[:200],
+                    attempt=attempt + 1,
+                )
+                tier_errors.append(err)
+                break
+
+    log_agent_error(
+        logger,
+        AgentLogEvent.LLM_ALL_TIERS_FAILED,
+        error="; ".join(tier_errors),
+        trace_id=trace_id,
+    )
+    await _record_fin_langfuse(
+        generation_name=generation_name,
+        messages=messages,
+        model="none",
+        response="",
+        tools=tools,
+        error="; ".join(tier_errors),
+        request_id=trace_id,
+    )
+    raise FallbackLLMError(trace_id=trace_id, tier_errors=tier_errors)
 
 
 class LlmCallResult(BaseModel):
@@ -30,6 +314,7 @@ async def _emit_langfuse(
     output: str,
     model: str,
     error: str | None = None,
+    usage: dict | None = None,
 ) -> None:
     if not settings.LANGFUSE_ENABLED:
         return
@@ -45,7 +330,19 @@ async def _emit_langfuse(
     from datetime import datetime, timezone
     
     auth = base64.b64encode(f"{pk}:{sk}".encode()).decode()
-    trace_id = str(uuid.uuid4())
+    try:
+        from shared.context.request_context import trace_id_var, session_id_var, user_id_var
+        req_trace = trace_id_var.get()
+        req_sess = session_id_var.get()
+        req_user = user_id_var.get()
+    except Exception:
+        req_trace = ""
+        req_sess = ""
+        req_user = "fin-agent"
+    
+    trace_id = req_trace if req_trace else str(uuid.uuid4())
+    session_id = req_sess if req_sess else trace_id
+    user_id = req_user if req_user else "fin-agent"
     gen_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     max_chars = settings.LANGFUSE_TRACE_MAX_OUTPUT_CHARS
@@ -75,8 +372,8 @@ async def _emit_langfuse(
             "body": {
                 "id": trace_id,
                 "name": f"llm.{prompt_key}",
-                "userId": "fin-agent",
-                "sessionId": trace_id,
+                "userId": user_id,
+                "sessionId": session_id,
                 "tags": ["fin-agent", "llm", prompt_key],
                 "metadata": meta,
                 "input": {"system": system[:max_chars], "user": user_str[:max_chars]},
@@ -92,32 +389,77 @@ async def _emit_langfuse(
                 "traceId": trace_id,
                 "name": prompt_key,
                 "model": model,
-                "input": [
-                    {"role": "system", "content": system[:max_chars]},
-                    {"role": "user", "content": user_str[:max_chars]},
-                ],
+                "input": [{"role": m.get("role"), "content": m.get("content", "")[:max_chars]} for m in messages],
                 "output": (error or output)[:max_chars],
                 "metadata": meta,
                 "level": "ERROR" if error else "DEFAULT",
                 "statusMessage": error,
+                **({"usage": {
+                    "promptTokens": usage.get("prompt_tokens"),
+                    "completionTokens": usage.get("completion_tokens"),
+                    "totalTokens": usage.get("total_tokens")
+                }} if usage else {})
             },
         },
     ]
     
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.post(
+        async with httpx.AsyncClient() as c:
+            resp = await c.post(
                 f"{host}/api/public/ingestion",
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Basic {auth}",
-                },
+                headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"},
                 json={"batch": batch}
             )
             if resp.status_code not in {200, 207}:
                 logger.warning(f"Langfuse ingestion returned status {resp.status_code}")
     except Exception as e:
         logger.warning(f"Langfuse ingestion failed: {e}")
+
+async def emit_langfuse_span(name: str, input_args: dict, result: Any, start_time: float) -> None:
+    if not settings.LANGFUSE_ENABLED:
+        return
+    pk = settings.LANGFUSE_PUBLIC_KEY
+    sk = settings.LANGFUSE_SECRET_KEY
+    host = settings.LANGFUSE_HOST.rstrip("/")
+    if not pk or not sk or not host:
+        return
+    import base64, uuid, json
+    from datetime import datetime, timezone
+    
+    auth = base64.b64encode(f"{pk}:{sk}".encode()).decode()
+    try:
+        from shared.context.request_context import trace_id_var
+        req_trace = trace_id_var.get()
+    except Exception:
+        req_trace = ""
+    
+    trace_id = req_trace if req_trace else str(uuid.uuid4())
+    span_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc)
+    
+    input_str = json.dumps(input_args, default=str)
+    output_str = json.dumps(result, default=str) if not isinstance(result, str) else result
+    max_chars = settings.LANGFUSE_TRACE_MAX_OUTPUT_CHARS
+    
+    batch = [{
+        "id": str(uuid.uuid4()),
+        "type": "span-create",
+        "timestamp": now.isoformat(),
+        "body": {
+            "id": span_id,
+            "traceId": trace_id,
+            "name": name,
+            "startTime": datetime.fromtimestamp(start_time, timezone.utc).isoformat(),
+            "endTime": now.isoformat(),
+            "input": input_str[:max_chars],
+            "output": output_str[:max_chars],
+        }
+    }]
+    try:
+        async with httpx.AsyncClient() as c:
+            await c.post(f"{host}/api/public/ingestion", headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"}, json={"batch": batch})
+    except Exception as e:
+        logger.warning(f"Langfuse span ingestion failed: {e}")
 
 
 class DirectLiteLLMClient:
@@ -175,36 +517,44 @@ class DirectLiteLLMClient:
         tool_choice: Optional[str] = None,
         request_id: str = "fin-request",
     ) -> Any:
-        url = f"{self.base_url}/chat/completions"
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": settings.LLM_MAX_TOKENS,
-            "stream": False,
-            "metadata": self._metadata(request_id=request_id, generation_name="fin-agent", backend="finance"),
-        }
-        if tools:
-            payload["tools"] = tools
-            if tool_choice:
-                payload["tool_choice"] = tool_choice
+        try:
+            data, tier = await _call_with_fallback(
+                messages=messages,
+                tools=tools,
+                tool_choice=tool_choice,
+                temperature=temperature,
+                request_id=request_id,
+                generation_name="fin.chat",
+                backend="finance",
+            )
+        except FallbackLLMError as exc:
+            # Return structured ERROR so callers never get a blank crash
+            return {
+                "error": True,
+                "traceId": exc.trace_id,
+                "message": "LLM unavailable â€” all providers failed",
+                "details": exc.tier_errors,
+            }
+        except Exception as exc:
+            from shared.agents.token_budget import TokenBudgetExceededError
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            resp = await client.post(url, headers=self._headers(), json=payload)
-            if resp.status_code != 200:
-                err_text = resp.text[:500]
-                asyncio.create_task(_emit_langfuse("fin.chat", messages, "", self.model, err_text))
-                raise RuntimeError(f"LiteLLM failed [{resp.status_code}]: {err_text}")
-            data = resp.json()
+            if isinstance(exc, TokenBudgetExceededError):
+                return {
+                    "error": True,
+                    "code": "TOKEN_BUDGET_EXCEEDED",
+                    "message": str(exc),
+                    "tokensUsed": exc.used,
+                    "tokenLimit": exc.limit,
+                }
+            raise
 
         message = data["choices"][0]["message"]
-        content = message.get("content") or message.get("reasoning_content") or ""
-        output_str = json.dumps(message.get("tool_calls")) if message.get("tool_calls") else content
-        asyncio.create_task(_emit_langfuse("fin.chat", messages, output_str, self.model))
-
+        content = message.get("content") or ""
         if message.get("tool_calls"):
             return message
         return content
+
+
 
     async def chat_with_usage(
         self,
@@ -221,30 +571,18 @@ class DirectLiteLLMClient:
             {"role": "user", "content": user},
         ]
         started = time.perf_counter()
-        url = f"{self.base_url}/chat/completions"
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": temperature if temperature is not None else settings.LLM_TEMPERATURE,
-            "max_tokens": settings.LLM_MAX_TOKENS,
-            "stream": False,
-            "metadata": self._metadata(request_id=request_id, generation_name=generation_name, backend=backend),
-        }
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            resp = await client.post(url, headers=self._headers(), json=payload)
-            if resp.status_code != 200:
-                err_text = resp.text[:500]
-                asyncio.create_task(_emit_langfuse(generation_name, messages, "", self.model, err_text))
-                raise RuntimeError(f"LiteLLM failed [{resp.status_code}]: {err_text}")
-            data = resp.json()
-
-        content = data["choices"][0]["message"].get("content") or data["choices"][0]["message"].get("reasoning_content") or ""
-        asyncio.create_task(_emit_langfuse(generation_name, messages, content, self.model))
-
+        data, tier = await _call_with_fallback(
+            messages=messages,
+            temperature=temperature,
+            request_id=request_id,
+            generation_name=generation_name,
+            backend=backend,
+        )
+        content = data["choices"][0]["message"].get("content") or ""
         usage_raw = data.get("usage") or {}
         return LlmCallResult(
             content=content,
-            model=str(data.get("model") or self.model),
+            model=str(data.get("model") or tier.model),
             usage={
                 "prompt_tokens": int(usage_raw.get("prompt_tokens") or 0),
                 "completion_tokens": int(usage_raw.get("completion_tokens") or 0),
@@ -252,6 +590,7 @@ class DirectLiteLLMClient:
             },
             latency_ms=int((time.perf_counter() - started) * 1000),
         )
+
 
     async def chat_stream_with_usage(
         self,
@@ -308,7 +647,7 @@ class DirectLiteLLMClient:
                             "total_tokens": int(u.get("total_tokens") or 0),
                         }
                     delta = (data.get("choices") or [{}])[0].get("delta") or {}
-                    token = delta.get("content") or delta.get("reasoning_content")
+                    token = delta.get("content")
                     if token:
                         parts.append(token)
                         if on_token:
@@ -400,9 +739,12 @@ class GatewayLLMClient:
         }
         if tools:
             payload["tools"] = tools
-            if tool_choice:
-                payload["tool_choice"] = tool_choice
+        if tool_choice:
+            payload["tool_choice"] = tool_choice
 
+        from shared.agents.token_budget import assert_within_budget, record_turn_tokens
+
+        assert_within_budget()
         token = await self._get_access_token()
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             resp = await client.post(url, headers=self._headers(token), json=payload)
@@ -412,9 +754,20 @@ class GatewayLLMClient:
                 raise RuntimeError(f"Gateway LLM failed [{resp.status_code}]: {err_text}")
             data = resp.json()
 
+        record_turn_tokens(data.get("usage"))
+
         content = data.get("content") or ""
         output_str = json.dumps(data.get("tool_calls")) if data.get("tool_calls") else content
-        asyncio.create_task(_emit_langfuse("fin.chat", messages, output_str, settings.LLM_PLANNER_MODEL))
+        usage = data.get("usage")
+        await _record_fin_langfuse(
+            generation_name="fin.chat",
+            messages=messages,
+            model=settings.LLM_PLANNER_MODEL,
+            response=data,
+            tools=tools,
+            usage=usage,
+            request_id=request_id,
+        )
 
         if data.get("tool_calls"):
             return data
@@ -455,9 +808,9 @@ class GatewayLLMClient:
             data = resp.json()
 
         content = data["content"]
-        asyncio.create_task(_emit_langfuse(generation_name, messages, content, settings.LLM_PLANNER_MODEL))
-
         usage = data.get("usage") or {}
+        asyncio.create_task(_emit_langfuse(generation_name, messages, content, settings.LLM_PLANNER_MODEL, usage=usage))
+
         return LlmCallResult(
             content=content,
             model=settings.LLM_PLANNER_MODEL,

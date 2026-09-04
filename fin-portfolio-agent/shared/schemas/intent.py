@@ -13,6 +13,12 @@ class WidgetId:
     API_TEST_WIDGET    = "API_TEST_WIDGET"
     TEXT_RESPONSE      = "TEXT_RESPONSE"
     ERROR              = "ERROR"
+    BASKET_CARD        = "BASKET_CARD"
+    NONE               = "NONE"
+    RISK_METRICS       = "RISK_METRICS"
+    PERFORMANCE_CHART  = "PERFORMANCE_CHART"
+    ORDER_PREVIEW      = "ORDER_PREVIEW"
+
 
 
 class ChatRequest(BaseModel):

@@ -5,3 +5,5 @@ from contextvars import ContextVar
 user_id_var: ContextVar[str] = ContextVar("user_id", default="anonymous")
 trace_id_var: ContextVar[str] = ContextVar("trace_id", default="")
 session_id_var: ContextVar[str] = ContextVar("session_id", default="")
+auth_token_var: ContextVar[str] = ContextVar("auth_token", default="")
+chat_tokens_used_var: ContextVar[int] = ContextVar("chat_tokens_used", default=0)

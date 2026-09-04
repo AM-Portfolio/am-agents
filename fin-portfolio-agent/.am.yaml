@@ -1,0 +1,15 @@
+# amctl deploy config for fin-portfolio-agent.
+# Secrets stay in Vault (helm/vault-mappings.yaml); do not put credentials here.
+
+name: am-fin-agent
+release: am-fin-agent
+runtime: python
+language: python
+dockerfile: Dockerfile
+context: .
+image: ghcr.io/am-portfolio/am-fin-agent
+github:
+  repo: AM-Portfolio/am-agents
+  deploy_workflow: deploy-am-fin-agent.yml
+  service: am-fin-agent
+  ref: feature/am-agents/ai_chat

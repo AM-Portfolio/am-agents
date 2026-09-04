@@ -1,0 +1,47 @@
+﻿name: AM Fin Portfolio Agent Publish
+
+on:
+  push:
+    branches: ["main", "develop", "test/**", "feature/**", "hotfix/**", "fix/**"]
+    paths:
+      - "fin-portfolio-agent/**"
+      - ".dockerignore"
+  pull_request:
+    branches: ["main", "develop", "test/**", "feature/**", "hotfix/**", "fix/**"]
+    paths:
+      - "fin-portfolio-agent/**"
+      - ".dockerignore"
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test fin-portfolio-agent
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fin-portfolio-agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - run: pytest tests -q --import-mode=importlib
+
+  publish:
+    name: Publish AM Fin Portfolio Agent
+    needs: test
+    permissions:
+      contents: read
+      packages: write
+    uses: AM-Portfolio/am-pipelines/.github/workflows/central-build-publish.yml@main
+    with:
+      language: "python"
+      working_directory: "fin-portfolio-agent"
+      image_name: "am-fin-agent"
+      build_context: "."
+      preprod_namespace: "am-apps-preprod"
+      prod_namespace: "am-apps-prod"
+      deploy_dev: true
+      deploy_prod: true
+    secrets: inherit

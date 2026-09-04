@@ -19,17 +19,26 @@ os.environ["ENABLE_API_TESTING"] = "false"
 
 load_dotenv(os.path.join(root_dir, ".env"), override=True)
 
-from fastapi import FastAPI, HTTPException
+from shared.observability.logging_setup import configure_logging
+
+configure_logging()
+
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from shared.schemas.intent import ChatRequest, AiIntentResponse
 from shared.session.store import session_store
 from shared.middleware.logging_middleware import LoggingMiddleware
-from shared.context.request_context import trace_id_var
+from shared.context.request_context import trace_id_var, user_id_var, session_id_var, auth_token_var
+from shared.context.jwt_context import resolve_request_user_id
 from shared.agents.finance_agent import finance_agent
 from shared.tools.registry import TOOL_REGISTRY
+from shared.streaming.events import error_event
+from shared.observability.agent_log import log_agent_error, log_agent_event
+from shared.observability.log_events import AgentLogEvent
+from shared.observability.logging_setup import get_logger
 
-logger = logging.getLogger("am.fin.portfolio.api")
+logger = get_logger("api")
 
 app = FastAPI(
     title="AM Portfolio Analysis API",
@@ -45,32 +54,238 @@ app.add_middleware(
 )
 app.add_middleware(LoggingMiddleware)
 
+
+@app.on_event("startup")
+async def _log_runtime_config() -> None:
+    from shared.core.config import settings
+    from shared.observability.langfuse_tracer import start_langfuse_worker
+
+    await start_langfuse_worker()
+    log_agent_event(
+        logger,
+        AgentLogEvent.STARTUP,
+        env=settings.AM_AGENT_ENV,
+        mcp=settings.MCP_BASE_URL,
+        litellm=settings.LITELLM_BASE_URL or "(unset)",
+        analysis=os.getenv("ANALYSIS_BASE_URL", "http://localhost:8060"),
+        mcp_auth_disabled=settings.MCP_GATEWAY_AUTH_DISABLED,
+        langfuse=settings.LANGFUSE_ENABLED,
+        prompt=settings.LANGFUSE_PROMPT_NAME,
+    )
+
+
+@app.on_event("shutdown")
+async def _shutdown_observability() -> None:
+    from shared.observability.langfuse_tracer import stop_langfuse_worker
+
+    await stop_langfuse_worker()
+
+
 @app.get("/")
 async def root():
     return {"message": "Portfolio Analysis API is running. Use /api/v1/ai/chat for agent interaction."}
 
 @app.post("/api/v1/ai/chat", response_model=AiIntentResponse)
-async def chat(request: ChatRequest) -> AiIntentResponse:
+async def chat(request: ChatRequest, http_request: Request) -> AiIntentResponse:
     session_id = request.sessionId or str(uuid.uuid4())
     trace_id = trace_id_var.get() or str(uuid.uuid4())
+    uid, _jwt_sub = resolve_request_user_id(
+        body_user_id=request.userId,
+        header_user_id=http_request.headers.get("x-user-id"),
+        auth_header=auth_token_var.get() or http_request.headers.get("Authorization", ""),
+    )
+    user_id_var.set(uid)
+    session_id_var.set(session_id)
 
-    history = session_store.get(session_id)
-    session_store.append(session_id, "user", request.message)
+    history = session_store.get_history(uid, session_id)
+    session_store.append_turn(uid, session_id, "user", request.message)
 
     try:
         response = await finance_agent.run(
             message=request.message,
             history=history,
-            user_id=request.userId,
+            user_id=uid,
             session_id=session_id,
             trace_id=trace_id,
         )
     except Exception as e:
-        logger.error(f"Agent failed: {e}")
+        log_agent_error(
+            logger,
+            AgentLogEvent.CHAT_ERROR,
+            error=e,
+            exc_info=True,
+            endpoint="/api/v1/ai/chat",
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
-    session_store.append(session_id, "assistant", response.message)
+    session_store.append_turn(uid, session_id, "assistant", response.message)
+    log_agent_event(
+        logger,
+        AgentLogEvent.CHAT_COMPLETE,
+        widget_id=str(response.widgetId),
+        tools_used=response.toolsUsed,
+        message_preview=(response.message or "")[:200],
+    )
     return response
+
+
+@app.post("/api/v1/ai/chat/stream")
+@app.get("/api/v1/ai/chat/stream")
+async def chat_stream(
+    http_request: Request,
+    request: ChatRequest | None = None,
+    message: str | None = None,
+    user_id: str | None = None,
+    session_id: str | None = None,
+):
+    msg = (request.message if request else message) or ""
+    body_uid = (request.userId if request else user_id) or ""
+    sid = (request.sessionId if request else session_id) or str(uuid.uuid4())
+    tid = trace_id_var.get() or str(uuid.uuid4())
+    uid, _jwt_sub = resolve_request_user_id(
+        body_user_id=body_uid,
+        header_user_id=http_request.headers.get("x-user-id"),
+        auth_header=auth_token_var.get() or http_request.headers.get("Authorization", ""),
+    )
+    user_id_var.set(uid)
+    session_id_var.set(sid)
+
+    if not msg:
+        raise HTTPException(status_code=400, detail="Missing message parameter")
+
+    history = session_store.get_history(uid, sid)
+    session_store.append_turn(uid, sid, "user", msg)
+
+    async def event_generator():
+        try:
+            async for sse_chunk in finance_agent.run_stream(
+                message=msg,
+                history=history,
+                user_id=uid,
+                session_id=sid,
+                trace_id=tid,
+            ):
+                yield sse_chunk
+        except Exception as exc:
+            log_agent_error(
+                logger,
+                AgentLogEvent.CHAT_STREAM_ERROR,
+                error=exc,
+                exc_info=True,
+                endpoint="/api/v1/ai/chat/stream",
+            )
+            yield error_event(str(exc), tid, sid).to_sse()
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Trace-Id": tid,
+            "X-Session-Id": sid,
+        },
+    )
+
+
+@app.post("/api/v1/ai/feedback")
+async def feedback(payload: dict):
+    logger.info("Received user feedback: %s", payload)
+    return {"status": "ok", "message": "Feedback recorded"}
+
+
+@app.post("/api/v1/ai/actions/confirm")
+async def confirm_action(payload: dict, request: Request):
+    """
+    Phase 4 HITL action confirmation endpoint.
+    Executes the 'place_smart_order' MCP tool bypassing the LLM.
+    """
+    confirm_token = payload.get("confirmToken")
+    if not confirm_token:
+        raise HTTPException(status_code=400, detail="Missing confirmToken in payload")
+        
+    idempotency_key = request.headers.get("Idempotency-Key") or payload.get("idempotencyKey")
+    
+    # Phase 4 Idempotency Check
+    if idempotency_key:
+        # In a real app, check Redis. Here we check a local mock store.
+        if getattr(app.state, "idempotency_store", None) is None:
+            app.state.idempotency_store = set()
+        if idempotency_key in app.state.idempotency_store:
+            return {"status": "confirmed", "message": "Action already executed (idempotency hit)."}
+        app.state.idempotency_store.add(idempotency_key)
+        
+    # Phase 4 Security: Scope check (mock for now)
+    auth_header = request.headers.get("Authorization", "")
+    if "Bearer " in auth_header:
+        token = auth_header.split(" ")[1]
+        import base64
+        try:
+            parts = token.split(".")
+            if len(parts) == 3:
+                payload_json = base64.b64decode(parts[1] + "==").decode("utf-8")
+                import json
+                jwt_data = json.loads(payload_json)
+                scopes = jwt_data.get("scope", "")
+                if "ai:trade:write" not in scopes:
+                    logger.warning(f"Rejecting confirm: missing ai:trade:write scope. Scopes found: {scopes}")
+                    raise HTTPException(status_code=403, detail="Missing required scope: ai:trade:write")
+        except Exception:
+            pass # fallback to accept for local demo if malformed
+            
+    # Audit trail variables
+    user_id = payload.get("userId") or request.headers.get("x-user-id", "unknown")
+    trace_id = request.headers.get("x-trace-id", str(uuid.uuid4()))
+    import datetime
+    timestamp = datetime.datetime.utcnow().isoformat()
+        
+    logger.info(f"Received HITL confirm action for token: {confirm_token} from user: {user_id}")
+    
+    # We call the local python tool
+    try:
+        from shared.tools.smart_order import place_smart_order
+        import json
+        result_str = place_smart_order(confirmToken=confirm_token)
+        result = json.loads(result_str)
+        if "error" in result:
+            raise HTTPException(status_code=400, detail=result["error"])
+            
+        # Phase 4 Audit Trail
+        audit_log = {
+            "event": "HITL_CONFIRM",
+            "userId": user_id,
+            "token": confirm_token,
+            "tool": "place_smart_order",
+            "result": "SUCCESS",
+            "timestamp": timestamp,
+            "traceId": trace_id
+        }
+        logger.warning(f"AUDIT LOG: {json.dumps(audit_log)}")
+        
+        return {
+            "status": "confirmed",
+            "confirmToken": confirm_token,
+            "message": "Action confirmed and executed successfully.",
+            "data": result
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to execute place_smart_order: {e}")
+        # Phase 4 Audit Trail Failure
+        audit_log = {
+            "event": "HITL_CONFIRM",
+            "userId": user_id,
+            "token": confirm_token,
+            "tool": "place_smart_order",
+            "result": "FAILURE",
+            "reason": str(e),
+            "timestamp": timestamp,
+            "traceId": trace_id
+        }
+        logger.warning(f"AUDIT LOG: {json.dumps(audit_log)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/health")
 def health():
@@ -88,3 +303,4 @@ def ready():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8101)
+

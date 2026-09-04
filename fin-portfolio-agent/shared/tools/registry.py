@@ -14,10 +14,13 @@ Contains:
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Any, Callable, Dict, List
 
-logger = logging.getLogger(__name__)
+from shared.observability.agent_log import log_agent_error, log_agent_warning
+from shared.observability.log_events import AgentLogEvent
+from shared.observability.logging_setup import get_logger
+
+logger = get_logger("tools.registry")
 
 # ─── Registries ───────────────────────────────────────────────────────────────
 
@@ -120,38 +123,57 @@ def register_openapi_tools(apis: List[Dict[str, Any]]) -> int:
 
 
 async def execute_tool(name: str, args: Dict[str, Any]) -> str:
+    if name == "get_holding_details":
+        name = "get_holding_detail"
+
     """
     Dispatch a tool call by name (ASYNCHRONOUS).
 
     Priority:
       1. Hand-written tools (_TOOL_IMPL)
       2. OpenAPI-generated tools (OPENAPI_EXECUTOR_MAP)
-      3. Unknown → error string
+      3. Unknown -> error string
     """
-    # 1. Hand-written tool
-    impl = _TOOL_IMPL.get(name)
-    if impl:
+    import time
+    start_time = time.time()
+    result = ""
+    
+    try:
+        # 1. Hand-written tool
+        impl = _TOOL_IMPL.get(name)
+        if impl:
+            try:
+                if asyncio.iscoroutinefunction(impl):
+                    result = await impl(**args)
+                else:
+                    result = impl(**args)
+            except Exception as exc:
+                log_agent_error(logger, AgentLogEvent.TOOL_EXECUTE_ERROR, error=exc, tool=name)
+                result = f"Error executing tool '{name}': {exc}"
+            return result
+            
+        # 2. OpenAPI-generated tool
+        meta = OPENAPI_EXECUTOR_MAP.get(name)
+        if meta:
+            from tools.openapi_tool_generator import execute_openapi_tool
+            try:
+                result = await execute_openapi_tool(meta, args)
+            except Exception as exc:
+                logger.error("execute_tool: openapi tool '%s' raised %s", name, exc)
+                result = f'{{"error": "Tool execution failed: {exc}"}}'
+            return result
+            
+        # 3. Unknown
+        log_agent_warning(logger, AgentLogEvent.TOOL_UNKNOWN, tool=name, args=args)
+        result = f"Error: Unknown tool '{name}'"
+        return result
+        
+    finally:
         try:
-            if asyncio.iscoroutinefunction(impl):
-                return await impl(**args)
-            return impl(**args)
-        except Exception as exc:
-            logger.error("execute_tool: hand-written tool '%s' raised %s", name, exc)
-            return f"Error executing tool '{name}': {exc}"
-
-    # 2. OpenAPI-generated tool
-    meta = OPENAPI_EXECUTOR_MAP.get(name)
-    if meta:
-        from tools.openapi_tool_generator import execute_openapi_tool
-        try:
-            return await execute_openapi_tool(meta, args)
-        except Exception as exc:
-            logger.error("execute_tool: openapi tool '%s' raised %s", name, exc)
-            return f'{{"error": "Tool execution failed: {exc}"}}'
-
-    # 3. Unknown
-    logger.warning("execute_tool: unknown tool '%s'", name)
-    return f"Error: Unknown tool '{name}'"
+            from shared.llm.client import emit_langfuse_span
+            asyncio.create_task(emit_langfuse_span(f"tool.{name}", args, result, start_time))
+        except Exception as e:
+            logger.error(f"Failed to emit langfuse span: {e}")
 
 
 def _run_async(coro_fn, *args) -> str:

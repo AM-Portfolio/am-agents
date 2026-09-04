@@ -1,0 +1,33 @@
+environment: preprod
+replicaCount: 1
+
+vault:
+  enabled: true
+  secretPaths:
+    otel:
+      path: "apps/data/preprod/infra/observability"
+    mongodb:
+      path: "apps/data/preprod/infra/mongodb"
+    redis:
+      path: "apps/data/preprod/infra/redis"
+    observability:
+      path: "apps/data/preprod/services/am-agents-mcp-gateway"
+    llm-api-keys:
+      path: "apps/data/preprod/services/am-agents-mcp-gateway"
+
+ingress:
+  enabled: true
+  annotations:
+    traefik.ingress.kubernetes.io/router.priority: "100"
+    traefik.ingress.kubernetes.io/router.middlewares: >-
+      am-apps-preprod-global-cors@kubernetescrd,
+      am-apps-preprod-strip-prefix-apps@kubernetescrd
+  hosts:
+    - host: am-preprod.asrax.in
+      paths:
+        - path: /ai
+          pathType: Prefix
+
+env:
+  APP_ENV: preprod
+  AI_WRITE_TOOLS_ENABLED: "false"
