@@ -16,6 +16,7 @@ class StreamEvent:
     trace_id: str | None = None
     session_id: str | None = None
     tools_used: list | None = None
+    tokens_used: int | None = None
 
     def to_sse(self) -> str:
         """Format as SSE line: data: {...}\n\n"""
@@ -41,8 +42,19 @@ def tool_end_event(tool_name: str, trace_id: str | None = None) -> StreamEvent:
 def widget_event(widget_id: str, widget_params: dict, trace_id: str | None = None, session_id: str | None = None) -> StreamEvent:
     return StreamEvent(type="widget", widget_id=widget_id, widget_params=widget_params, trace_id=trace_id, session_id=session_id)
 
-def done_event(tools_used: list, trace_id: str, session_id: str) -> StreamEvent:
-    return StreamEvent(type="done", tools_used=tools_used, trace_id=trace_id, session_id=session_id)
+def done_event(
+    tools_used: list,
+    trace_id: str,
+    session_id: str,
+    tokens_used: int | None = None,
+) -> StreamEvent:
+    return StreamEvent(
+        type="done",
+        tools_used=tools_used,
+        trace_id=trace_id,
+        session_id=session_id,
+        tokens_used=tokens_used,
+    )
 
 def error_event(message: str, trace_id: str, session_id: str | None = None) -> StreamEvent:
     return StreamEvent(type="error", content=message, trace_id=trace_id, session_id=session_id)

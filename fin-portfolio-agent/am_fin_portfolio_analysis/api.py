@@ -40,6 +40,20 @@ from shared.observability.logging_setup import get_logger
 
 logger = get_logger("api")
 
+
+def _parse_sse_event(sse_chunk: str) -> dict | None:
+    if not sse_chunk.startswith("data:"):
+        return None
+    raw = sse_chunk[len("data:") :].strip()
+    if not raw:
+        return None
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
 app = FastAPI(
     title="AM Portfolio Analysis API",
     description="AI-powered financial intelligence for portfolio management",
@@ -97,7 +111,7 @@ async def chat(request: ChatRequest, http_request: Request) -> AiIntentResponse:
     user_id_var.set(uid)
     session_id_var.set(session_id)
 
-    history = session_store.get_history(uid, session_id)
+    history = await session_store.load_history(uid, session_id)
     session_store.append_turn(uid, session_id, "user", request.message)
 
     try:
@@ -119,6 +133,24 @@ async def chat(request: ChatRequest, http_request: Request) -> AiIntentResponse:
         raise HTTPException(status_code=500, detail=str(e))
 
     session_store.append_turn(uid, session_id, "assistant", response.message)
+    from shared.agents.token_budget import current_turn_tokens
+
+    await session_store.persist_turn(
+        uid,
+        session_id,
+        [
+            {"role": "user", "content": request.message, "trace_id": trace_id},
+            {
+                "role": "assistant",
+                "content": response.message,
+                "widget_id": response.widgetId,
+                "widget_params": response.widgetParams or None,
+                "tools_used": response.toolsUsed or None,
+                "tokens_used": current_turn_tokens() or None,
+                "trace_id": response.traceId,
+            },
+        ],
+    )
     log_agent_event(
         logger,
         AgentLogEvent.CHAT_COMPLETE,
@@ -153,10 +185,14 @@ async def chat_stream(
     if not msg:
         raise HTTPException(status_code=400, detail="Missing message parameter")
 
-    history = session_store.get_history(uid, sid)
+    history = await session_store.load_history(uid, sid)
     session_store.append_turn(uid, sid, "user", msg)
 
     async def event_generator():
+        assistant_text = ""
+        tools_used: list = []
+        widget_id = None
+        widget_params = None
         try:
             async for sse_chunk in finance_agent.run_stream(
                 message=msg,
@@ -166,6 +202,17 @@ async def chat_stream(
                 trace_id=tid,
             ):
                 yield sse_chunk
+                event = _parse_sse_event(sse_chunk)
+                if not event:
+                    continue
+                kind = event.get("type")
+                if kind == "token" and event.get("content"):
+                    assistant_text = event["content"]
+                elif kind == "widget":
+                    widget_id = event.get("widget_id")
+                    widget_params = event.get("widget_params")
+                elif kind == "done":
+                    tools_used = event.get("tools_used") or []
         except Exception as exc:
             log_agent_error(
                 logger,
@@ -175,6 +222,25 @@ async def chat_stream(
                 endpoint="/api/v1/ai/chat/stream",
             )
             yield error_event(str(exc), tid, sid).to_sse()
+            return
+
+        if assistant_text:
+            session_store.append_turn(uid, sid, "assistant", assistant_text)
+            await session_store.persist_turn(
+                uid,
+                sid,
+                [
+                    {"role": "user", "content": msg, "trace_id": tid},
+                    {
+                        "role": "assistant",
+                        "content": assistant_text,
+                        "widget_id": widget_id,
+                        "widget_params": widget_params,
+                        "tools_used": tools_used or None,
+                        "trace_id": tid,
+                    },
+                ],
+            )
 
     return StreamingResponse(
         event_generator(),

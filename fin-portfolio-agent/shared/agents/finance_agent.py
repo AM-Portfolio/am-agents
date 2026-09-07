@@ -515,6 +515,7 @@ class FinanceAgent:
                 sessionId=session_id,
                 toolsUsed=[],
                 traceId=trace_id,
+                tokensUsed=current_turn_tokens(),
             )
 
         tools_called = final_state.get("tools_called", [])
@@ -561,6 +562,7 @@ class FinanceAgent:
             sessionId=session_id,
             toolsUsed=tools_called,
             traceId=trace_id,
+            tokensUsed=current_turn_tokens(),
         )
 
     async def run_stream(
@@ -652,7 +654,12 @@ class FinanceAgent:
                                 trace_id=trace_id, session_id=session_id
                             ).to_sse()
 
-                            yield done_event(tc or tools_called, trace_id, session_id).to_sse()
+                            yield done_event(
+                                tc or tools_called,
+                                trace_id,
+                                session_id,
+                                tokens_used=current_turn_tokens(),
+                            ).to_sse()
         except asyncio.CancelledError:
             yield cancelled_event(trace_id, session_id).to_sse()
             raise

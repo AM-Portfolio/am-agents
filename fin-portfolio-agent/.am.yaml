@@ -13,3 +13,6 @@ github:
   deploy_workflow: deploy-am-fin-agent.yml
   service: am-fin-agent
   ref: feature/am-agents/ai_chat
+deploy:
+  via: helm
+  rebuild: on-change

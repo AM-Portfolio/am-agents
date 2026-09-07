@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from shared.context.request_context import chat_tokens_used_var
+from shared.context.request_context import chat_tokens_bag_var
 from shared.core.config import settings
 
 
@@ -17,11 +17,20 @@ class TokenBudgetExceededError(Exception):
 
 
 def reset_turn_token_budget() -> None:
-    chat_tokens_used_var.set(0)
+    """Bind a fresh mutable counter for this request (visible across asyncio tasks)."""
+    chat_tokens_bag_var.set({"used": 0})
+
+
+def _bag() -> dict:
+    bag = chat_tokens_bag_var.get()
+    if bag is None:
+        bag = {"used": 0}
+        chat_tokens_bag_var.set(bag)
+    return bag
 
 
 def current_turn_tokens() -> int:
-    return int(chat_tokens_used_var.get() or 0)
+    return int(_bag().get("used") or 0)
 
 
 def _usage_total(usage: dict[str, Any] | None) -> int:
@@ -36,8 +45,9 @@ def _usage_total(usage: dict[str, Any] | None) -> int:
 def record_turn_tokens(usage: dict[str, Any] | None) -> int:
     """Add provider usage to the current turn total. Returns new cumulative total."""
     added = _usage_total(usage)
-    total = current_turn_tokens() + added
-    chat_tokens_used_var.set(total)
+    bag = _bag()
+    total = int(bag.get("used") or 0) + added
+    bag["used"] = total
     return total
 
 

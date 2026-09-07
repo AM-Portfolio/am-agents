@@ -34,3 +34,4 @@ class AiIntentResponse(BaseModel):
     sessionId: str
     toolsUsed: List[str] = []
     traceId: str
+    tokensUsed: int = 0
