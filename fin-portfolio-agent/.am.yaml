@@ -14,5 +14,5 @@ github:
   service: am-fin-agent
   ref: feature/am-agents/ai_chat
 deploy:
-  via: helm
+  via: actions
   rebuild: on-change
