@@ -1,41 +1,35 @@
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
 [project]
-name = "am-fin-agent"
-version = "2.0.0"
-description = "AI-powered financial intelligence agent with multi-domain OpenAPI tool integration"
-readme = "README.md"
-requires-python = ">=3.9"
-license = {text = "MIT"}
-authors = [
-    {name = "AM Development Team"}
-]
+name = "am-fin-portfolio-agent"
+version = "0.1.0"
+description = "AM Fin Portfolio Analysis Agent"
+requires-python = ">=3.11"
 dependencies = [
-    "fastapi==0.110.0",
-    "uvicorn==0.27.1",
-    "langchain-core==0.1.27",
-    "langchain-community==0.0.24",
-    "langgraph==0.0.26",
-    "together==0.2.11",
+    "fastapi==0.111.0",
+    "uvicorn[standard]==0.29.0",
+    "pydantic==2.7.1",
+    "pydantic-settings==2.2.1",
     "httpx==0.27.0",
-    "python-dotenv==1.0.1",
-    "pydantic==2.6.3",
+    "python-multipart==0.0.9",
+    "langchain==0.2.16",
+    "langchain-core==0.2.38",
+    "langchain-openai==0.1.23",
+    "langgraph==0.2.28",
+    "openai==1.40.0",
+    "redis==5.0.4",
+    "opentelemetry-api==1.24.0",
+    "opentelemetry-sdk==1.24.0",
+    "opentelemetry-exporter-otlp-proto-http==1.24.0",
+    "opentelemetry-instrumentation-fastapi==0.45b0",
+    "opentelemetry-instrumentation-httpx==0.45b0",
+    "prometheus-client==0.20.0",
     "structlog==24.1.0",
-    "requests==2.31.0",
-    "google-genai==0.3.0",
-    "duckduckgo-search==5.3.0",
-    "motor==3.3.2",
-    "pymongo==4.6.2",
-    "openapi-pydantic>=0.4.0",
-    "chromadb>=0.5.0",
-    "sentence-transformers>=3.0.0",
-    "mcp>=1.0.0"
+    "tenacity==8.3.0",
+    "orjson==3.10.3",
+    "toon-python",
 ]
 
 [project.optional-dependencies]
-test = [
+dev = [
     "pytest==8.1.1",
     "pytest-asyncio==0.23.6",
     "pytest-mock==3.14.0"
@@ -44,3 +38,4 @@ test = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+pythonpath = ["."]
