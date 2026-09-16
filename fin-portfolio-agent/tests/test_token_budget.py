@@ -1,4 +1,6 @@
 """Per-turn token budget for fin-agent chat."""
+import asyncio
+
 from shared.agents.token_budget import (
     TokenBudgetExceededError,
     assert_within_budget,
@@ -45,3 +47,18 @@ def test_zero_limit_disables_cap():
 def test_turn_token_limit_reads_config():
     settings.AI_MAX_TOKENS_PER_TURN = 12000
     assert turn_token_limit() == 12000
+
+
+def test_tokens_visible_across_asyncio_child_task():
+    """LangGraph nodes often run in child tasks; int ContextVar.set would stay 0."""
+
+    async def _run() -> int:
+        reset_turn_token_budget()
+
+        async def child() -> None:
+            record_turn_tokens({"total_tokens": 1234})
+
+        await asyncio.create_task(child())
+        return current_turn_tokens()
+
+    assert asyncio.run(_run()) == 1234

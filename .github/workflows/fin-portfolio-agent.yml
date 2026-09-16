@@ -1,4 +1,4 @@
-﻿name: AM Fin Portfolio Agent Publish
+name: AM Fin Portfolio Agent Publish
 
 on:
   push:
@@ -26,13 +26,14 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements.txt
-      - run: pytest tests -q --import-mode=importlib
+      - run: PYTHONPATH=. pytest tests -q --import-mode=importlib
 
   publish:
     name: Publish AM Fin Portfolio Agent
     needs: test
     permissions:
-      contents: read
+      # Nested deploy-preprod pushes helm/ci-image.yaml on feature branches.
+      contents: write
       packages: write
     uses: AM-Portfolio/am-pipelines/.github/workflows/central-build-publish.yml@main
     with:

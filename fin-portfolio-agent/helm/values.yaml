@@ -9,6 +9,9 @@ global:
     role: "am-backend-role"
     authPath: "auth/kubernetes"
     serviceAccountName: "am-backend-sa"
+    # Contabo/Kind VPS uses Vault Agent inject (no Secrets Store CSI CRD).
+    csi:
+      enabled: false
 
 image:
   repository: am-fin-agent

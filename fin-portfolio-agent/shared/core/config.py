@@ -158,6 +158,17 @@ class Config:
     AI_HISTORY_MAX_TURNS: int = int(os.getenv("AI_HISTORY_MAX_TURNS", "10"))
     AI_SESSION_MAX_TURNS: int = int(os.getenv("AI_SESSION_MAX_TURNS", "20"))
 
+    # Sprint D1 — durable chat memory (empty URL = in-process RAM fallback)
+    USER_PLATFORM_URL: str = os.getenv("USER_PLATFORM_URL", "").strip()
+    USER_PLATFORM_SERVICE_TOKEN: str = os.getenv("USER_PLATFORM_SERVICE_TOKEN", "").strip()
+    USER_PLATFORM_TIMEOUT_SECONDS: float = float(
+        os.getenv("USER_PLATFORM_TIMEOUT_SECONDS", "8.0")
+    )
+    AM_FIN_AGENT_CLIENT_ID: str = os.getenv(
+        "AM_FIN_AGENT_CLIENT_ID", "am-fin-agent-service"
+    )
+    AM_FIN_AGENT_CLIENT_SECRET: str = os.getenv("AM_FIN_AGENT_CLIENT_SECRET") or ""
+
     # Phase 1 — Agent turn / token guards (prevents runaway tool+LLM loops)
     AI_GRAPH_RECURSION_LIMIT: int = int(os.getenv("AI_GRAPH_RECURSION_LIMIT", "14"))
     AI_MAX_TOOL_CALLS_PER_TURN: int = int(os.getenv("AI_MAX_TOOL_CALLS_PER_TURN", "6"))

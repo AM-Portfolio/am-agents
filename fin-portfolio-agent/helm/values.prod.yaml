@@ -13,6 +13,8 @@ vault:
       path: "apps/data/prod/infra/redis"
     am-agents:
       path: "apps/data/prod/services/am-agents"
+    am-user-platform:
+      path: "secret/data/prod/services/am-user-platform"
 
 ingress:
   enabled: false
@@ -43,6 +45,9 @@ env:
   MCP_GATEWAY_AUTH_DISABLED: "true"
   # am-analysis — portfolio REST fallback for tools not yet on MCP (port 8080 in cluster)
   ANALYSIS_BASE_URL: "http://am-analysis.am-apps-prod.svc.cluster.local:8080"
+  USER_PLATFORM_URL: "http://am-user-platform.am-apps-prod.svc.cluster.local:8080"
+  KEYCLOAK_TOKEN_URL: "http://auth.asrax.in/auth/realms/am-realm/protocol/openid-connect/token"
+  AM_FIN_AGENT_CLIENT_ID: "am-fin-agent-service"
   # Internal infra — MongoDB and Redis via cluster DNS
   MONGODB_URI: "mongodb://mongodb.infra-prod.svc.cluster.local:27017/portfolio"
   REDIS_URL: "redis://redis.infra-prod.svc.cluster.local:6379/0"
