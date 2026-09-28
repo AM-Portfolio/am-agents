@@ -4,12 +4,14 @@ on:
   push:
     branches: ["main", "develop", "test/**", "feature/**", "hotfix/**", "fix/**"]
     paths:
+      - ".github/workflows/am-support-agent.yml"
       - "support-agent/**"
       - ".dockerignore"
       - ".github/workflows/am-support-agent.yml"
   pull_request:
     branches: ["main", "develop", "test/**", "feature/**", "hotfix/**", "fix/**"]
     paths:
+      - ".github/workflows/am-support-agent.yml"
       - "support-agent/**"
       - ".dockerignore"
       - ".github/workflows/am-support-agent.yml"

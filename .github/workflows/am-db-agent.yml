@@ -4,11 +4,13 @@ on:
   push:
     branches: ["main", "develop", "test/**", "feature/**", "hotfix/**", "fix/**"]
     paths:
+      - ".github/workflows/am-db-agent.yml"
       - "db-agent/**"
       - ".dockerignore"
   pull_request:
     branches: ["main", "develop", "test/**", "feature/**", "hotfix/**", "fix/**"]
     paths:
+      - ".github/workflows/am-db-agent.yml"
       - "db-agent/**"
       - ".dockerignore"
   workflow_dispatch:
