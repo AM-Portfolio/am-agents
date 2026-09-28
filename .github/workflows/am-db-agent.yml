@@ -16,7 +16,6 @@ on:
 jobs:
   publish:
     name: Publish am-db-agent
-    needs: test
     permissions:
       contents: write
       packages: write

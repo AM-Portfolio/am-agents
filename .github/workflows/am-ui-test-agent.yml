@@ -66,7 +66,7 @@ jobs:
 
   publish:
     name: Publish am-ui-test-agent
-    needs: test
+    needs: ensure-base
     permissions:
       contents: write
       packages: write
