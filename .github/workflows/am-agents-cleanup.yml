@@ -2,33 +2,29 @@ name: Container Cleanup — AM Agents
 
 on:
   workflow_dispatch:
-    inputs:
-      service_name:
-        description: "Agent to clean up"
-        required: true
-        type: choice
-        options:
-          - am-fin-agent
-          - am-support-agent
-          - am-tool-agent
-          - am-ui-test-agent
-          - am-db-agent
-      tag:
-        description: "Image tag to delete (e.g. sha-abc1234)"
-        required: true
-        type: string
+  schedule:
+    - cron: '0 0 * * 0' # Run weekly on Sundays
 
 jobs:
-  cleanup:
-    name: Delete ${{ github.event.inputs.service_name }} tag — ${{ github.event.inputs.tag }}
+  smart-cleanup:
+    name: Smart Cleanup (5 Main + 5 Feature)
     runs-on: ubuntu-latest
     permissions:
       packages: write
+      actions: read
     steps:
-      - name: Delete container image tag
-        uses: actions/delete-package-versions@v5
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          package-name: "${{ github.event.inputs.service_name }}"
-          package-type: "container"
-          min-versions-to-keep: 5
-          delete-only-pre-release-versions: "false"
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: pip install requests
+
+      - name: Run Smart Cleanup Script
+        env:
+          GITHUB_TOKEN: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+        run: python .github/scripts/smart-cleanup.py
