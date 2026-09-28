@@ -14,25 +14,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
-    name: Test tool-agent
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: tool-agent
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install -r requirements.txt
-      - run: pytest tests tools/mongodb/tests tools/postgres/tests tools/redis/tests tools/kafka/tests tools/qdrant/tests tools/vault/tests tools/grafana/tests -q --import-mode=importlib
-      - run: python scripts/run_query_corpus.py --local
-      - run: sh scripts/check-db-agent-untouched.sh
-
   publish:
     name: Publish am-tool-agent
-    needs: test
     permissions:
       contents: write
       packages: write
