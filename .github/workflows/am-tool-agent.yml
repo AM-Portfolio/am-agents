@@ -31,19 +31,15 @@ jobs:
       - run: sh scripts/check-db-agent-untouched.sh
 
   publish:
-    name: Publish AM Tool Agent
+    name: Publish am-tool-agent
     needs: test
     permissions:
-      contents: read
+      contents: write
       packages: write
-    uses: AM-Portfolio/am-pipelines/.github/workflows/central-build-publish.yml@main
+    uses: AM-Portfolio/am-pipelines/.github/workflows/central-build-publish-contabo.yml@main
     with:
       language: "python"
       working_directory: "tool-agent"
       image_name: "am-tool-agent"
       build_context: "."
-      preprod_namespace: "am-apps-preprod"
-      prod_namespace: "am-apps-prod"
-      deploy_dev: true
-      deploy_prod: true
     secrets: inherit

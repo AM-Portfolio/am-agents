@@ -1,0 +1,34 @@
+name: Container Cleanup — AM Agents
+
+on:
+  workflow_dispatch:
+    inputs:
+      service_name:
+        description: "Agent to clean up"
+        required: true
+        type: choice
+        options:
+          - am-fin-agent
+          - am-support-agent
+          - am-tool-agent
+          - am-ui-test-agent
+          - am-db-agent
+      tag:
+        description: "Image tag to delete (e.g. sha-abc1234)"
+        required: true
+        type: string
+
+jobs:
+  cleanup:
+    name: Delete ${{ github.event.inputs.service_name }} tag — ${{ github.event.inputs.tag }}
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Delete container image tag
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: "${{ github.event.inputs.service_name }}"
+          package-type: "container"
+          min-versions-to-keep: 5
+          delete-only-pre-release-versions: "false"

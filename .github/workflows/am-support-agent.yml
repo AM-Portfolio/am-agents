@@ -94,19 +94,15 @@ jobs:
           ! grep -E '(password|api_key|token):' support-agent/helm/values*.yaml
 
   publish:
-    name: Publish AM Support Agent
-    needs: [test, helm]
+    name: Publish am-support-agent
+    needs: test
     permissions:
-      contents: read
+      contents: write
       packages: write
-    uses: AM-Portfolio/am-pipelines/.github/workflows/central-build-publish.yml@main
+    uses: AM-Portfolio/am-pipelines/.github/workflows/central-build-publish-contabo.yml@main
     with:
       language: "python"
       working_directory: "support-agent"
       image_name: "am-support-agent"
       build_context: "."
-      preprod_namespace: "am-apps-preprod"
-      prod_namespace: "am-apps-prod"
-      deploy_dev: true
-      deploy_prod: true
     secrets: inherit
