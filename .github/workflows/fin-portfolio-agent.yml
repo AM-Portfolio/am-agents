@@ -4,11 +4,13 @@ on:
   push:
     branches: ["main", "develop", "test/**", "feature/**", "hotfix/**", "fix/**"]
     paths:
+      - ".github/workflows/fin-portfolio-agent.yml"
       - "fin-portfolio-agent/**"
       - ".dockerignore"
   pull_request:
     branches: ["main", "develop", "test/**", "feature/**", "hotfix/**", "fix/**"]
     paths:
+      - ".github/workflows/fin-portfolio-agent.yml"
       - "fin-portfolio-agent/**"
       - ".dockerignore"
   workflow_dispatch:

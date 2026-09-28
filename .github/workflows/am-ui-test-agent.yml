@@ -4,12 +4,14 @@ on:
   push:
     branches: ["main", "develop", "test/**", "feature/**", "hotfix/**", "fix/**"]
     paths:
+      - ".github/workflows/am-ui-test-agent.yml"
       - "ui-test-agent/**"
       - "docker/Dockerfile.ui-test-agent-base"
       - ".dockerignore"
   pull_request:
     branches: ["main", "develop", "test/**", "feature/**", "hotfix/**", "fix/**"]
     paths:
+      - ".github/workflows/am-ui-test-agent.yml"
       - "ui-test-agent/**"
       - "docker/Dockerfile.ui-test-agent-base"
       - ".dockerignore"
