@@ -28,7 +28,7 @@ ingress:
       am-apps-preprod-global-cors@kubernetescrd,
       am-apps-preprod-strip-prefix-apps@kubernetescrd
   hosts:
-    - host: am.asrax.in
+    - host: am-preprod.asrax.in
       paths:
         - path: /db
           pathType: Prefix
