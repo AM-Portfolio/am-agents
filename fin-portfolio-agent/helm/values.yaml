@@ -40,7 +40,6 @@ env:
   LLM_ROUTING: direct
   LITELLM_BASE_URL: "http://litellm.am-ai.svc.cluster.local:4000"
   LANGFUSE_ENABLED: "true"
-  LANGFUSE_HOST: "https://langfuse.munish.org"
   LANGFUSE_TRACE_MAX_OUTPUT_CHARS: "8000"
   LANGFUSE_PROMPT_NAME: "fin-agent/finance-system"
   LANGFUSE_PROMPT_LABEL: "prod"
