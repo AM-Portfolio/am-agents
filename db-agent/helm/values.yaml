@@ -56,7 +56,6 @@ env:
   KAFKA_PEEK_MODE: auto
   KAFKA_UI_CLUSTER: am-preprod
   LANGFUSE_ENABLED: "true"
-  LANGFUSE_HOST: "https://langfuse.munish.org"
   LANGFUSE_TRACE_MAX_OUTPUT_CHARS: "8000"
 
 probes:
