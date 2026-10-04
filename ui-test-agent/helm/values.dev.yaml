@@ -42,4 +42,4 @@ env:
   QDRANT_HTTPS: "false"
   KEYCLOAK_TOKEN_URL: "http://auth.munish.org/auth/realms/am-dev-realm/protocol/openid-connect/token"
   LANGFUSE_ENABLED: "true"
-  LANGFUSE_HOST: "https://langfuse.munish.org"
+  LANGFUSE_HOST: "https://langfuse.asrax.in"

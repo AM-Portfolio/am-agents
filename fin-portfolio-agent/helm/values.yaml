@@ -9,6 +9,9 @@ global:
     role: "am-backend-role"
     authPath: "auth/kubernetes"
     serviceAccountName: "am-backend-sa"
+    # Contabo/Kind VPS uses Vault Agent inject (no Secrets Store CSI CRD).
+    csi:
+      enabled: false
 
 image:
   repository: am-fin-agent
@@ -37,7 +40,7 @@ env:
   LLM_ROUTING: direct
   LITELLM_BASE_URL: "http://litellm.am-ai.svc.cluster.local:4000"
   LANGFUSE_ENABLED: "true"
-  LANGFUSE_HOST: "https://langfuse.munish.org"
+  LANGFUSE_HOST: "https://langfuse.asrax.in"
   LANGFUSE_TRACE_MAX_OUTPUT_CHARS: "8000"
   LANGFUSE_PROMPT_NAME: "fin-agent/finance-system"
   LANGFUSE_PROMPT_LABEL: "prod"
