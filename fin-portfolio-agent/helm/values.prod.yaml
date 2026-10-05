@@ -45,7 +45,7 @@ env:
   ANALYSIS_BASE_URL: "http://am-analysis-prod.am-apps-prod.svc.cluster.local:8080"
   USER_PLATFORM_URL: "http://am-user-platform-prod.am-apps-prod.svc.cluster.local:8080"
   KEYCLOAK_TOKEN_URL: "https://auth.asrax.in/realms/am-realm/protocol/openid-connect/token"
-  AM_FIN_AGENT_CLIENT_ID: "am-fin-agent-service"
+  AM_FIN_AGENT_CLIENT_ID: "am-mcp-server"
   AM_MCP_CLIENT_ID: "am-mcp-server"
   # Internal infra — MongoDB and Redis via cluster DNS
   MONGODB_URI: "mongodb://mongodb.infra-prod.svc.cluster.local:27017/portfolio"
