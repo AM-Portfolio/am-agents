@@ -14,7 +14,7 @@ vault:
     am-agents:
       path: "apps/data/prod/services/am-agents"
     am-user-platform:
-      path: "secret/data/prod/services/am-user-platform"
+      path: "apps/data/prod/services/am-user-platform"
 
 ingress:
   enabled: false
@@ -38,14 +38,15 @@ env:
   # LiteLLM — API keys injected from Vault (vault-mappings.yaml → apps/data/prod/services/am-agents)
   LITELLM_BASE_URL: "http://litellm.am-ai.svc.cluster.local:4000"
   # MCP server — internal cluster DNS (no public internet needed)
-  MCP_BASE_URL: "http://am-mcp-server.am-apps-prod.svc.cluster.local:8080"
+  MCP_BASE_URL: "http://am-mcp-server-prod.am-agents-prod.svc.cluster.local:8080"
   MCP_GATEWAY_BASE_URL: "http://am-ai-gateway.am-apps-prod.svc.cluster.local:8120"
-  MCP_GATEWAY_AUTH_DISABLED: "true"
+  MCP_GATEWAY_AUTH_DISABLED: "false"
   # am-analysis — portfolio REST fallback for tools not yet on MCP (port 8080 in cluster)
-  ANALYSIS_BASE_URL: "http://am-analysis.am-apps-prod.svc.cluster.local:8080"
-  USER_PLATFORM_URL: "http://am-user-platform.am-apps-prod.svc.cluster.local:8080"
-  KEYCLOAK_TOKEN_URL: "http://auth.asrax.in/auth/realms/am-realm/protocol/openid-connect/token"
+  ANALYSIS_BASE_URL: "http://am-analysis-prod.am-apps-prod.svc.cluster.local:8080"
+  USER_PLATFORM_URL: "http://am-user-platform-prod.am-apps-prod.svc.cluster.local:8080"
+  KEYCLOAK_TOKEN_URL: "https://auth.asrax.in/realms/am-realm/protocol/openid-connect/token"
   AM_FIN_AGENT_CLIENT_ID: "am-fin-agent-service"
+  AM_MCP_CLIENT_ID: "am-mcp-server"
   # Internal infra — MongoDB and Redis via cluster DNS
   MONGODB_URI: "mongodb://mongodb.infra-prod.svc.cluster.local:27017/portfolio"
   REDIS_URL: "redis://redis.infra-prod.svc.cluster.local:6379/0"
